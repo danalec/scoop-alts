@@ -25,14 +25,14 @@ To add the `scoop-alts` bucket to your [Scoop](https://scoop.sh/) installation, 
 2.  **Add the bucket:** Execute the following command:
 
     ```powershell
-    scoop bucket add scoop-alts [https://github.com/danalec/scoop-alts](https://github.com/danalec/scoop-alts)
+    scoop bucket add scoop-alts https://github.com/danalec/scoop-alts
     ```
 
 ## Installing Ungoogled-Chromium with Widevine
 
 After adding the bucket, you can install ungoogled-chromium with Widevine support:
 
-1.  **Update [Scoop](https://scoop.sh/) (Recommended):** Ensure your [Scoop](https://scoop.sh/) installation is up-to-date:
+1.  **Update [Scoop](https://scoop.sh/) (Recommended):** Ensure your installation is up-to-date:
 
     ```powershell
     scoop update
