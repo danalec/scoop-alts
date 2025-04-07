@@ -10,12 +10,12 @@
     "architecture": {
         "64bit": {
             "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/135.0.7049.41-1.1/ungoogled-chromium_135.0.7049.41-1.1_windows_x64.zip",
-            "hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",  // REPLACE WITH ACTUAL HASH
+            "hash": "1a6b021e1d50cc943250cf0e075511c8c1ddae9cff90bd4af7f35cb2cceac682",
             "extract_dir": "ungoogled-chromium_135.0.7049.41-1.1_windows_x64"
         },
         "32bit": {
             "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/135.0.7049.41-1.1/ungoogled-chromium_135.0.7049.41-1.1_windows_x86.zip",
-            "hash": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",  // REPLACE WITH ACTUAL HASH
+            "hash": "b19ff6f5a4e66361ee246d710512ddae6c8ddd8a0916664d8e72b6e6f858ea70",
             "extract_dir": "ungoogled-chromium_135.0.7049.41-1.1_windows_x86"
         }
     },
