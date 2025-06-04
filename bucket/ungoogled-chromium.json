@@ -1,6 +1,6 @@
 {
-    "version": "135.0.7049.41-1.1",
-    "description": "Chromium",
+    "version": "137.0.7151.55-1.1",
+    "description": "Chromium, sans Google integration (downloads Widevine & cert. revocation lists separately, stored passwords/profile not encrypted)",
     "homepage": "https://ungoogled-software.github.io/ungoogled-chromium-binaries/",
     "license": "BSD-3-Clause",
     "depends": [
@@ -9,14 +9,14 @@
     ],
     "architecture": {
         "64bit": {
-            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/135.0.7049.41-1.1/ungoogled-chromium_135.0.7049.41-1.1_windows_x64.zip",
-            "hash": "1a6b021e1d50cc943250cf0e075511c8c1ddae9cff90bd4af7f35cb2cceac682",
-            "extract_dir": "ungoogled-chromium_135.0.7049.41-1.1_windows_x64"
+            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/137.0.7151.55-1.1/ungoogled-chromium_137.0.7151.55-1.1_windows_x64.zip",
+            "hash": "6d0f2735edb2abc89665d9727c4087e3c40d3e0bfe2db8884364683a780a8500",
+            "extract_dir": "ungoogled-chromium_137.0.7151.55-1.1_windows_x64"
         },
         "32bit": {
-            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/135.0.7049.41-1.1/ungoogled-chromium_135.0.7049.41-1.1_windows_x86.zip",
-            "hash": "b19ff6f5a4e66361ee246d710512ddae6c8ddd8a0916664d8e72b6e6f858ea70",
-            "extract_dir": "ungoogled-chromium_135.0.7049.41-1.1_windows_x86"
+            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/137.0.7151.55-1.1/ungoogled-chromium_137.0.7151.55-1.1_windows_x86.zip",
+            "hash": "a15a4001bc08abc8612a7f31098a27e21b43c6c25480eb1bcd922638a607642c",
+            "extract_dir": "ungoogled-chromium_137.0.7151.55-1.1_windows_x86"
         }
     },
     "bin": [
@@ -53,6 +53,14 @@
         "}"
     ],
     "post_install": [
+        "$ace = [System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new('S-1-15-2-2'), [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)",
+        "foreach ($d in @($dir, $original_dir)) {",
+        "   $acl = Get-Acl $d",
+        "   if (-not ($acl.Access | Where-Object { $_.IdentityReference -eq $ace.IdentityReference -and $_.FileSystemRights -eq $ace.FileSystemRights -and $_.InheritanceFlags -eq $ace.InheritanceFlags -and $_.PropagationFlags -eq $ace.PropagationFlags -and $_.AccessControlType -eq $ace.AccessControlType })) {",
+        "       $acl.AddAccessRule($ace)",
+        "       Set-Acl -Path $d -AclObject $acl",
+        "   }",
+        "}",
         "$componentPackage = @{",
         "    'WidevineCdm' = 'widevinecdm'",
         "    'CertificateRevocation' = 'chromium-crlset'",
@@ -152,7 +160,7 @@
                 "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x86.zip",
                 "hash": {
                     "url": "https://ungoogled-software.github.io/ungoogled-chromium-binaries/releases/windows/32bit/$matchMain",
-                    "xpath": "//ul/li/a[contains(text(), \"$basename\")]/../ul/li[contains(text(), \"SHA256:\")]/code"
+                    "xpath": "//ul/li/a[contains(text(), \"$basename\")]/../ul/li[contains(text-content, \"$basename\")]/../ul/li[contains(text(), \"SHA256:\")]/code"
                 },
                 "extract_dir": "ungoogled-chromium_$version_windows_x86"
             }
