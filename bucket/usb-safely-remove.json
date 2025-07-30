@@ -1,27 +1,15 @@
 {
     "version": "7.1.2",
-    "description": "USB Safely Remove - Safe removal of USB devices",
+    "description": "Safe removal of USB devices",
     "homepage": "https://safelyremove.com/",
     "license": "Proprietary",
     "url": "https://safelyremove.com/assets/exe/usbsafelyremovesetup_7-1-2.exe",
     "hash": "sha1:C1C69E30712EAAA0D969D53EA791EDC7F342903A",
-    "pre_install": "Get-ChildItem \"$dir\\usbsafelyremovesetup*.exe\" | Rename-Item -NewName 'usb-installer.exe'",
     "installer": {
-        "file": "usb-installer.exe",
-        "args": [
-            "/VERYSILENT",
-            "/SUPPRESSMSGBOXES", 
-            "/NORESTART",
-            "/DIR=\"$dir\""
+        "script": [
+            "Start-Process \"$dir\\usbsafelyremovesetup_7-1-2.exe\" -ArgumentList '/SP-', '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait"
         ]
     },
-    "bin": "USBSafelyRemove.exe",
-    "shortcuts": [
-        [
-            "USBSafelyRemove.exe",
-            "USB Safely Remove"
-        ]
-    ],
     "checkver": {
         "url": "https://safelyremove.com/",
         "regex": "Version ([\\d.]+)"

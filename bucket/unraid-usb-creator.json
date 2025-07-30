@@ -7,7 +7,7 @@
     "hash": "sha1:3DD198BC166ACE35827769DE93A26C81C9D13AC7",
     "installer": {
         "script": [
-            "Start-Process \"$dir\\unraid-usb-creator-1.0.1.exe\" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait"
+            "Start-Process \"$dir\\unraid-usb-creator-1.0.1.exe\" -ArgumentList '/S' -Wait"
         ]
     },
     "checkver": {
