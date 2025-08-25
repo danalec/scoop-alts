@@ -10,7 +10,6 @@ Dan's Alternative Scoop buckets provide enhanced applications with customized co
 - **esptool** - Enhanced ESP32/ESP8266 flashing utility with additional features
 - **ntoptimizer** - Windows network optimization tools with custom configurations
 - **windhawk** - System customization tool with tailored settings
-- **atto-disk-benchmark** - Disk performance testing with optimized presets
 - **wifiscanner** - Wireless network analysis with improved interface
 
 Each package includes Dan's custom configurations and quality-of-life enhancements to improve the overall user experience.
