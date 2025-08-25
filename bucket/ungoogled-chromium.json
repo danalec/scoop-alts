@@ -1,5 +1,5 @@
 {
-    "version": "138.0.7204.168-1.1",
+    "version": "139.0.7258.127-1.1",
     "description": "Chromium, sans Google integration (downloads Widevine & cert. revocation lists separately, stored passwords/profile not encrypted)",
     "homepage": "https://ungoogled-software.github.io/ungoogled-chromium-binaries/",
     "license": "BSD-3-Clause",
@@ -9,14 +9,14 @@
     ],
     "architecture": {
         "64bit": {
-            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/138.0.7204.168-1.1/ungoogled-chromium_138.0.7204.168-1.1_windows_x64.zip",
-            "hash": "883c49d12efaad43f7dac985596084525ec1485c58b3ad873847d033385a0248",
-            "extract_dir": "ungoogled-chromium_138.0.7204.168-1.1_windows_x64"
+            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/139.0.7258.127-1.1/ungoogled-chromium_139.0.7258.127-1.1_windows_x64.zip",
+            "hash": "02c1ce75b664fd6c43b9a2780ca65c6425519fae0f0a1deefe632c08a61ed5e7",
+            "extract_dir": "ungoogled-chromium_139.0.7258.127-1.1_windows_x64"
         },
         "32bit": {
-            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/138.0.7204.168-1.1/ungoogled-chromium_138.0.7204.168-1.1_windows_x86.zip",
-            "hash": "cc6230973b291232624fc8419114d0c0b89e8b881a86612da87e6ebfa413c7df",
-            "extract_dir": "ungoogled-chromium_138.0.7204.168-1.1_windows_x86"
+            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/139.0.7258.127-1.1/ungoogled-chromium_139.0.7258.127-1.1_windows_x86.zip",
+            "hash": "daf9aeea953611bdebe136fd05302454a1d270e25d1810cae744ba2c8d2eb8f6",
+            "extract_dir": "ungoogled-chromium_139.0.7258.127-1.1_windows_x86"
         }
     },
     "bin": [
