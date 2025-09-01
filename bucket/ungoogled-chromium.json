@@ -10,7 +10,7 @@
     "architecture": {
         "64bit": {
             "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/139.0.7258.127-1.1/ungoogled-chromium_139.0.7258.127-1.1_windows_x64.zip",
-            "hash": "02c1ce75b664fd6c43b9a2780ca65c6425519fae0f0a1deefe632c08a61ed5e7",
+            "hash": "cd2237230c7e952dbbc9050bae042412c09cfd1f2466d2896b945bc927ea4ea3",
             "extract_dir": "ungoogled-chromium_139.0.7258.127-1.1_windows_x64"
         },
         "32bit": {
