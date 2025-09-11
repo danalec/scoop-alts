@@ -30,7 +30,7 @@ def fetch_latest_version(arch: str) -> Optional[str]:
         api_url = "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest"
         with urlopen(api_url) as response:
             data = json.loads(response.read().decode('utf-8'))
-        
+
         tag_name = data.get('tag_name', '')
         # Extract version from tag like "139.0.7258.154-1.1" -> "139.0.7258.154-1.1"
         version_match = re.match(r'(\d+\.\d+\.\d+\.\d+-\d+(?:\.\d+)?)', tag_name)
@@ -38,7 +38,7 @@ def fetch_latest_version(arch: str) -> Optional[str]:
             version = version_match.group(1)
             print(f"Found latest version: {version}")
             return version
-        
+
         return None
     except Exception as e:
         print(f"Error fetching latest version: {e}")
@@ -50,16 +50,16 @@ def fetch_hash_from_github(version: str, arch: str) -> Optional[str]:
         api_url = f"https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/tags/{version}"
         with urlopen(api_url) as response:
             data = json.loads(response.read().decode('utf-8'))
-        
+
         arch_suffix = "x64" if arch == "64bit" else "x86"
         filename = f"ungoogled-chromium_{version}_windows_{arch_suffix}.zip"
-        
+
         # Look for the asset and its SHA256 in the release
         for asset in data.get('assets', []):
             if asset.get('name') == filename:
                 # GitHub doesn't provide SHA256 in API, so we'll download and calculate
                 return calculate_hash_from_url(asset.get('browser_download_url'))
-        
+
         # Fallback: construct URL manually
         download_url = f"{GITHUB_RELEASE_BASE}{version}/{filename}"
         return calculate_hash_from_url(download_url)
@@ -84,12 +84,12 @@ def fetch_hash(version: str, arch: str) -> Optional[str]:
     """Fetch SHA256 hash for the given version and architecture."""
     return fetch_hash_from_github(version, arch)
 
-def get_version_info() -> Dict[str, Tuple[str, Optional[str]]]:
-    """Get latest version and hashes for both architectures."""
-    version = fetch_latest_version("windows")
-    if not version:
-        return {}
-    
+def get_latest_version_only() -> Optional[str]:
+    """Get only the latest version without downloading hashes."""
+    return fetch_latest_version("windows")
+
+def get_version_info(version: str) -> Dict[str, Tuple[str, Optional[str]]]:
+    """Get version and hashes for both architectures."""
     return {
         "64bit": (version, fetch_hash(version, "64bit")),
         "32bit": (version, fetch_hash(version, "32bit"))
@@ -169,24 +169,55 @@ def update_bucket_json(version_info: Dict[str, Tuple[str, Optional[str]]], force
         print(f"Error updating bucket JSON: {e}")
         return None
 
+def get_current_version() -> Optional[str]:
+    """Get the current version from the bucket JSON file."""
+    try:
+        with open(BUCKET_PATH, 'r', encoding='utf-8') as f:
+            bucket_data = json.load(f)
+        return bucket_data.get('version')
+    except Exception as e:
+        print(f"Error reading current version: {e}")
+        return None
+
 def main() -> None:
     """Main execution function."""
     print("Checking for ungoogled-chromium updates...")
 
-    version_info = get_version_info()
+    # Get current version
+    current_version = get_current_version()
+    print(f"Current version: {current_version}")
+
+    # Get latest version without downloading hashes
+    latest_version = get_latest_version_only()
+    if not latest_version:
+        print("Cannot update: failed to fetch latest version")
+        return
+
+    print(f"Latest version: {latest_version}")
+
+    # Check if version has changed
+    if current_version == latest_version:
+        print(f"No update needed: version {latest_version} is already current")
+        return
+
+    # Only download hashes if version has changed
+    print(f"Version changed from {current_version} to {latest_version}")
+    version_info = get_version_info(latest_version)
 
     # Display found versions
     for arch, (version, hash_val) in version_info.items():
         status = "✓" if version and hash_val else "✗"
         print(f"{status} {arch}: {version or 'Not found'} (hash: {'found' if hash_val else 'missing'})")
 
-    # Update bucket if we have valid data
-    if all(v and h for v, h in version_info.values()):
-        if updated_version := update_bucket_json(version_info):
-            # Commit and push changes if update was successful
-            git_commit_and_push(updated_version)
-    else:
+    # Check if we have valid data
+    if not all(v and h for v, h in version_info.values()):
         print("Cannot update: missing version or hash data")
+        return
+
+    # Update bucket since version has changed
+    if updated_version := update_bucket_json(version_info):
+        # Commit and push changes if update was successful
+        git_commit_and_push(updated_version)
 
 if __name__ == "__main__":
     main()
