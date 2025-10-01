@@ -1,43 +1,73 @@
-# danalec_scoop-alts
+# 🚀 Dan's Alternative Scoop Bucket
 
-Alternative Scoop buckets for various applications, focusing on enhanced functionality, customized configurations, and quality-of-life improvements.
+> **Enhanced applications with automation-powered quality assurance**
 
-## Description
+Alternative Scoop bucket featuring **carefully curated applications** with enhanced functionality, customized configurations, and automated quality-of-life improvements. Every package is maintained through a sophisticated **Python automation system** that ensures reliability and freshness.
 
-Dan's Alternative Scoop buckets provide enhanced applications with customized configurations and quality-of-life improvements. Dan's collection includes:
+## 📦 Featured Applications
 
-- **ungoogled-chromium with Widevine support** - Privacy-focused browser with DRM support for Netflix, Amazon Prime Video, and Spotify Web Player
-- **esptool** - Enhanced ESP32/ESP8266 flashing utility with additional features
-- **ntoptimizer** - Windows network optimization tools with custom configurations
-- **windhawk** - System customization tool with tailored settings
-- **wifiscanner** - Wireless network analysis with improved interface
+| Package | Description | Special Features |
+|---------|-------------|------------------|
+| **ungoogled-chromium** | Privacy-focused browser | ✅ Widevine DRM support for Netflix/Spotify
 
-Each package includes Dan's custom configurations and quality-of-life enhancements to improve the overall user experience.
+## 🚀 Quick Start
 
-## Installation
-
-### Add the bucket
-
+### Install the Bucket
 ```powershell
 scoop bucket add danalec_scoop-alts https://github.com/danalec/scoop-alts
 ```
 
-### Install ungoogled-chromium with Widevine
-
+### Install Enhanced Chromium
 ```powershell
 scoop install danalec_scoop-alts/ungoogled-chromium
 ```
 
-**Note:** You might need to run `scoop config force_update $true` to ensure updates from this bucket are not disregarded.
+### Browse All Packages
+```powershell
+scoop search danalec_scoop-alts/
+```
 
-## Usage
+## 🤖 Automation
 
-After installation, launch **Chromium** from your Start Menu. To verify Widevine functionality, visit Netflix or Crunchyroll and test video playback.
+This bucket features **automated package maintenance** powered by a Python automation system that ensures packages stay up-to-date and reliable:
 
-## Contributing
+### For Developers
+Complete automation framework available for creating your own automated Scoop buckets:
+- **[AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md)**: Setup and usage documentation
+- **[AUTOMATION-SCRIPTS-DOCUMENTATION.md](AUTOMATION-SCRIPTS-DOCUMENTATION.md)**: Technical reference
 
-Contributions welcome! Submit pull requests for improvements or new bucket suggestions.
+## 🛠️ For Developers & Contributors
 
-## License
+### **Create Your Own Automated Bucket**
+This repository includes a complete automation framework for maintaining Scoop buckets:
 
-BSD-3-Clause - See [LICENSE](LICENSE) file for details
+```bash
+# Quick setup
+git clone https://github.com/danalec/scoop-alts
+cd scoop-alts
+pip install -r requirements-automation.txt
+
+# Interactive wizard (no JSON editing required!)
+python scripts/automate-scoop.py wizard
+```
+
+**See [AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md) for complete setup and usage documentation.**
+
+## 🤝 Contributing
+
+### **For Users**
+- 🐛 **Report Issues**: Found a problem? Open an issue!
+- 💡 **Request Packages**: Suggest new software to include
+- ⭐ **Star the Repo**: Help others discover this bucket
+
+### **For Developers**
+- 🔧 **Improve Automation**: Enhance the Python scripts
+- 📦 **Add Packages**: Contribute new software configurations
+- 🧪 **Testing**: Help improve validation and testing
+- 📚 **Documentation**: Improve guides and examples
+
+**See [AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md) for detailed contribution instructions.**
+
+## 📄 License
+
+BSD-3-Clause - See [LICENSE](LICENSE) file for details.
