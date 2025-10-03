@@ -52,15 +52,17 @@ def parse_version_and_tokens(xml: str):
     }
 
 def build_urls(version: str, token32: str, token64: str):
-    """Construct architecture-specific download URLs using tokens and version."""
-    url64 = f"https://dl.google.com/release2/chrome/{token64}_{version}/{version}_chrome_installer.exe#/dl.7z"
-    url32 = f"https://dl.google.com/release2/chrome/{token32}_{version}/{version}_chrome_installer.exe#/dl.7z"
+    """Construct architecture-specific download URLs using tokens and version.
+    Rename to chrome.7z to match installer script expectations.
+    """
+    url64 = f"https://dl.google.com/release2/chrome/{token64}_{version}/{version}_chrome_installer.exe#/chrome.7z"
+    url32 = f"https://dl.google.com/release2/chrome/{token32}_{version}/{version}_chrome_installer.exe#/chrome.7z"
     return url32, url64
 
 def update_manifest():
     """Update the Scoop manifest by parsing XML for version, tokens, and hashes."""
     print(f"🔄 Updating {SOFTWARE_NAME}...")
-    
+
     # Fetch and parse XML
     try:
         xml = fetch_update_xml()
@@ -91,13 +93,13 @@ def update_manifest():
     except json.JSONDecodeError as e:
         print(f"❌ Invalid JSON in manifest: {e}")
         return False
-    
+
     # Check if update is needed
     current_version = manifest.get('version', '')
     if current_version == version and manifest.get('architecture', {}).get('64bit', {}).get('url', '') == url64:
         print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         return True
-    
+
     # Update manifest fields: version and architecture-specific URLs and hashes
     manifest['version'] = version
     if 'architecture' not in manifest:
@@ -108,21 +110,36 @@ def update_manifest():
     manifest['architecture']['64bit']['url'] = url64
     if sha64:
         manifest['architecture']['64bit']['hash'] = sha64
-    
+
     manifest['architecture']['32bit']['url'] = url32
     if sha32:
         manifest['architecture']['32bit']['hash'] = sha32
-    
+
+    # Keep autoupdate URL templates in sync with rename fragment expected by installer
+    try:
+        if 'autoupdate' in manifest and 'architecture' in manifest['autoupdate']:
+            if '64bit' in manifest['autoupdate']['architecture']:
+                manifest['autoupdate']['architecture']['64bit']['url'] = (
+                    "https://dl.google.com/release2/chrome/$match64_$version/$version_chrome_installer.exe#/chrome.7z"
+                )
+            if '32bit' in manifest['autoupdate']['architecture']:
+                manifest['autoupdate']['architecture']['32bit']['url'] = (
+                    "https://dl.google.com/release2/chrome/$match32_$version/$version_chrome_installer.exe#/chrome.7z"
+                )
+    except Exception:
+        # If autoupdate structure is missing or different, skip template sync
+        pass
+
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-        
+
         print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(f"   64-bit URL: {url64}")
         print(f"   32-bit URL: {url32}")
         return True
-        
+
     except Exception as e:
         print(f"❌ Failed to save manifest: {e}")
         return False
