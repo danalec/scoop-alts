@@ -51,13 +51,35 @@ def parse_version_and_tokens(xml: str):
         'sha64': sha64,
     }
 
-def build_urls(version: str, token32: str, token64: str):
+def build_urls(version: str, token32: str, token64: str, variant: str = "uncompressed"):
     """Construct architecture-specific download URLs using tokens and version.
+    Variant can be 'uncompressed' (preferred) or 'compressed'.
     Rename to chrome.7z to match installer script expectations.
     """
-    url64 = f"https://dl.google.com/release2/chrome/{token64}_{version}/{version}_chrome_installer.exe#/chrome.7z"
-    url32 = f"https://dl.google.com/release2/chrome/{token32}_{version}/{version}_chrome_installer.exe#/chrome.7z"
+    if variant == "uncompressed":
+        suffix = "_chrome_installer_uncompressed.exe"
+    else:
+        suffix = "_chrome_installer.exe"
+    url64 = f"https://dl.google.com/release2/chrome/{token64}_{version}/{version}{suffix}#/chrome.7z"
+    url32 = f"https://dl.google.com/release2/chrome/{token32}_{version}/{version}{suffix}#/chrome.7z"
     return url32, url64
+
+def validate_url(url: str) -> bool:
+    """Check if the URL is accessible via HEAD, fall back to GET with Range."""
+    try:
+        s = requests.Session()
+        r = s.head(url.split('#', 1)[0], timeout=20, allow_redirects=True)
+        if r.status_code == 200:
+            return True
+    except Exception:
+        pass
+
+    try:
+        s = requests.Session()
+        r = s.get(url.split('#', 1)[0], headers={'Range': 'bytes=0-0'}, timeout=20)
+        return r.status_code in (200, 206)
+    except Exception:
+        return False
 
 def update_manifest():
     """Update the Scoop manifest by parsing XML for version, tokens, and hashes."""
@@ -81,7 +103,40 @@ def update_manifest():
     sha32 = info['sha32']
     sha64 = info['sha64']
 
-    url32, url64 = build_urls(version, token32, token64)
+    # Prefer uncompressed installer variant; fall back to compressed if needed
+    chosen_variant = "uncompressed"
+    url32, url64 = build_urls(version, token32, token64, variant=chosen_variant)
+
+    # Validate URLs; if invalid, try to refetch XML once to get fresh tokens
+    if not (validate_url(url32) and validate_url(url64)):
+        # Try compressed variant as fallback
+        chosen_variant = "compressed"
+        url32, url64 = build_urls(version, token32, token64, variant=chosen_variant)
+
+    # Validate URLs; if invalid, try to refetch XML once to get fresh tokens
+    if not (validate_url(url32) and validate_url(url64)):
+        try:
+            xml = fetch_update_xml()
+            info2 = parse_version_and_tokens(xml)
+            if info2:
+                version = info2['version']
+                token32 = info2['token32']
+                token64 = info2['token64']
+                sha32 = info2['sha32']
+                sha64 = info2['sha64']
+                # Try uncompressed first on fresh tokens
+                chosen_variant = "uncompressed"
+                url32, url64 = build_urls(version, token32, token64, variant=chosen_variant)
+                if not (validate_url(url32) and validate_url(url64)):
+                    # Fallback to compressed
+                    chosen_variant = "compressed"
+                    url32, url64 = build_urls(version, token32, token64, variant=chosen_variant)
+        except Exception:
+            pass
+
+    if not (validate_url(url32) and validate_url(url64)):
+        print("❌ Generated Widevine URLs are not accessible (404). Skipping manifest update to avoid broken links.")
+        return False
 
     # Load existing manifest
     try:
@@ -120,11 +175,15 @@ def update_manifest():
         if 'autoupdate' in manifest and 'architecture' in manifest['autoupdate']:
             if '64bit' in manifest['autoupdate']['architecture']:
                 manifest['autoupdate']['architecture']['64bit']['url'] = (
-                    "https://dl.google.com/release2/chrome/$match64_$version/$version_chrome_installer.exe#/chrome.7z"
+                    "https://dl.google.com/release2/chrome/$match64_$version/" +
+                    ("$version_chrome_installer_uncompressed.exe" if chosen_variant == "uncompressed" else "$version_chrome_installer.exe") +
+                    "#/chrome.7z"
                 )
             if '32bit' in manifest['autoupdate']['architecture']:
                 manifest['autoupdate']['architecture']['32bit']['url'] = (
-                    "https://dl.google.com/release2/chrome/$match32_$version/$version_chrome_installer.exe#/chrome.7z"
+                    "https://dl.google.com/release2/chrome/$match32_$version/" +
+                    ("$version_chrome_installer_uncompressed.exe" if chosen_variant == "uncompressed" else "$version_chrome_installer.exe") +
+                    "#/chrome.7z"
                 )
     except Exception:
         # If autoupdate structure is missing or different, skip template sync
