@@ -83,18 +83,18 @@ def validate_url(url: str) -> bool:
 
 def update_manifest():
     """Update the Scoop manifest by parsing XML for version, tokens, and hashes."""
-    print(f"🔄 Updating {SOFTWARE_NAME}...")
+    print(f"Updating {SOFTWARE_NAME}...")
 
     # Fetch and parse XML
     try:
         xml = fetch_update_xml()
     except Exception as e:
-        print(f"❌ Failed to fetch XML: {e}")
+        print(f"Error: Failed to fetch XML: {e}")
         return False
 
     info = parse_version_and_tokens(xml)
     if not info:
-        print("❌ Failed to parse version/tokens from XML")
+        print("Error: Failed to parse version/tokens from XML")
         return False
 
     version = info['version']
@@ -135,7 +135,7 @@ def update_manifest():
             pass
 
     if not (validate_url(url32) and validate_url(url64)):
-        print("❌ Generated Widevine URLs are not accessible (404). Skipping manifest update to avoid broken links.")
+        print("Error: Generated Widevine URLs are not accessible (404). Skipping manifest update to avoid broken links.")
         return False
 
     # Load existing manifest
@@ -143,16 +143,16 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(f"Error: Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON in manifest: {e}")
+        print(f"Error: Invalid JSON in manifest: {e}")
         return False
 
     # Check if update is needed
     current_version = manifest.get('version', '')
     if current_version == version and manifest.get('architecture', {}).get('64bit', {}).get('url', '') == url64:
-        print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        print(f"{SOFTWARE_NAME} is already up to date (v{version})")
         return True
 
     # Update manifest fields: version and architecture-specific URLs and hashes
@@ -194,13 +194,13 @@ def update_manifest():
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        print(f"Updated {SOFTWARE_NAME}: {current_version} -> {version}")
         print(f"   64-bit URL: {url64}")
         print(f"   32-bit URL: {url32}")
         return True
 
     except Exception as e:
-        print(f"❌ Failed to save manifest: {e}")
+        print(f"Error: Failed to save manifest: {e}")
         return False
 
 def main():

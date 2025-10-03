@@ -3,3 +3,9 @@
 ._*
 page.html
 checkver-*.html
+
+# Ignore local Python virtual environment
+.venv/
+
+# Ignore VS Code workspace settings
+.vscode/
