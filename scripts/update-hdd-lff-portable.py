@@ -22,7 +22,7 @@ def update_manifest():
     # Configure software version detection
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
-        homepage_url=HOMEPAGE_URL,
+        homepage=HOMEPAGE_URL,
         version_patterns=['HDDLLF\\.([\\d\\.]+)\\.exe', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="HDD Low Level Format Tool (Portable) - A utility for low-level formatting of SATA, IDE, SAS, SCSI or SSD drives",

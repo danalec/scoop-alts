@@ -50,8 +50,9 @@ class VersionDetector:
             for pattern in version_patterns:
                 matches = re.findall(pattern, content, re.IGNORECASE)
                 if matches:
-                    # Return the first (and usually latest) version found
-                    version = matches[0]
+                    # Normalize match to a string if regex returns tuples of groups
+                    first_match = matches[0]
+                    version = first_match[0] if isinstance(first_match, (tuple, list)) else first_match
                     print(f"✅ Found version: {version}")
                     return version
             
@@ -104,14 +105,17 @@ class VersionDetector:
         Returns:
             SHA256 hash string if successful, None otherwise
         """
+        # Strip any fragment (e.g., "#/setup.exe") which is used by Scoop for local renaming
+        clean_url = url.split('#', 1)[0]
+
         # First validate the URL is accessible
-        if not self.validate_url(url):
-            print(f"❌ URL not accessible: {url}")
+        if not self.validate_url(clean_url):
+            print(f"❌ URL not accessible: {clean_url}")
             return None
             
         try:
             print("🔍 Calculating hash...")
-            response = self.session.get(url, timeout=60, stream=True)
+            response = self.session.get(clean_url, timeout=60, stream=True)
             response.raise_for_status()
             
             sha256_hash = hashlib.sha256()

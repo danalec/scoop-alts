@@ -1,219 +1,137 @@
 #!/usr/bin/env python3
 """
 Widevinecdm Update Script
-Automatically checks for updates and updates the Scoop manifest.
+Fetches version and architecture-specific download info from the Chrome UpdateTracker XML
+and updates the Scoop manifest using XML-provided URLs and SHA256 values (no downloads).
 """
 
 import json
 import re
-import requests
-import hashlib
-import subprocess
+import sys
 from pathlib import Path
-from typing import Optional
+import requests
 
 # Configuration
-HOMEPAGE_URL = "https://scoopinstaller.github.io/UpdateTracker/googlechrome/chrome.min.xml"
-DOWNLOAD_URL_TEMPLATE = ""
+SOFTWARE_NAME = "widevinecdm"
+XML_URL = "https://scoopinstaller.github.io/UpdateTracker/googlechrome/chrome.min.xml"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "widevinecdm.json"
 
-class WidevinecdmUpdater:
-    """Handles Widevinecdm updates"""
+TOKEN_REGEX = re.compile(
+    r"(?s)<stable32>.*?<version>([\d.]+)</version>.*?release2/chrome/([A-Za-z0-9_-]+)_.*?</stable32>.*?"
+    r"<stable64>.*?release2/chrome/([A-Za-z0-9_-]+)_.*?</stable64>"
+)
+SHA32_REGEX = re.compile(r"(?s)<stable32>.*?<sha256>([a-f0-9]{64})</sha256>.*?</stable32>")
+SHA64_REGEX = re.compile(r"(?s)<stable64>.*?<sha256>([a-f0-9]{64})</sha256>.*?</stable64>")
+
+def fetch_update_xml() -> str:
+    """Download the UpdateTracker XML content."""
+    s = requests.Session()
+    s.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
+    })
+    resp = s.get(XML_URL, timeout=30)
+    resp.raise_for_status()
+    return resp.text
+
+def parse_version_and_tokens(xml: str):
+    """Extract version, 32-bit token, 64-bit token and SHA256 hashes from XML."""
+    m = TOKEN_REGEX.search(xml)
+    if not m:
+        return None
+    version, token32, token64 = m.groups()
+    m32 = SHA32_REGEX.search(xml)
+    m64 = SHA64_REGEX.search(xml)
+    sha32 = m32.group(1) if m32 else None
+    sha64 = m64.group(1) if m64 else None
+    return {
+        'version': version,
+        'token32': token32,
+        'token64': token64,
+        'sha32': sha32,
+        'sha64': sha64,
+    }
+
+def build_urls(version: str, token32: str, token64: str):
+    """Construct architecture-specific download URLs using tokens and version."""
+    url64 = f"https://dl.google.com/release2/chrome/{token64}_{version}/{version}_chrome_installer.exe#/dl.7z"
+    url32 = f"https://dl.google.com/release2/chrome/{token32}_{version}/{version}_chrome_installer.exe#/dl.7z"
+    return url32, url64
+
+def update_manifest():
+    """Update the Scoop manifest by parsing XML for version, tokens, and hashes."""
+    print(f"🔄 Updating {SOFTWARE_NAME}...")
     
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'identity',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        })
+    # Fetch and parse XML
+    try:
+        xml = fetch_update_xml()
+    except Exception as e:
+        print(f"❌ Failed to fetch XML: {e}")
+        return False
 
-    def fetch_latest_version(self) -> Optional[str]:
-        """Fetch the latest version from the homepage"""
-        try:
-            print(f"🔍 Scraping version from: {HOMEPAGE_URL}")
-            response = self.session.get(HOMEPAGE_URL, timeout=30)
-            response.raise_for_status()
-            
-            content = response.text
-            
-            # Version patterns for Widevinecdm
-            version_patterns = [
-                r'(?sm)<stable32><version>(?<version>[\d.]+)</version>.+release2/chrome/(?<32>[\w-]+)_.+<stable64>.+release2/chrome/(?<64>[\w-]+)_.+</stable64>',
-                r'Version:?\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)',
-                r'v\.?\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)',
-                r'([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)\s*(?:version|release)',
-            ]
-            
-            for pattern in version_patterns:
-                matches = re.findall(pattern, content, re.IGNORECASE)
-                if matches:
-                    # Get the latest version (assuming semantic versioning)
-                    versions = [match if isinstance(match, str) else match[0] for match in matches]
-                    latest_version = max(versions, key=lambda v: [int(x) for x in v.split('.')])
-                    print(f"✅ Found Widevinecdm version: {latest_version}")
-                    return latest_version
-            
-            print("❌ No version found on the page")
-            return None
-            
-        except Exception as e:
-            print(f"❌ Error fetching version: {e}")
-            return None
+    info = parse_version_and_tokens(xml)
+    if not info:
+        print("❌ Failed to parse version/tokens from XML")
+        return False
 
-    def get_download_url(self, version: str) -> str:
-        """Generate download URL for the given version"""
-        if DOWNLOAD_URL_TEMPLATE:
-            return DOWNLOAD_URL_TEMPLATE.replace("$version", version)
-        else:
-            # Fallback: try to construct URL from current manifest
-            with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
-                current_manifest = json.load(f)
-            current_url = current_manifest.get('url', '')
-            current_version = current_manifest.get('version', '')
-            
-            if current_version and current_version in current_url:
-                return current_url.replace(current_version, version)
-            else:
-                raise ValueError("Cannot determine download URL pattern")
+    version = info['version']
+    token32 = info['token32']
+    token64 = info['token64']
+    sha32 = info['sha32']
+    sha64 = info['sha64']
 
-    def calculate_hash(self, url: str) -> str:
-        """Calculate SHA256 hash of the downloaded file"""
-        try:
-            print(f"🔍 Calculating hash for: {url}")
-            response = self.session.get(url, timeout=60, stream=True)
-            response.raise_for_status()
-            
-            sha256_hash = hashlib.sha256()
-            for chunk in response.iter_content(chunk_size=8192):
-                sha256_hash.update(chunk)
-            
-            hash_value = sha256_hash.hexdigest()
-            print(f"✅ Hash calculated: {hash_value}")
-            return hash_value
-            
-        except Exception as e:
-            print(f"❌ Error calculating hash: {e}")
-            raise
+    url32, url64 = build_urls(version, token32, token64)
 
-    def update_manifest(self, new_version: str, new_url: str, new_hash: str) -> bool:
-        """Update the manifest file with new version info"""
-        try:
-            with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
-                manifest = json.load(f)
-            
-            # Update version, URL, and hash
-            manifest['version'] = new_version
-            manifest['url'] = new_url
-            manifest['hash'] = f"sha256:{new_hash}"
-            
-            # Update bin name if it contains version
-            if 'bin' in manifest and isinstance(manifest['bin'], str):
-                old_version = manifest['version'] if 'version' in manifest else ''
-                if old_version and old_version in manifest['bin']:
-                    manifest['bin'] = manifest['bin'].replace(old_version, new_version)
-            
-            # Update shortcuts if they contain version
-            if 'shortcuts' in manifest:
-                for shortcut in manifest['shortcuts']:
-                    if isinstance(shortcut, list) and len(shortcut) > 0:
-                        if old_version and old_version in shortcut[0]:
-                            shortcut[0] = shortcut[0].replace(old_version, new_version)
-            
-            # Save updated manifest
-            with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
-                json.dump(manifest, f, indent=4, ensure_ascii=False)
-            
-            print(f"✅ Updated manifest: {BUCKET_FILE}")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error updating manifest: {e}")
-            return False
+    # Load existing manifest
+    try:
+        with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
+            manifest = json.load(f)
+    except FileNotFoundError:
+        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        return False
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in manifest: {e}")
+        return False
+    
+    # Check if update is needed
+    current_version = manifest.get('version', '')
+    if current_version == version and manifest.get('architecture', {}).get('64bit', {}).get('url', '') == url64:
+        print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        return True
+    
+    # Update manifest fields: version and architecture-specific URLs and hashes
+    manifest['version'] = version
+    if 'architecture' not in manifest:
+        manifest['architecture'] = {}
+    manifest['architecture']['64bit'] = manifest.get('architecture', {}).get('64bit', {})
+    manifest['architecture']['32bit'] = manifest.get('architecture', {}).get('32bit', {})
 
-    def commit_and_push(self, version: str) -> bool:
-        """Commit and push changes to git repository"""
-        try:
-            # Add the updated manifest
-            subprocess.run(['git', 'add', str(BUCKET_FILE)], check=True, cwd=BUCKET_FILE.parent.parent)
-            
-            # Commit with descriptive message
-            commit_message = f"Update widevinecdm to version {version}"
-            subprocess.run(['git', 'commit', '-m', commit_message], check=True, cwd=BUCKET_FILE.parent.parent)
-            
-            # Push to remote
-            subprocess.run(['git', 'push'], check=True, cwd=BUCKET_FILE.parent.parent)
-            
-            print(f"✅ Committed and pushed changes")
-            return True
-            
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Git operation failed: {e}")
-            return False
-
-    def run_update(self) -> bool:
-        """Main update process"""
-        print(f"🚀 Starting Widevinecdm update check...")
+    manifest['architecture']['64bit']['url'] = url64
+    if sha64:
+        manifest['architecture']['64bit']['hash'] = sha64
+    
+    manifest['architecture']['32bit']['url'] = url32
+    if sha32:
+        manifest['architecture']['32bit']['hash'] = sha32
+    
+    # Save updated manifest
+    try:
+        with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
         
-        # Get current version
-        try:
-            with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
-                current_manifest = json.load(f)
-            current_version = current_manifest.get('version', 'unknown')
-        except Exception:
-            current_version = 'unknown'
+        print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        print(f"   64-bit URL: {url64}")
+        print(f"   32-bit URL: {url32}")
+        return True
         
-        # Fetch latest version
-        latest_version = self.fetch_latest_version()
-        if not latest_version:
-            print("❌ Failed to fetch latest version")
-            return False
-        
-        # Check if update is needed
-        if current_version == latest_version:
-            print(f"ℹ️  Current version {current_version} is up to date (latest: {latest_version})")
-            print("ℹ️  No update needed")
-            return True
-        
-        print(f"🔄 Update available: {current_version} → {latest_version}")
-        
-        # Get download URL and calculate hash
-        try:
-            download_url = self.get_download_url(latest_version)
-            print(f"📦 Download URL: {download_url}")
-            
-            file_hash = self.calculate_hash(download_url)
-            
-            # Update manifest
-            if self.update_manifest(latest_version, download_url, file_hash):
-                print(f"✅ Successfully updated Widevinecdm to version {latest_version}")
-                
-                # Optionally commit and push (uncomment if desired)
-                # self.commit_and_push(latest_version)
-                
-                return True
-            else:
-                print("❌ Failed to update manifest")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Update failed: {e}")
-            return False
+    except Exception as e:
+        print(f"❌ Failed to save manifest: {e}")
+        return False
 
 def main():
-    """Main function"""
-    updater = WidevinecdmUpdater()
-    success = updater.run_update()
-    
-    if success:
-        print(f"✨ Widevinecdm update check completed")
-    else:
-        print(f"💥 Widevinecdm update check failed")
-        exit(1)
+    """Main update function"""
+    success = update_manifest()
+    if not success:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
