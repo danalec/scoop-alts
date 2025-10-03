@@ -113,22 +113,32 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
         print(f"💥 {script_name} - Error: {e}")
         return UpdateResult(script_name, False, str(e), duration, False)
 
-def run_sequential(scripts: List[Path], timeout: int) -> List[UpdateResult]:
-    """Run update scripts sequentially."""
+def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0) -> List[UpdateResult]:
+    """Run update scripts sequentially.
+
+    Args:
+        scripts: List of script paths to run
+        timeout: Timeout per script in seconds
+        delay: Optional delay (in seconds) between scripts to avoid overwhelming APIs
+    """
     results = []
     
     for script_path in scripts:
         result = run_update_script(script_path, timeout)
         results.append(result)
         
-        # Add a small delay between scripts to avoid overwhelming APIs
-        time.sleep(1)
+        # Optional delay between scripts
+        if delay and delay > 0:
+            time.sleep(delay)
     
     return results
 
 def run_parallel(scripts: List[Path], timeout: int, max_workers: int) -> List[UpdateResult]:
     """Run update scripts in parallel."""
     results = []
+    
+    # Cap workers to the number of scripts to avoid oversubscription
+    max_workers = max(1, min(max_workers, len(scripts)))
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all scripts
@@ -218,6 +228,10 @@ def main():
                        help="Run scripts in parallel (faster but may hit API limits)")
     parser.add_argument("--workers", "-w", type=int, default=3,
                        help="Number of parallel workers (default: 3)")
+    parser.add_argument("--delay", "-D", type=float, default=0.5,
+                       help="Delay (seconds) between scripts in sequential mode (default: 0.5)")
+    parser.add_argument("--fast", "-f", action="store_true",
+                       help="Enable fast mode: parallel execution with an optimized worker count")
     parser.add_argument("--timeout", "-t", type=int, default=300,
                        help="Timeout per script in seconds (default: 300)")
     parser.add_argument("--scripts", "-s", nargs="+", 
@@ -275,6 +289,8 @@ def main():
     print(f"🎯 Mode: {'Parallel' if args.parallel else 'Sequential'}")
     if args.parallel:
         print(f"👥 Workers: {args.workers}")
+    else:
+        print(f"⏳ Sequential delay: {args.delay:.1f}s")
     print(f"⏱️  Timeout: {args.timeout}s per script")
     print(f"📋 Scripts to run ({len(script_paths)}):")
     
@@ -291,10 +307,18 @@ def main():
     # Run the scripts
     start_time = time.time()
     
+    # If fast mode is enabled, force parallel with an optimized worker count
+    if args.fast:
+        args.parallel = True
+        # Recommend worker count based on CPU and script count (network-bound tasks benefit from moderate concurrency)
+        recommended_workers = min(6, max(3, (os.cpu_count() or 4)))
+        args.workers = min(recommended_workers, len(script_paths))
+        print(f"⚡ Fast mode enabled: workers set to {args.workers}")
+    
     if args.parallel:
         results = run_parallel(script_paths, args.timeout, args.workers)
     else:
-        results = run_sequential(script_paths, args.timeout)
+        results = run_sequential(script_paths, args.timeout, args.delay)
     
     total_duration = time.time() - start_time
     
