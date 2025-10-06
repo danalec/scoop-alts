@@ -17,14 +17,18 @@ Alternative Scoop bucket featuring **carefully curated applications** with enhan
 scoop bucket add danalec_scoop-alts https://github.com/danalec/scoop-alts
 ```
 
-### Install Enhanced Chromium
+### Install Ungoogled Chromium with Widevine
 ```powershell
 scoop install danalec_scoop-alts/ungoogled-chromium
 ```
 
 ### Browse All Packages
+Online:
+https://github.com/danalec/scoop-alts/tree/main/bucket
+
+Locally (after adding the bucket):
 ```powershell
-scoop search danalec_scoop-alts/
+Get-ChildItem "$env:SCOOP\\buckets\\danalec_scoop-alts\\bucket\\*.json" | Select-Object -ExpandProperty BaseName
 ```
 
 ## 🤖 Automation
