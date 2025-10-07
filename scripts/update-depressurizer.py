@@ -11,8 +11,8 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "depressurizer"
-HOMEPAGE_URL = "https://api.github.com/repos/Depressurizer/Depressurizer/releases/latest"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/Depressurizer/Depressurizer/releases/download/v$version/Depressurizer-v$version.zip"
+HOMEPAGE_URL = "https://api.github.com/repos/julianxhokaxhiu/Depressurizer/releases/latest"
+DOWNLOAD_URL_TEMPLATE = "https://github.com/julianxhokaxhiu/Depressurizer/releases/download/$version/Depressurizer-v$version.0_Release.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "depressurizer.json"
 
 def update_manifest():

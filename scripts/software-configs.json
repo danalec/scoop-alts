@@ -60,14 +60,14 @@
     {
       "name": "depressurizer",
       "description": "Depressurizer - A Steam library categorizing tool",
-      "homepage": "https://api.github.com/repos/Depressurizer/Depressurizer/releases/latest",
+      "homepage": "https://api.github.com/repos/julianxhokaxhiu/Depressurizer/releases/latest",
       "license": "GPL-3.0",
       "version_regex": "\"tag_name\":\\s*\"v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\"",
-      "download_url_template": "https://github.com/Depressurizer/Depressurizer/releases/download/v$version/Depressurizer-v$version.zip",
-      "bin_name": "Depressurizer-v$version.exe",
+      "download_url_template": "https://github.com/julianxhokaxhiu/Depressurizer/releases/download/$version/Depressurizer-v$version.0_Release.zip",
+      "bin_name": "Depressurizer.exe",
       "shortcuts": [
         [
-          "Depressurizer-v$version.exe",
+          "Depressurizer.exe",
           "Depressurizer"
         ]
       ]
