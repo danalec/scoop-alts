@@ -83,7 +83,7 @@ def update_manifest():
     # Configure software version detection
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
-        homepage_url=HOMEPAGE_URL,
+        homepage=HOMEPAGE_URL,
         version_patterns={version_patterns},
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="{manifest.get('description', package_name)}",

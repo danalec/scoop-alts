@@ -15,6 +15,7 @@ import requests
 import tempfile
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
+from version_detector import SoftwareConfig
 
 # Add current directory to path for imports
 scripts_dir = Path(__file__).parent
