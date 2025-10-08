@@ -9,3 +9,5 @@ checkver-*.html
 
 # Ignore VS Code workspace settings
 .vscode/
+# Ignore Python bytecode cache for scripts
+scripts/__pycache__/

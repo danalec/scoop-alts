@@ -34,6 +34,7 @@ def update_manifest():
     hash_value = detector.calculate_hash(download_url)
     if not hash_value:
         print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "hash_failed"}))
         return False
     
     # Load existing manifest
@@ -51,6 +52,7 @@ def update_manifest():
     current_version = manifest.get('version', '')
     if version and current_version == version:
         print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
     
     # Update manifest
@@ -66,10 +68,12 @@ def update_manifest():
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         
         print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version or manifest.get('version', '')}))
         return True
         
     except Exception as e:
         print(f"❌ Failed to save manifest: {e}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version or manifest.get('version', ''), "error": "save_failed"}))
         return False
 
 def main():

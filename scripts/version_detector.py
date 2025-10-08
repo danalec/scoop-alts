@@ -5,6 +5,7 @@ Provides reusable functions for version detection and URL construction.
 """
 
 import re
+import os
 import requests
 import hashlib
 import tempfile
@@ -13,20 +14,98 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass
 
+# Optional adapters/retries for robust and efficient HTTP requests
+try:
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+except Exception:  # pragma: no cover - environment may not have urllib3
+    HTTPAdapter = None
+    Retry = None
+
+# Optional caching support; used only if available and enabled by caller
+try:
+    import requests_cache  # type: ignore
+except Exception:  # pragma: no cover
+    requests_cache = None
+
+DEFAULT_TIMEOUT = 15  # seconds
+
+def get_session(
+    *,
+    retries: int = 2,
+    backoff_factor: float = 0.3,
+    pool_connections: int = 10,
+    pool_maxsize: int = 20,
+    use_cache: bool = False,
+    cache_expire_seconds: int = 1800,
+) -> requests.Session:
+    """Create a configured HTTP session with pooling, retries, and optional caching.
+
+    Args:
+        retries: Total retry attempts for transient errors
+        backoff_factor: Backoff factor for retry delays
+        pool_connections: Connection pool size per host
+        pool_maxsize: Max pooled connections
+        use_cache: Enable requests-cache if available
+        cache_expire_seconds: Cache TTL when using requests-cache
+
+    Returns:
+        Configured requests.Session (or CachedSession if caching enabled)
+    """
+    if use_cache and requests_cache is not None:
+        session: requests.Session = requests_cache.CachedSession(
+            cache_name='version-detector-cache',
+            backend='sqlite',
+            expire_after=cache_expire_seconds,
+        )
+    else:
+        session = requests.Session()
+
+    # Default headers (prefer compressed responses)
+    session.headers.update({
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/120.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    })
+
+    # Configure connection pooling and retries if available
+    if HTTPAdapter is not None and Retry is not None:
+        retry = Retry(
+            total=retries,
+            backoff_factor=backoff_factor,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(['HEAD', 'GET']),
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(
+            pool_connections=pool_connections,
+            pool_maxsize=pool_maxsize,
+            max_retries=retry,
+        )
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+
+    return session
+
 class VersionDetector:
     """Shared class for version detection and URL construction"""
     
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'identity',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        })
+        # Use shared session with pooling, retries, and compressed responses
+        # Enable cache if env variables request it
+        use_cache = bool(os.environ.get('AUTOMATION_HTTP_CACHE') or os.environ.get('REQUESTS_CACHE'))
+        ttl = int(os.environ.get('AUTOMATION_HTTP_CACHE_TTL', '1800'))
+        self.session = get_session(use_cache=use_cache, cache_expire_seconds=ttl)
+        # Per-URL conditional request metadata and cached parsed version
+        self._version_cache: Dict[str, Dict[str, str]] = {}
     
     def fetch_latest_version(self, homepage_url: str, version_patterns: List[str]) -> Optional[str]:
         """
@@ -41,9 +120,23 @@ class VersionDetector:
         """
         try:
             print(f"🔍 Scraping version from: {homepage_url}")
-            response = self.session.get(homepage_url, timeout=30)
+            # Use conditional headers when we have prior metadata
+            headers: Dict[str, str] = {}
+            cached = self._version_cache.get(homepage_url)
+            if cached:
+                if cached.get('etag'):
+                    headers['If-None-Match'] = cached['etag']
+                if cached.get('last_modified'):
+                    headers['If-Modified-Since'] = cached['last_modified']
+
+            response = self.session.get(homepage_url, timeout=DEFAULT_TIMEOUT, headers=headers)
             response.raise_for_status()
             
+            # If not modified, return cached version immediately
+            if response.status_code == 304 and cached and cached.get('version'):
+                print("ℹ️  Not modified (304), using cached version")
+                return cached['version']
+
             content = response.text
             
             # Try each pattern until we find a match
@@ -54,9 +147,21 @@ class VersionDetector:
                     first_match = matches[0]
                     version = first_match[0] if isinstance(first_match, (tuple, list)) else first_match
                     print(f"✅ Found version: {version}")
+                    # Store conditional metadata and parsed version
+                    self._version_cache[homepage_url] = {
+                        'etag': response.headers.get('ETag', ''),
+                        'last_modified': response.headers.get('Last-Modified', ''),
+                        'version': version,
+                    }
                     return version
             
             print("❌ No version found with any pattern")
+            # Cache response metadata even when not found, to enable future 304
+            self._version_cache[homepage_url] = {
+                'etag': response.headers.get('ETag', ''),
+                'last_modified': response.headers.get('Last-Modified', ''),
+                'version': '',
+            }
             return None
             
         except requests.RequestException as e:
@@ -84,13 +189,13 @@ class VersionDetector:
     def validate_url(self, url: str) -> bool:
         """Validate if URL is accessible without downloading the full file"""
         try:
-            response = self.session.head(url, timeout=30, allow_redirects=True)
+            response = self.session.head(url, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
             return response.status_code == 200
         except Exception:
             # If HEAD fails, try GET with range to check first byte
             try:
                 headers = {'Range': 'bytes=0-0'}
-                response = self.session.get(url, headers=headers, timeout=30)
+                response = self.session.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
                 return response.status_code in [200, 206]  # 206 = Partial Content
             except Exception:
                 return False
@@ -115,7 +220,7 @@ class VersionDetector:
             
         try:
             print("🔍 Calculating hash...")
-            response = self.session.get(clean_url, timeout=60, stream=True)
+            response = self.session.get(clean_url, timeout=max(30, DEFAULT_TIMEOUT), stream=True)
             response.raise_for_status()
             
             sha256_hash = hashlib.sha256()
@@ -143,11 +248,31 @@ class VersionDetector:
         Returns:
             Version string if found, None otherwise
         """
+        # Try cheaper strategies first to avoid full downloads
         try:
+            # 1) Try to guess version from URL/filename
+            v_guess = self.guess_version_from_url(download_url)
+            if v_guess:
+                print(f"✅ Version guessed from URL: {v_guess}")
+                return v_guess
+
+            # 2) Try HEAD for headers-based hints (e.g., Content-Disposition)
+            head_resp = self.head(download_url)
+            v_head = self.guess_version_from_headers(head_resp) if head_resp else None
+            if v_head:
+                print(f"✅ Version guessed from headers: {v_head}")
+                return v_head
+
+            # 3) Try partial content scan for common version strings
+            v_partial = self.guess_version_from_partial_content(download_url)
+            if v_partial:
+                print(f"✅ Version inferred from partial content: {v_partial}")
+                return v_partial
+
+            # 4) Fallback to full download and metadata extraction
             print(f"🔍 Downloading executable to analyze metadata: {download_url}")
 
-            # Download file to temporary location
-            response = self.session.get(download_url, stream=True, timeout=60)
+            response = self.session.get(download_url, stream=True, timeout=max(30, DEFAULT_TIMEOUT))
             response.raise_for_status()
 
             with tempfile.NamedTemporaryFile(delete=False, suffix='.exe') as temp_file:
@@ -178,6 +303,24 @@ class VersionDetector:
         except Exception as e:
             print(f"❌ Error extracting version from executable: {e}")
             return None
+
+    # Utility helpers for efficient network access
+    def head(self, url: str, *, timeout: int = DEFAULT_TIMEOUT, allow_redirects: bool = True) -> Optional[requests.Response]:
+        try:
+            return self.session.head(url, timeout=timeout, allow_redirects=allow_redirects)
+        except Exception:
+            return None
+
+    def get_range_bytes(self, url: str, start: int = 0, end: int = 65535, *, timeout: int = DEFAULT_TIMEOUT) -> Optional[bytes]:
+        """Fetch a byte range to avoid full downloads when only metadata is needed."""
+        try:
+            headers = {'Range': f'bytes={start}-{end}'}
+            resp = self.session.get(url, headers=headers, timeout=timeout)
+            if resp.status_code in (200, 206):
+                return resp.content
+        except Exception:
+            return None
+        return None
 
     def _extract_version_powershell(self, exe_path: Path) -> Optional[str]:
         """Extract version using PowerShell Get-ItemProperty"""
@@ -225,6 +368,26 @@ class VersionDetector:
     def get_msi_version(self, msi_url: str) -> Optional[str]:
         """Extract version from MSI installer"""
         try:
+            # 1) Try to guess version from URL/filename
+            v_guess = self.guess_version_from_url(msi_url)
+            if v_guess:
+                print(f"✅ Version guessed from URL: {v_guess}")
+                return v_guess
+
+            # 2) Headers-based hints
+            head_resp = self.head(msi_url)
+            v_head = self.guess_version_from_headers(head_resp) if head_resp else None
+            if v_head:
+                print(f"✅ Version guessed from headers: {v_head}")
+                return v_head
+
+            # 3) Partial content scan for ProductVersion strings
+            v_partial = self.guess_version_from_partial_content(msi_url)
+            if v_partial:
+                print(f"✅ Version inferred from partial content: {v_partial}")
+                return v_partial
+
+            # 4) Fallback: full download and query MSI properties
             print(f"🔍 Downloading MSI to analyze: {msi_url}")
             
             response = self.session.get(msi_url, stream=True, timeout=60)
@@ -255,6 +418,59 @@ class VersionDetector:
         except Exception as e:
             print(f"❌ Error extracting MSI version: {e}")
         
+        return None
+
+    # Lightweight version inference helpers
+    def guess_version_from_url(self, url: str) -> Optional[str]:
+        """Try to infer version from URL/filename patterns."""
+        try:
+            fname = url.split('/')[-1]
+            candidates = [fname, url]
+            for text in candidates:
+                # Common patterns: v1.2.3, 1.2.3, 1.2.3.4, 2024.10
+                m = re.search(r'v?(\d+\.\d+(?:\.\d+){0,2})', text)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+        return None
+
+    def guess_version_from_headers(self, resp: Optional[requests.Response]) -> Optional[str]:
+        """Infer version from Content-Disposition filename or other headers."""
+        if not resp:
+            return None
+        cd = resp.headers.get('Content-Disposition') or resp.headers.get('content-disposition')
+        if cd:
+            # filename="app-1.2.3.exe"
+            m = re.search(r'filename="?([^";]+)"?', cd)
+            if m:
+                return self.guess_version_from_url(m.group(1))
+        return None
+
+    def guess_version_from_partial_content(self, url: str, *, first_bytes: int = 262144) -> Optional[str]:
+        """Download a small byte range and scan for typical version strings.
+        This is best-effort and may not always succeed, but avoids full downloads.
+        """
+        try:
+            data = self.get_range_bytes(url, 0, first_bytes)
+            if not data:
+                return None
+            # Look for strings like FileVersion/ProductVersion and nearby version numbers
+            blob = data.decode('latin-1', errors='ignore')
+            # Search within 100 chars after the keyword for a version pattern
+            for key in ("FileVersion", "ProductVersion", "Product Version", "Version"):
+                idx = blob.find(key)
+                if idx != -1:
+                    window = blob[idx: idx + 200]
+                    m = re.search(r'(\d+\.\d+(?:\.\d+){0,2})', window)
+                    if m:
+                        return m.group(1)
+            # Fallback: any standalone version-looking pattern
+            m2 = re.search(r'\b(\d+\.\d+(?:\.\d+){0,2})\b', blob)
+            if m2:
+                return m2.group(1)
+        except Exception:
+            return None
         return None
 
 @dataclass

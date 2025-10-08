@@ -34,6 +34,7 @@ def update_manifest():
         content = resp.text
     except Exception as e:
         print(f"❌ Failed to query CRX update service: {e}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "query_failed"}))
         return False
 
     # Extract version, codebase (download URL), and sha256 hash from the response
@@ -43,6 +44,7 @@ def update_manifest():
 
     if not (version_match and url_match and hash_match):
         print("❌ Failed to parse CRX update response for version/url/hash")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "parse_failed"}))
         return False
 
     version = version_match.group(1)
@@ -64,6 +66,7 @@ def update_manifest():
     current_version = manifest.get('version', '')
     if current_version == version:
         print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
     
     # Update manifest
@@ -78,10 +81,12 @@ def update_manifest():
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         
         print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
         
     except Exception as e:
         print(f"❌ Failed to save manifest: {e}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
 
 def main():

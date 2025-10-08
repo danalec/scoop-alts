@@ -24,6 +24,8 @@ def update_manifest(software_name: str, config: SoftwareVersionConfig, bucket_fi
     version_info = get_version_info(config)
     if not version_info:
         print(f"❌ Failed to get version info for {software_name}")
+        # Emit structured output for orchestrator
+        print(json.dumps({"updated": False, "name": software_name, "error": "version_info_unavailable"}))
         return False
     
     version = version_info['version']
@@ -45,6 +47,8 @@ def update_manifest(software_name: str, config: SoftwareVersionConfig, bucket_fi
     current_version = manifest.get('version', '')
     if current_version == version:
         print(f"✅ {software_name} is already up to date (v{version})")
+        # Emit structured output for orchestrator
+        print(json.dumps({"updated": False, "name": software_name, "version": version}))
         return True
     
     # Update manifest
@@ -58,10 +62,14 @@ def update_manifest(software_name: str, config: SoftwareVersionConfig, bucket_fi
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         
         print(f"✅ Updated {software_name}: {current_version} → {version}")
+        # Emit structured output for orchestrator
+        print(json.dumps({"updated": True, "name": software_name, "version": version}))
         return True
         
     except Exception as e:
         print(f"❌ Failed to save manifest: {e}")
+        # Emit structured output for orchestrator
+        print(json.dumps({"updated": False, "name": software_name, "version": version, "error": "save_failed"}))
         return False
 
 # Example usage template - replace with actual software configuration

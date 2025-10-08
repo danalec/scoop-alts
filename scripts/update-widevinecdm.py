@@ -90,11 +90,13 @@ def update_manifest():
         xml = fetch_update_xml()
     except Exception as e:
         print(f"Error: Failed to fetch XML: {e}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "xml_fetch_failed"}))
         return False
 
     info = parse_version_and_tokens(xml)
     if not info:
         print("Error: Failed to parse version/tokens from XML")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "xml_parse_failed"}))
         return False
 
     version = info['version']
@@ -136,6 +138,7 @@ def update_manifest():
 
     if not (validate_url(url32) and validate_url(url64)):
         print("Error: Generated Widevine URLs are not accessible (404). Skipping manifest update to avoid broken links.")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "urls_inaccessible"}))
         return False
 
     # Load existing manifest
@@ -153,6 +156,7 @@ def update_manifest():
     current_version = manifest.get('version', '')
     if current_version == version and manifest.get('architecture', {}).get('64bit', {}).get('url', '') == url64:
         print(f"{SOFTWARE_NAME} is already up to date (v{version})")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
 
     # Update manifest fields: version and architecture-specific URLs and hashes
@@ -197,10 +201,12 @@ def update_manifest():
         print(f"Updated {SOFTWARE_NAME}: {current_version} -> {version}")
         print(f"   64-bit URL: {url64}")
         print(f"   32-bit URL: {url32}")
+        print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
 
     except Exception as e:
         print(f"Error: Failed to save manifest: {e}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
 
 def main():

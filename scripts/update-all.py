@@ -13,7 +13,9 @@ from datetime import datetime
 import argparse
 import concurrent.futures
 import os
+import json
 from typing import List, Tuple, Dict
+import threading
 
 # Set UTF-8 encoding for Windows console
 if sys.platform == "win32":
@@ -24,6 +26,10 @@ if sys.platform == "win32":
 # Configuration
 SCRIPTS_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPTS_DIR.parent
+
+# Cache manifest versions in-memory during one orchestrator run to avoid
+# repeated disk reads when printing summaries and composing commit messages.
+MANIFEST_VERSION_CACHE: Dict[str, str] = {}
 
 def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, str]:
     """Run a git command and return (returncode, stdout, stderr)."""
@@ -38,6 +44,11 @@ def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, s
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except Exception as e:
         return 1, "", str(e)
+
+def is_file_tracked(path: Path) -> bool:
+    """Return True if the file is tracked by git."""
+    rc, _, _ = run_git_command(["git", "ls-files", "--error-unmatch", str(path)])
+    return rc == 0
 
 def stage_bucket_changes() -> None:
     """Stage changes inside the bucket directory."""
@@ -96,6 +107,79 @@ def push_changes() -> None:
         print(f"⚠️  git push failed: {err or out}")
     else:
         print(out or "⬆️  Pushed changes to remote")
+
+def get_manifest_version(app_name: str) -> str:
+    """Return version string from bucket/<app_name>.json if available, using cache."""
+    # Return cached value if present
+    if app_name in MANIFEST_VERSION_CACHE:
+        return MANIFEST_VERSION_CACHE.get(app_name, "")
+
+    manifest_path = REPO_ROOT / "bucket" / f"{app_name}.json"
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+            version = str(manifest.get("version", "")).strip()
+            MANIFEST_VERSION_CACHE[app_name] = version
+            return version
+    except Exception:
+        # Cache miss with empty value to avoid reattempting in this run
+        MANIFEST_VERSION_CACHE[app_name] = ""
+        return ""
+
+def list_untracked_manifests() -> List[Tuple[str, Path]]:
+    """Return a list of (app_name, path) for untracked manifests under bucket/."""
+    rc, out, err = run_git_command(["git", "ls-files", "--others", "--exclude-standard", "bucket"])
+    if rc != 0:
+        print(f"⚠️  git ls-files failed: {err or out}")
+        return []
+    manifests: List[Tuple[str, Path]] = []
+    for rel in out.splitlines():
+        rel = rel.strip()
+        if not rel:
+            continue
+        if not rel.endswith('.json'):
+            continue
+        if not rel.startswith('bucket/'):
+            continue
+        p = REPO_ROOT / rel
+        app_name = Path(rel).stem
+        manifests.append((app_name, p))
+    return manifests
+
+def stage_and_commit_per_package(updated_results: List["UpdateResult"]) -> None:
+    """Stage and commit changes per updated package manifest under bucket/."""
+    for r in updated_results:
+        # Derive package name from script name: update-<pkg>.py
+        pkg = r.script_name.replace('update-', '').replace('.py', '')
+        manifest_path = REPO_ROOT / "bucket" / f"{pkg}.json"
+
+        if not manifest_path.exists():
+            # If the script updated something else or the manifest name differs, skip gracefully
+            continue
+
+        # Stage only this manifest
+        rc, out, err = run_git_command(["git", "add", str(manifest_path)])
+        if rc != 0:
+            print(f"⚠️  git add {manifest_path} failed: {err or out}")
+            continue
+
+        # Determine if there's a staged change and whether it's new or modified
+        rc, ns_out, ns_err = run_git_command(["git", "diff", "--cached", "--name-status", "--", str(manifest_path)])
+        if not ns_out.strip():
+            print(f"ℹ️  No staged changes for {pkg}, skipping commit.")
+            continue
+        status_line = ns_out.strip().splitlines()[0]
+        status_code = status_line.split("\t", 1)[0] if "\t" in status_line else ""
+        new_file = status_code.startswith("A")
+
+        # Read manifest version, if available
+        version_str = get_manifest_version(pkg)
+
+        if new_file:
+            msg = f"{pkg}: Add version {version_str}" if version_str else f"{pkg}: Add manifest"
+        else:
+            msg = f"{pkg}: Update to version {version_str}" if version_str else f"{pkg}: Update manifest"
+        commit_with_message(msg)
 
 def discover_update_scripts() -> List[str]:
     """Automatically discover all update-*.py scripts in the scripts directory"""
@@ -156,8 +240,34 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
         
         # Check if update was successful and if anything was updated
         output = result.stdout + result.stderr
-        updated = "update completed successfully" in output.lower() or "updated" in output.lower()
-        no_update_needed = "no update needed" in output.lower() or "up to date" in output.lower()
+
+        # Prefer structured JSON result if the last non-empty line is a JSON object
+        structured_updated = None
+        try:
+            lines = [ln for ln in output.strip().splitlines() if ln.strip()]
+            if lines:
+                last = lines[-1].strip()
+                if last.startswith('{') and last.endswith('}'):
+                    import json as _json
+                    parsed = _json.loads(last)
+                    if isinstance(parsed, dict):
+                        if 'updated' in parsed:
+                            structured_updated = bool(parsed.get('updated'))
+                        # Prime version cache if provided
+                        pkg = script_name.replace('update-', '').replace('.py', '')
+                        v = parsed.get('version')
+                        if isinstance(v, str) and v:
+                            MANIFEST_VERSION_CACHE[pkg] = v
+        except Exception:
+            # Ignore JSON parsing issues; fall back to text heuristics
+            pass
+
+        if structured_updated is not None:
+            updated = structured_updated
+            no_update_needed = not updated
+        else:
+            updated = "update completed successfully" in output.lower() or "updated" in output.lower()
+            no_update_needed = "no update needed" in output.lower() or "up to date" in output.lower()
         
         if result.returncode == 0:
             if updated:
@@ -206,20 +316,47 @@ def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0) -> Lis
     
     return results
 
-def run_parallel(scripts: List[Path], timeout: int, max_workers: int) -> List[UpdateResult]:
-    """Run update scripts in parallel."""
+def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_workers: int = 3) -> List[UpdateResult]:
+    """Run update scripts in parallel with provider-aware throttling."""
     results = []
-    
+
+    # Helper: determine if a script is GitHub-heavy (uses GitHub API or downloads)
+    def is_github_script(p: Path) -> bool:
+        try:
+            with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read(4000)
+                return ('github.com' in content) or ('api.github.com' in content)
+        except Exception:
+            return False
+
     # Cap workers to the number of scripts to avoid oversubscription
     max_workers = max(1, min(max_workers, len(scripts)))
-    
+
+    # Compute provider classification and throttling semaphore for GitHub
+    gh_map: Dict[Path, bool] = {p: is_github_script(p) for p in scripts}
+    gh_count = sum(1 for v in gh_map.values() if v)
+    non_gh_count = len(scripts) - gh_count
+    # Default GitHub concurrency cap
+    github_workers = max(1, min(github_workers, max_workers))
+    gh_sem = threading.BoundedSemaphore(value=github_workers)
+    if gh_count:
+        print(f"🔗 Provider-aware throttling: {gh_count} GitHub-related script(s) limited to {github_workers} concurrent")
+
+    def _task(script_path: Path, timeout: int) -> UpdateResult:
+        if gh_map.get(script_path, False):
+            # Limit GitHub-related tasks to avoid rate limits
+            with gh_sem:
+                return run_update_script(script_path, timeout)
+        else:
+            return run_update_script(script_path, timeout)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all scripts
+        # Submit all scripts with throttling wrapper
         future_to_script = {
-            executor.submit(run_update_script, script_path, timeout): script_path 
+            executor.submit(_task, script_path, timeout): script_path
             for script_path in scripts
         }
-        
+
         # Collect results as they complete
         for future in concurrent.futures.as_completed(future_to_script):
             script_path = future_to_script[future]
@@ -229,7 +366,7 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int) -> List[Up
             except Exception as e:
                 print(f"💥 {script_path.name} - Unexpected error: {e}")
                 results.append(UpdateResult(script_path.name, False, str(e), 0, False))
-    
+
     # Sort results by script name for consistent output
     results.sort(key=lambda x: x.script_name)
     return results
@@ -253,7 +390,12 @@ def print_summary(results: List[UpdateResult], total_duration: float):
     if updated:
         print(f"\n🎉 PACKAGES UPDATED:")
         for result in updated:
-            print(f"   • {result.script_name.replace('update-', '').replace('.py', '')} ({result.duration:.1f}s)")
+            package_name = result.script_name.replace('update-', '').replace('.py', '')
+            version = get_manifest_version(package_name)
+            if version:
+                print(f"   • {package_name}: Update to version {version} ({result.duration:.1f}s)")
+            else:
+                print(f"   • {package_name} ({result.duration:.1f}s)")
     
     if failed:
         print(f"\n❌ FAILED SCRIPTS:")
@@ -270,7 +412,11 @@ def print_summary(results: List[UpdateResult], total_duration: float):
         print(f"\nℹ️  NO UPDATES NEEDED:")
         for result in no_updates:
             package_name = result.script_name.replace('update-', '').replace('.py', '')
-            print(f"   • {package_name}")
+            version = get_manifest_version(package_name)
+            if version:
+                print(f"   • {package_name} (version {version})")
+            else:
+                print(f"   • {package_name}")
     
     print("\n" + "="*80)
 
@@ -297,22 +443,37 @@ def check_dependencies():
 def main():
     """Main function to orchestrate all update scripts."""
     parser = argparse.ArgumentParser(description="Run all Scoop bucket update scripts")
-    parser.add_argument("--parallel", "-p", action="store_true", 
-                       help="Run scripts in parallel (faster but may hit API limits)")
-    parser.add_argument("--workers", "-w", type=int, default=3,
-                       help="Number of parallel workers (default: 3)")
-    parser.add_argument("--delay", "-D", type=float, default=0.5,
-                       help="Delay (seconds) between scripts in sequential mode (default: 0.5)")
+    # Default to parallel execution; allow forcing sequential with --sequential
+    parser.add_argument("--parallel", "-p", action="store_true", default=True,
+                       help="Run scripts in parallel (default). Use --sequential to run sequentially.")
+    parser.add_argument("--sequential", action="store_true",
+                       help="Force sequential execution.")
+    parser.add_argument("--workers", "-w", type=int, default=6,
+                       help="Number of parallel workers (default: 6)")
+    parser.add_argument("--delay", "-D", type=float, default=0.0,
+                       help="Delay (seconds) between scripts in sequential mode (default: 0.0)")
     parser.add_argument("--fast", "-f", action="store_true",
                        help="Enable fast mode: parallel execution with an optimized worker count")
-    parser.add_argument("--timeout", "-t", type=int, default=300,
-                       help="Timeout per script in seconds (default: 300)")
+    parser.add_argument("--timeout", "-t", type=int, default=120,
+                       help="Timeout per script in seconds (default: 120)")
+    parser.add_argument("--github-workers", type=int, default=3,
+                       help="Max concurrent GitHub-related scripts (default: 3) to avoid hitting rate limits")
     parser.add_argument("--scripts", "-s", nargs="+", 
                        help="Run only specific scripts (e.g., corecycler esptool)")
     parser.add_argument("--dry-run", "-d", action="store_true",
                        help="Show what would be run without executing")
     parser.add_argument("--skip-git", action="store_true",
                        help="Skip git add/commit/push after updates")
+    parser.add_argument("--git-per-package", action="store_true",
+                       help="Stage & commit each updated manifest individually with its own message")
+    parser.add_argument("--git-aggregate", action="store_true",
+                       help="Stage & commit all changes in aggregate groups (overrides per-package default)")
+    parser.add_argument("--structured-output", action="store_true",
+                       help="Prefer structured JSON output from update scripts (falls back to text heuristics)")
+    parser.add_argument("--http-cache", action="store_true",
+                       help="Enable short-lived HTTP response caching for update scripts during this run")
+    parser.add_argument("--http-cache-ttl", type=int, default=1800,
+                       help="HTTP cache TTL in seconds when --http-cache is enabled (default: 1800)")
     
     args = parser.parse_args()
     
@@ -361,8 +522,17 @@ def main():
     print("🔧 Scoop Bucket Update Orchestrator")
     print(f"📅 Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📂 Scripts directory: {SCRIPTS_DIR}")
+    # Resolve mode: if --sequential is set, override parallel
+    if args.sequential:
+        args.parallel = False
+    else:
+        # Default to parallel if not explicitly sequential
+        args.parallel = True if args.parallel else True
+
     print(f"🎯 Mode: {'Parallel' if args.parallel else 'Sequential'}")
     if args.parallel:
+        # Clamp workers to number of scripts
+        args.workers = max(1, min(args.workers, len(script_paths)))
         print(f"👥 Workers: {args.workers}")
     else:
         print(f"⏳ Sequential delay: {args.delay:.1f}s")
@@ -372,15 +542,20 @@ def main():
     for script_path in script_paths:
         package_name = script_path.name.replace('update-', '').replace('.py', '')
         print(f"   • {package_name}")
-    
+
     if args.dry_run:
         print("\n🔍 DRY RUN - No scripts will be executed")
         return
-    
+
     print("\n" + "="*80)
-    
+
     # Run the scripts
     start_time = time.time()
+
+    # Propagate HTTP cache settings to child processes
+    if args.http_cache:
+        os.environ['AUTOMATION_HTTP_CACHE'] = '1'
+        os.environ['AUTOMATION_HTTP_CACHE_TTL'] = str(args.http_cache_ttl)
     
     # If fast mode is enabled, force parallel with an optimized worker count
     if args.fast:
@@ -391,7 +566,7 @@ def main():
         print(f"⚡ Fast mode enabled: workers set to {args.workers}")
     
     if args.parallel:
-        results = run_parallel(script_paths, args.timeout, args.workers)
+        results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers)
     else:
         results = run_sequential(script_paths, args.timeout, args.delay)
     
@@ -411,26 +586,51 @@ def main():
             print("\n" + "-"*80)
             print("🧩 Git integration: staging and committing changes...")
             try:
-                # Stage bucket changes
-                stage_bucket_changes()
-                # Collect staged changes
-                added_apps, updated_apps = get_staged_bucket_changes()
-
-                if not added_apps and not updated_apps:
-                    print("ℹ️  No staged changes found under bucket/ to commit.")
+                use_per_package = args.git_per_package or not args.git_aggregate
+                if use_per_package:
+                    # Per-package staging/commit using the results
+                    updated_results = [r for r in results if r.updated]
+                    if not updated_results:
+                        print("ℹ️  No updated packages to commit.")
+                    else:
+                        stage_and_commit_per_package(updated_results)
+                        # Also handle newly added manifests (e.g., from manifest-generator)
+                        new_manifests = list_untracked_manifests()
+                        for app_name, path in new_manifests:
+                            rc, out, err = run_git_command(["git", "add", str(path)])
+                            if rc != 0:
+                                print(f"⚠️  git add {path} failed: {err or out}")
+                                continue
+                            version_str = get_manifest_version(app_name)
+                            msg = f"{app_name}: Add version {version_str}" if version_str else f"{app_name}: Add manifest"
+                            commit_with_message(msg)
+                        push_changes()
                 else:
-                    # Commit updated manifests first (if any)
-                    if updated_apps:
-                        msg = "updated: " + ", ".join(updated_apps)
-                        print(f"📝 Committing: {msg}")
-                        commit_with_message(msg)
-                    # Commit newly added manifests (if any)
-                    if added_apps:
-                        msg = "added: " + ", ".join(added_apps)
-                        print(f"📝 Committing: {msg}")
-                        commit_with_message(msg)
-                    # Push once after commits
-                    push_changes()
+                    # Aggregate commit: stage entire bucket and commit added/updated groups
+                    stage_bucket_changes()
+                    added_apps, updated_apps = get_staged_bucket_changes()
+
+                    if not added_apps and not updated_apps:
+                        print("ℹ️  No staged changes found under bucket/ to commit.")
+                    else:
+                        if updated_apps:
+                            # Include versions in grouped commit
+                            updated_with_versions = []
+                            for app in updated_apps:
+                                v = get_manifest_version(app)
+                                updated_with_versions.append(f"{app} {v}" if v else app)
+                            msg = "updated: " + ", ".join(updated_with_versions)
+                            print(f"📝 Committing: {msg}")
+                            commit_with_message(msg)
+                        if added_apps:
+                            added_with_versions = []
+                            for app in added_apps:
+                                v = get_manifest_version(app)
+                                added_with_versions.append(f"{app} {v}" if v else app)
+                            msg = "added: " + ", ".join(added_with_versions)
+                            print(f"📝 Committing: {msg}")
+                            commit_with_message(msg)
+                        push_changes()
             except Exception as e:
                 print(f"⚠️  Git integration encountered an error: {e}")
 

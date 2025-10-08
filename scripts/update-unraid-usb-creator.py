@@ -33,6 +33,7 @@ def update_manifest():
     version_info = get_version_info(config)
     if not version_info:
         print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
         return False
     
     version = version_info['version']
@@ -54,6 +55,7 @@ def update_manifest():
     current_version = manifest.get('version', '')
     if current_version == version:
         print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
     
     # Update manifest
@@ -67,10 +69,12 @@ def update_manifest():
             json.dump(manifest, f, indent=2, ensure_ascii=False)
         
         print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
         
     except Exception as e:
         print(f"❌ Failed to save manifest: {e}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
 
 def main():
