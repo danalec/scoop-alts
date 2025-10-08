@@ -139,21 +139,40 @@ class VersionDetector:
 
             content = response.text
             
-            # Try each pattern until we find a match
+            # Try each pattern and collect all matches
+            all_versions: List[str] = []
             for pattern in version_patterns:
                 matches = re.findall(pattern, content, re.IGNORECASE)
                 if matches:
-                    # Normalize match to a string if regex returns tuples of groups
-                    first_match = matches[0]
-                    version = first_match[0] if isinstance(first_match, (tuple, list)) else first_match
-                    print(f"✅ Found version: {version}")
-                    # Store conditional metadata and parsed version
-                    self._version_cache[homepage_url] = {
-                        'etag': response.headers.get('ETag', ''),
-                        'last_modified': response.headers.get('Last-Modified', ''),
-                        'version': version,
-                    }
-                    return version
+                    for m in matches:
+                        # Normalize match to a string if regex returns tuples of groups
+                        v = m[0] if isinstance(m, (tuple, list)) else m
+                        # Basic sanity filter: must start with a digit
+                        if isinstance(v, str) and v and v[0].isdigit():
+                            all_versions.append(v)
+
+            if all_versions:
+                # Pick the highest semantic-ish version (compare by integer parts)
+                def version_key(v: str) -> List[int]:
+                    parts = re.split(r"[._-]", v)
+                    key: List[int] = []
+                    for p in parts:
+                        try:
+                            key.append(int(p))
+                        except ValueError:
+                            # Non-numeric parts sort after numeric
+                            key.append(-1)
+                    return key
+
+                best = sorted(all_versions, key=version_key, reverse=True)[0]
+                print(f"✅ Found version: {best}")
+                # Store conditional metadata and parsed version
+                self._version_cache[homepage_url] = {
+                    'etag': response.headers.get('ETag', ''),
+                    'last_modified': response.headers.get('Last-Modified', ''),
+                    'version': best,
+                }
+                return best
             
             print("❌ No version found with any pattern")
             # Cache response metadata even when not found, to enable future 304
