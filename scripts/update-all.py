@@ -23,6 +23,79 @@ if sys.platform == "win32":
 
 # Configuration
 SCRIPTS_DIR = Path(__file__).parent
+REPO_ROOT = SCRIPTS_DIR.parent
+
+def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, str]:
+    """Run a git command and return (returncode, stdout, stderr)."""
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+            encoding="utf-8",
+        )
+        return result.returncode, result.stdout.strip(), result.stderr.strip()
+    except Exception as e:
+        return 1, "", str(e)
+
+def stage_bucket_changes() -> None:
+    """Stage changes inside the bucket directory."""
+    rc, out, err = run_git_command(["git", "add", "bucket"])
+    if rc != 0:
+        print(f"⚠️  git add failed: {err or out}")
+
+def get_staged_bucket_changes() -> Tuple[List[str], List[str]]:
+    """Return (added_apps, updated_apps) from staged changes under bucket/."""
+    rc, out, err = run_git_command(["git", "diff", "--cached", "--name-status"])
+    if rc != 0:
+        print(f"⚠️  git diff --cached failed: {err or out}")
+        return [], []
+
+    added_apps: List[str] = []
+    updated_apps: List[str] = []
+
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        status, path = parts
+        # Only consider manifests in bucket/
+        if not path.startswith("bucket/") or not path.endswith(".json"):
+            continue
+        app_name = Path(path).stem
+        if status.startswith("A"):  # Added
+            added_apps.append(app_name)
+        elif status.startswith("M") or status.startswith("R"):  # Modified or Renamed
+            updated_apps.append(app_name)
+
+    added_apps.sort()
+    updated_apps.sort()
+    return added_apps, updated_apps
+
+def commit_with_message(message: str) -> bool:
+    """Create a commit with the given message. Returns True if commit succeeded."""
+    rc, out, err = run_git_command(["git", "commit", "-m", message])
+    if rc != 0:
+        # If there is nothing to commit, git returns non-zero; report and skip
+        reason = err or out
+        if "nothing to commit" in (reason.lower()):
+            print("ℹ️  No changes staged to commit.")
+        else:
+            print(f"⚠️  git commit failed: {reason}")
+        return False
+    print(out or "✅ Commit created")
+    return True
+
+def push_changes() -> None:
+    """Push committed changes to the remote."""
+    rc, out, err = run_git_command(["git", "push"])
+    if rc != 0:
+        print(f"⚠️  git push failed: {err or out}")
+    else:
+        print(out or "⬆️  Pushed changes to remote")
 
 def discover_update_scripts() -> List[str]:
     """Automatically discover all update-*.py scripts in the scripts directory"""
@@ -238,6 +311,8 @@ def main():
                        help="Run only specific scripts (e.g., corecycler esptool)")
     parser.add_argument("--dry-run", "-d", action="store_true",
                        help="Show what would be run without executing")
+    parser.add_argument("--skip-git", action="store_true",
+                       help="Skip git add/commit/push after updates")
     
     args = parser.parse_args()
     
@@ -331,6 +406,34 @@ def main():
         print(f"\n⚠️  {failed_count} script(s) failed")
         sys.exit(1)
     else:
+        # Optionally perform git add/commit/push
+        if not args.skip_git:
+            print("\n" + "-"*80)
+            print("🧩 Git integration: staging and committing changes...")
+            try:
+                # Stage bucket changes
+                stage_bucket_changes()
+                # Collect staged changes
+                added_apps, updated_apps = get_staged_bucket_changes()
+
+                if not added_apps and not updated_apps:
+                    print("ℹ️  No staged changes found under bucket/ to commit.")
+                else:
+                    # Commit updated manifests first (if any)
+                    if updated_apps:
+                        msg = "updated: " + ", ".join(updated_apps)
+                        print(f"📝 Committing: {msg}")
+                        commit_with_message(msg)
+                    # Commit newly added manifests (if any)
+                    if added_apps:
+                        msg = "added: " + ", ".join(added_apps)
+                        print(f"📝 Committing: {msg}")
+                        commit_with_message(msg)
+                    # Push once after commits
+                    push_changes()
+            except Exception as e:
+                print(f"⚠️  Git integration encountered an error: {e}")
+
         print(f"\n🎉 All scripts completed successfully!")
         sys.exit(0)
 
