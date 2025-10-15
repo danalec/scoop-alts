@@ -1,23 +1,23 @@
 {
-    "version": "141.0.7390.54-1.1",
-    "description": "Ungoogled Chromium - Google Chromium without Google's integration",
-    "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
-    "license": "BSD-3-Clause",
-    "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/141.0.7390.54-1.1/ungoogled-chromium_141.0.7390.54-1.1_windows_x64.zip",
-    "hash": "sha256:984ba80089a85d389a0d65f1794f13de8055d28e7cf9f51d8ac54a3960399bf1",
-    "bin": "chrome.exe",
-    "shortcuts": [
-        [
-            "chrome.exe",
-            "Ungoogled Chromium"
-        ]
-    ],
-    "extract_dir": "ungoogled-chromium_141.0.7390.54-1.1_windows_x64",
-    "checkver": {
-        "url": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
-        "regex": "\"tag_name\":\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.[0-9]+)\""
-    },
-    "autoupdate": {
-        "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip"
-    }
+  "version": "141.0.7390.76-1.1",
+  "description": "Ungoogled Chromium - Google Chromium without Google's integration",
+  "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
+  "license": "BSD-3-Clause",
+  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/141.0.7390.76-1.1/ungoogled-chromium_141.0.7390.76-1.1_windows_x64.zip",
+  "hash": "sha256:591b20b9ee0c7a85a43f74df9822b60ac47256a05f707ffbc19ea9e8e05b6a7f",
+  "bin": "chrome.exe",
+  "shortcuts": [
+    [
+      "chrome.exe",
+      "Ungoogled Chromium"
+    ]
+  ],
+  "extract_dir": "ungoogled-chromium_141.0.7390.54-1.1_windows_x64",
+  "checkver": {
+    "url": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
+    "regex": "\"tag_name\":\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.[0-9]+)\""
+  },
+  "autoupdate": {
+    "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip"
+  }
 }
