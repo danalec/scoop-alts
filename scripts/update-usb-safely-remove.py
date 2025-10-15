@@ -13,7 +13,8 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "usb-safely-remove"
 HOMEPAGE_URL = "https://safelyremove.com/download.htm"
-DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/startdownload.htm?imm&v=&t="
+# Use Scoop fragment renaming to avoid illegal characters from query string in the filename
+DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/startdownload.htm?imm&v=&t=#/USBSafelyRemove.exe"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "usb-safely-remove.json"
 
 def update_manifest():
@@ -61,6 +62,9 @@ def update_manifest():
     
     # Update manifest
     manifest['version'] = version
+    # Ensure '#/USBSafelyRemove.exe' suffix remains even if detector returns a clean URL
+    if '#/USBSafelyRemove.exe' not in download_url:
+        download_url = download_url + "#/USBSafelyRemove.exe"
     manifest['url'] = download_url
     manifest['hash'] = f"sha256:{hash_value}"
     

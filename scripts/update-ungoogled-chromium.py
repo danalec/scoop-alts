@@ -63,6 +63,19 @@ def update_manifest():
     manifest['version'] = version
     manifest['url'] = download_url
     manifest['hash'] = f"sha256:{hash_value}"
+    # Ensure extract_dir matches the versioned folder inside the zip
+    manifest['extract_dir'] = f"ungoogled-chromium_{version}_windows_x64"
+    # Also set autoupdate.extract_dir to keep it in sync for automatic updates
+    try:
+        if 'autoupdate' not in manifest or not isinstance(manifest['autoupdate'], dict):
+            manifest['autoupdate'] = {}
+        manifest['autoupdate']['extract_dir'] = f"ungoogled-chromium_$version_windows_x64"
+    except Exception:
+        # Fallback: ensure autoupdate exists
+        manifest['autoupdate'] = {
+            'url': DOWNLOAD_URL_TEMPLATE,
+            'extract_dir': "ungoogled-chromium_$version_windows_x64"
+        }
     
     # Save updated manifest
     try:

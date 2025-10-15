@@ -1,0 +1,161 @@
+{
+    "version": "133.0.6943.141-1.1",
+    "description": "Chromium",
+    "homepage": "https://ungoogled-software.github.io/ungoogled-chromium-binaries/",
+    "license": "BSD-3-Clause",
+    "depends": [
+        "scoop-alts/widevinecdm",
+        "scoop-alts/chromium-crlset"
+    ],
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/133.0.6943.141-1.1/ungoogled-chromium_133.0.6943.141-1.1_windows_x64.zip",
+            "hash": "966d112266b4da29f2e9e92daee5e4abaf18eaafa3b6d9d7016c72392cee678f",
+            "extract_dir": "ungoogled-chromium_133.0.6943.141-1.1_windows_x64"
+        },
+        "32bit": {
+            "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/133.0.6943.141-1.1/ungoogled-chromium_133.0.6943.141-1.1_windows_x86.zip",
+            "hash": "ccd2c0c1ecfd6f158040967c0ca3e7133ab05d38c4ba78479949d54399101171",
+            "extract_dir": "ungoogled-chromium_133.0.6943.141-1.1_windows_x86"
+        }
+    },
+    "bin": [
+        [
+            "chrome.exe",
+            "chromium",
+            "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check"
+        ]
+    ],
+    "shortcuts": [
+        [
+            "chrome.exe",
+            "Chromium",
+            "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check"
+        ]
+    ],
+    "persist": [
+        "User Data",
+        "Dictionaries",
+        "hyphen-data",
+        "initial_preferences"
+    ],
+    "checkver": {
+        "github": "https://github.com/ungoogled-software/ungoogled-chromium-windows",
+        "regex": "releases/tag/((?<main>[\\d.]+-\\d).(?<release>\\d))"
+    },
+    "pre_install": [
+        "if (-not (Test-Path \"$persist_dir\\initial_preferences\")) { New-Item \"$dir\\initial_preferences\" -Force -ItemType File | Out-Null }",
+        "$manifest.persist | ForEach-Object {",
+        "    $dest = \"$dir\\$_\"",
+        "    if ((-not (Test-Path \"$persist_dir\\$_\")) -and (-not (Test-Path $dest -PathType Leaf))) {",
+        "       New-Item $dest -Force -ItemType Directory | Out-Null",
+        "    }",
+        "}"
+    ],
+    "post_install": [
+        "$componentPackage = @{",
+        "    'WidevineCdm' = 'widevinecdm'",
+        "    'CertificateRevocation' = 'chromium-crlset'",
+        "}",
+        "$componentPackage.GetEnumerator() | ForEach-Object {",
+        "    New-Item -Path \"$dir\\$($_.Key)\" -Target \"$(versiondir $_.Value 'current' $global)\\$($_.Key)\" -ItemType Junction -Force | Out-Null",
+        "}",
+        "",
+        "# Ask user if they want to set Chromium as default browser",
+        "$setDefault = Read-Host \"Do you want to set Ungoogled Chromium as your default browser? (y/n)\"",
+        "if ($setDefault -eq 'y' -or $setDefault -eq 'Y') {",
+        "    Write-Host \"Setting Ungoogled Chromium as default browser...\"",
+        "    ",
+        "    # Path to Chromium with proper arguments",
+        "    $chromePath = \"$dir\\chrome.exe\"",
+        "    $chromiumUserDataDir = \"$dir\\User Data\"",
+        "    $chromeArgs = \"--user-data-dir=`\"$chromiumUserDataDir`\" --disable-machine-id --disable-encryption --no-default-browser-check\"",
+        "    ",
+        "    # Find all relevant registry entries for URL handling and update them",
+        "    $registryPaths = @(",
+        "        \"HKCU:\\Software\\Classes\\ChromiumHTML\\shell\\open\\command\",",
+        "        \"HKCU:\\Software\\Classes\\http\\shell\\open\\command\",",
+        "        \"HKCU:\\Software\\Classes\\https\\shell\\open\\command\"",
+        "    )",
+        "    ",
+        "    foreach ($path in $registryPaths) {",
+        "        # Check if path exists, create if it doesn't",
+        "        if (!(Test-Path $path)) {",
+        "            New-Item -Path $path -Force | Out-Null",
+        "        }",
+        "        ",
+        "        # Update the command to include the specific profile arguments",
+        "        $commandValue = \"`\"$chromePath`\" $chromeArgs -- `\"%1`\"\"",
+        "        Set-ItemProperty -Path $path -Name \"(Default)\" -Value $commandValue -Type String",
+        "    }",
+        "    ",
+        "    # Create key for Chrome in the registry",
+        "    $progId = \"ChromiumHTML\"",
+        "    New-Item -Path \"HKCU:\\Software\\Classes\\$progId\" -Force | Out-Null",
+        "    Set-ItemProperty -Path \"HKCU:\\Software\\Classes\\$progId\" -Name \"(Default)\" -Value \"Chromium HTML Document\" -Type String",
+        "    ",
+        "    # Also update the registered application commands",
+        "    $chromiumAppPath = \"HKCU:\\Software\\Clients\\StartMenuInternet\\Chromium\\shell\\open\\command\"",
+        "    if (!(Test-Path $chromiumAppPath)) {",
+        "        New-Item -Path $chromiumAppPath -Force | Out-Null",
+        "    }",
+        "    Set-ItemProperty -Path $chromiumAppPath -Name \"(Default)\" -Value \"`\"$chromePath`\" $chromeArgs\" -Type String",
+        "    ",
+        "    # Check and update UserChoice ProgId if available",
+        "    $httpUserChoice = \"HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice\"",
+        "    $httpsUserChoice = \"HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice\"",
+        "    ",
+        "    if (Test-Path $httpUserChoice) {",
+        "        $currentProgId = (Get-ItemProperty -Path $httpUserChoice -ErrorAction SilentlyContinue).ProgId",
+        "        Write-Host \"Current HTTP ProgId: $currentProgId\"",
+        "        ",
+        "        if ($currentProgId) {",
+        "            $progIdPath = \"HKCU:\\Software\\Classes\\$currentProgId\\shell\\open\\command\"",
+        "            if (!(Test-Path $progIdPath)) {",
+        "                New-Item -Path $progIdPath -Force | Out-Null",
+        "            }",
+        "            Set-ItemProperty -Path $progIdPath -Name \"(Default)\" -Value \"`\"$chromePath`\" $chromeArgs -- `\"%1`\"\" -Type String -ErrorAction SilentlyContinue",
+        "        }",
+        "    }",
+        "    ",
+        "    if (Test-Path $httpsUserChoice) {",
+        "        $currentProgId = (Get-ItemProperty -Path $httpsUserChoice -ErrorAction SilentlyContinue).ProgId",
+        "        Write-Host \"Current HTTPS ProgId: $currentProgId\"",
+        "        ",
+        "        if ($currentProgId) {",
+        "            $progIdPath = \"HKCU:\\Software\\Classes\\$currentProgId\\shell\\open\\command\"",
+        "            if (!(Test-Path $progIdPath)) {",
+        "                New-Item -Path $progIdPath -Force | Out-Null",
+        "            }",
+        "            Set-ItemProperty -Path $progIdPath -Name \"(Default)\" -Value \"`\"$chromePath`\" $chromeArgs -- `\"%1`\"\" -Type String -ErrorAction SilentlyContinue",
+        "        }",
+        "    }",
+        "    ",
+        "    # Also open the default apps settings to complete manual parts if needed",
+        "    Write-Host \"Registry updated. Opening Default Apps settings for any remaining configurations.\"",
+        "    Start-Process \"ms-settings:defaultapps\"",
+        "} else {",
+        "    Write-Host \"Skipping default browser setup.\"",
+        "}"
+    ],
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip",
+                "hash": {
+                    "url": "https://ungoogled-software.github.io/ungoogled-chromium-binaries/releases/windows/64bit/$matchMain",
+                    "xpath": "//ul/li/a[contains(text(), \"$basename\")]/../ul/li[contains(text(), \"SHA256:\")]/code"
+                },
+                "extract_dir": "ungoogled-chromium_$version_windows_x64"
+            },
+            "32bit": {
+                "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x86.zip",
+                "hash": {
+                    "url": "https://ungoogled-software.github.io/ungoogled-chromium-binaries/releases/windows/32bit/$matchMain",
+                    "xpath": "//ul/li/a[contains(text(), \"$basename\")]/../ul/li[contains(text(), \"SHA256:\")]/code"
+                },
+                "extract_dir": "ungoogled-chromium_$version_windows_x86"
+            }
+        }
+    }
+}

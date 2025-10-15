@@ -5,10 +5,10 @@
   "license": "Freeware",
   "url": "https://hddguru.com/software/HDD-LLF-Low-Level-Format-Tool/HDDLLF.27.00.exe",
   "hash": "sha256:941c43382a2d38a187bfdbfc6d923ce025fb66f8545cdc677bfcc9008166fe32",
-  "bin": "HDDLLF.4.50.exe",
+  "bin": "HDDLLF.27.00.exe",
   "shortcuts": [
     [
-      "HDDLLF.4.50.exe",
+      "HDDLLF.27.00.exe",
       "HDD Low Level Format Tool"
     ]
   ],
