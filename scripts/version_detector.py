@@ -509,6 +509,8 @@ class SoftwareConfig:
     extract_dir: Optional[str] = None
     pre_install: Optional[List[str]] = None
     post_install: Optional[List[str]] = None
+    # Scoop allows persist to be a string or a list; keep it flexible
+    persist: Optional[Any] = None
     architecture: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):

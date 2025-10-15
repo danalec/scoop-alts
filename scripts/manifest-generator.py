@@ -167,6 +167,15 @@ class ManifestGenerator:
         if config.post_install:
             manifest["post_install"] = [cmd.replace("$version", version) for cmd in config.post_install]
         
+        # Add persist (string or list)
+        if getattr(config, "persist", None):
+            if isinstance(config.persist, list):
+                manifest["persist"] = [p.replace("$version", version) if isinstance(p, str) else p for p in config.persist]
+            elif isinstance(config.persist, str):
+                manifest["persist"] = config.persist.replace("$version", version)
+            else:
+                manifest["persist"] = config.persist
+        
         # Add architecture-specific configs
         if config.architecture:
             manifest["architecture"] = config.architecture

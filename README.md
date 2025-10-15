@@ -8,7 +8,7 @@ Alternative Scoop bucket featuring **carefully curated applications** with enhan
 
 | Package | Description | Special Features |
 |---------|-------------|------------------|
-| **ungoogled-chromium** | Privacy-focused browser | ✅ Widevine DRM support for Netflix/Spotify
+| **ungoogled-chromium** | Privacy-focused browser | ✅ Widevine DRM support for Netflix/Spotify · 💾 Persisted profile across updates · ⚙️ Opt-in default-browser post_install
 
 ## 🚀 Quick Start
 
@@ -19,6 +19,53 @@ scoop bucket add danalec_scoop-alts https://github.com/danalec/scoop-alts
 
 ### Install Ungoogled Chromium with Widevine
 ```powershell
+scoop install danalec_scoop-alts/ungoogled-chromium
+```
+
+### Ungoogled Chromium: Persist + Default Browser Setup
+
+This bucket’s Ungoogled Chromium manifest includes:
+- persist: "User Data" to preserve your profile across updates
+- a gated post_install script to help set it as your default browser when you opt in
+
+Default browser post_install (opt-in):
+- Automatic (no prompt):
+```powershell
+$env:SCOOP_SET_DEFAULT_BROWSER = '1'
+scoop uninstall ungoogled-chromium
+scoop install danalec_scoop-alts/ungoogled-chromium
+```
+- Interactive prompt:
+```powershell
+$env:SCOOP_INTERACTIVE = '1'
+scoop uninstall ungoogled-chromium
+scoop install danalec_scoop-alts/ungoogled-chromium
+```
+- Notes:
+  - Ensure you install from this bucket (danalec_scoop-alts), not extras, so the post_install runs.
+  - Windows 10/11 protects default app associations; the script updates command paths and opens Settings → Default Apps for confirmation when needed.
+
+Persist migration (no reinstall required):
+If you installed Chromium earlier without persist, you can migrate your profile:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\bin\migrate-ungoogled-chromium-persist.ps1
+```
+Then verify the junction:
+```powershell
+Get-Item "$env:USERPROFILE\scoop\apps\ungoogled-chromium\current\User Data" | Format-List *
+```
+LinkType should be Junction and Target should point to:
+```
+%USERPROFILE%\scoop\persist\ungoogled-chromium\User Data
+```
+
+Confirm the manifest/source in use:
+```powershell
+scoop info ungoogled-chromium
+```
+The Source should be danalec_scoop-alts. If it shows extras, reinstall explicitly from this bucket:
+```powershell
+scoop uninstall ungoogled-chromium
 scoop install danalec_scoop-alts/ungoogled-chromium
 ```
 

@@ -49,6 +49,7 @@
       "download_url_template": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip",
       "extract_dir": "ungoogled-chromium_$version_windows_x64",
       "bin_name": "chrome.exe",
+      "persist": "User Data",
       "post_install": [
         "$shouldRun = $false",
         "if ($env:SCOOP_SET_DEFAULT_BROWSER -eq '1') { $shouldRun = $true }",
