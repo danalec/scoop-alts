@@ -9,7 +9,8 @@
     "shortcuts": [
         [
             "chrome.exe",
-            "Ungoogled Chromium"
+            "Ungoogled Chromium",
+            "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check --profile-directory=\"Default\""
         ]
     ],
     "extract_dir": "ungoogled-chromium_141.0.7390.76-1.1_windows_x64",
@@ -24,7 +25,7 @@
         "  Write-Host 'Setting Ungoogled Chromium as default browser...'",
         "  $chromePath = \"$dir\\chrome.exe\"",
         "  $chromiumUserDataDir = \"$dir\\User Data\"",
-        "  $chromeArgs = \"--user-data-dir=``\"$chromiumUserDataDir``\" --disable-machine-id --disable-encryption --no-default-browser-check\"",
+        "  $chromeArgs = \"--user-data-dir=``\"$chromiumUserDataDir``\" --disable-machine-id --disable-encryption --no-default-browser-check --profile-directory=``\"Default``\"\"",
         "  $registryPaths = @(HKCU:\\Software\\Classes\\ChromiumHTML\\shell\\open\\command, HKCU:\\Software\\Classes\\http\\shell\\open\\command, HKCU:\\Software\\Classes\\https\\shell\\open\\command)",
         "  foreach ($path in $registryPaths) {",
         "    if (!(Test-Path $path)) { New-Item -Path $path -Force | Out-Null }",
