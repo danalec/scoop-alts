@@ -8,6 +8,7 @@ This avoids the complex $match replacements in Scoop and uses the direct codebas
 import json
 import re
 import sys
+import os
 import requests
 from pathlib import Path
 from version_detector import VersionDetector
@@ -94,6 +95,19 @@ def main():
     success = update_manifest()
     if not success:
         sys.exit(1)
+
+    # Optional per-script auto-commit helper
+    auto_commit = (
+        "--auto-commit" in sys.argv
+        or os.environ.get("AUTO_COMMIT") == "1"
+        or os.environ.get("SCOOP_AUTO_COMMIT") == "1"
+    )
+    if auto_commit:
+        try:
+            from git_helpers import commit_manifest_change
+            commit_manifest_change(SOFTWARE_NAME, str(BUCKET_FILE), push=True)
+        except Exception as e:
+            print(f"⚠️  Auto-commit failed: {e}")
 
 if __name__ == "__main__":
     main()
