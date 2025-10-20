@@ -15,7 +15,7 @@
   "shortcuts": [
     [
       "chrome.exe",
-      "Ungoogled Chromium",
+      "Chromium",
       "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check --profile-directory=\"Default\""
     ]
   ],
