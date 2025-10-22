@@ -24,7 +24,11 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['HDDLLF\\.([\\d\\.]+)\\.exe', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        # Restrict patterns to avoid picking unrelated numbers from the page (e.g., 1.0-1.5 MB/s)
+        version_patterns=[
+            r"HDDLLF\.([0-9]+\.[0-9]+)\.exe",           # matches HDDLLF.4.50.exe
+            r"ver\.?\s*([0-9]+\.[0-9]+)"                 # matches 'ver.4.50'
+        ],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="HDD Low Level Format Tool (Portable) - A utility for low-level formatting of SATA, IDE, SAS, SCSI or SSD drives",
         license="Freeware"
@@ -55,7 +59,7 @@ def update_manifest():
     
     # Check if update is needed
     current_version = manifest.get('version', '')
-    if current_version == version:
+    if current_version == version and manifest.get('hash', '').replace('sha256:', '') == hash_value:
         print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         # Emit structured result for orchestrator
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
