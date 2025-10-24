@@ -390,8 +390,16 @@ python scripts/automate-scoop.py wizard
 # Generate everything
 python scripts/automate-scoop.py generate-all
 
-# Run all updates
+# Run all updates (parallel by default)
 python scripts/update-all.py
+
+# Common orchestrator flags:
+python scripts/update-all.py --workers 6
+python scripts/update-all.py --sequential
+python scripts/update-all.py --fast
+python scripts/update-all.py --retry 2
+python scripts/update-all.py --structured-output
+python scripts/update-all.py --http-cache --http-cache-ttl 1800
 
 # Test the system
 python scripts/automate-scoop.py test

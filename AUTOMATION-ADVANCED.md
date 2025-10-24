@@ -224,7 +224,8 @@ jobs:
         
       - name: Run automation
         run: |
-          python scripts/update-all.py --parallel
+          # Parallel by default; customize workers and providers as needed
+          python scripts/update-all.py --workers 6 --github-workers 3 --microsoft-workers 3 --google-workers 4
           
       - name: Create Pull Request
         if: success()
@@ -237,14 +238,14 @@ jobs:
 
 ### Advanced Batch Operations
 ```bash
-# Update specific software categories
-python scripts/update-all.py --category "development-tools" --parallel
+# Update specific scripts with controlled concurrency
+python scripts/update-all.py --scripts corecycler esptool --workers 4
 
-# Update with custom retry logic
-python scripts/update-all.py --max-retries 5 --retry-delay 10
+# Update with custom retry logic (exponential backoff built-in)
+python scripts/update-all.py --retry 5
 
-# Update with performance monitoring
-python scripts/update-all.py --profile --benchmark
+# Verbose logging for performance insights; summary includes durations
+python scripts/update-all.py --verbose
 ```
 
 ## 🎨 Custom Script Templates

@@ -419,8 +419,26 @@ python scripts/update-all.py --scripts app1 app2
 # Dry run (test without changes)
 python scripts/update-all.py --dry-run
 
-# Parallel execution
-python scripts/update-all.py --parallel 4
+# Parallel execution (set worker count)
+python scripts/update-all.py --workers 4
+
+# Force sequential mode
+python scripts/update-all.py --sequential --delay 0.5
+
+# Fast mode (auto-selects worker count)
+python scripts/update-all.py --fast
+
+# Provider throttling (avoid rate limits)
+python scripts/update-all.py --github-workers 2 --microsoft-workers 2 --google-workers 3
+
+# Prefer structured output (JSON) from scripts
+python scripts/update-all.py --structured-output
+
+# Enable short-lived HTTP caching for this run (TTL in seconds)
+python scripts/update-all.py --http-cache --http-cache-ttl 1200
+
+# Retry failed scripts up to N times
+python scripts/update-all.py --retry 2
 ```
 
 ## 🧪 Testing & Validation
@@ -609,134 +627,3 @@ python scripts/automate-scoop.py test --software app-name --verbose
 - **Performance issues**: Use `--timeout 60` for slow networks
 
 For detailed troubleshooting scenarios, see **[AUTOMATION-ADVANCED.md](AUTOMATION-ADVANCED.md)**.
-python scripts/update-all.py --skip-hash
-```
-
-### Debugging Workflow
-
-1. **Enable Verbose Logging**:
-   ```bash
-   python scripts/update-package.py --verbose
-   ```
-
-2. **Test Individual Components**:
-   ```bash
-   # Test version detection only
-   python scripts/update-package.py --check-version
-   
-   # Test URL construction
-   python scripts/update-package.py --validate-urls
-   
-   # Test without making changes
-   python scripts/update-package.py --dry-run
-   ```
-
-3. **Validate Configuration**:
-   ```bash
-   python scripts/automate-scoop.py --validate
-   ```
-
-4. **Check Network Connectivity**:
-   ```bash
-   curl -I "https://homepage-url.com"
-   curl -I "https://download-url.com"
-   ```
-
-### Getting Help
-
-If you encounter issues not covered here:
-
-1. **Check Logs**: Enable verbose output for detailed error information
-2. **Validate Configuration**: Ensure `software-configs.json` syntax is correct
-3. **Test Manually**: Try accessing URLs directly with curl or browser
-4. **Review Recent Changes**: Check if software provider changed their release process
-5. **Create Issue**: Report bugs with full error logs and configuration details
-
-### Debug Mode
-
-Enable detailed logging for troubleshooting:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Add to your scripts for detailed output
-logger = logging.getLogger(__name__)
-logger.debug("Debug information here")
-```
-
-### Performance Optimization
-
-For large numbers of packages:
-
-```bash
-# Use parallel processing
-python scripts/update-all.py --parallel 8
-
-# Process in batches
-python scripts/update-all.py --scripts app1 app2 app3
-python scripts/update-all.py --scripts app4 app5 app6
-
-# Use dry-run for testing
-python scripts/update-all.py --dry-run
-```
-
-## 📊 Monitoring & Metrics
-
-### Success Tracking
-
-Monitor automation success with built-in metrics:
-
-```python
-# Check update success rates
-from pathlib import Path
-import json
-
-def check_update_success():
-    """Check recent update success rates."""
-    logs_dir = Path("logs")
-    if not logs_dir.exists():
-        return
-```
-
-## 🤝 Contributing
-
-### Adding New Software
-
-1. Create JSON configuration in `automation/configs/`
-2. Generate manifest and script: `python scripts/automate-scoop.py generate-all --software new-software`
-3. Test: `python scripts/automate-scoop.py test --software new-software`
-4. Submit pull request with configuration and generated files
-
-For detailed contribution guidelines, see **[AUTOMATION-ADVANCED.md](AUTOMATION-ADVANCED.md)**.
-
-## 📚 Additional Resources
-
-### Documentation
-- [Scoop Documentation](https://scoop.sh/)
-- [Python Requests Documentation](https://docs.python-requests.org/)
-- [Regular Expressions Guide](https://docs.python.org/3/library/re.html)
-- [JSON Specification](https://www.json.org/json-en.html)
-
-### Tools
-- [Regex Tester](https://regex101.com/) - Test your version detection patterns
-- [JSON Validator](https://jsonlint.com/) - Validate generated manifests
-- [HTTP Status Checker](https://httpstatus.io/) - Debug download URLs
-- [User Agent Strings](https://www.whatismybrowser.com/guides/the-latest-user-agent/) - Current browser user agents
-
-### Community
-- [Scoop GitHub](https://github.com/ScoopInstaller/Scoop) - Main Scoop repository
-- [Scoop Extras](https://github.com/ScoopInstaller/Extras) - Community packages
-- [Scoop Directory](https://scoop.sh/#/buckets) - Discover other buckets
-
----
-
-<div align="center">
-
-**🚀 Ready to build your own automated Scoop bucket?**
-
-[**Get Started**](https://github.com/danalec/scoop-alts) • [**Report Issues**](https://github.com/danalec/scoop-alts/issues) • [**Contribute**](https://github.com/danalec/scoop-alts/pulls)
-
-*Powered by Python • Enhanced by Automation • Built for Scale*
-
-</div>
