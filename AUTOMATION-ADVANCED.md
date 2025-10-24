@@ -248,6 +248,22 @@ python scripts/update-all.py --retry 5
 python scripts/update-all.py --verbose
 ```
 
+### HTTP caching tips
+- When to use: helpful for repeated runs within a short period or to reduce load on provider APIs.
+- Recommended TTL: 600–1800 seconds. Default is 1800; shorter TTLs (e.g., 1200) are good when changes may occur frequently.
+- What is cached: HTTP GET responses via requests-cache; avoid caching endpoints that require fresh state (e.g., dynamic download URLs that expire quickly).
+- Caveats: caching can mask transient availability issues; disable caching when verifying a fresh release.
+- How to enable: use `--http-cache --http-cache-ttl <seconds>` on `update-all.py`. The orchestrator propagates env vars `AUTOMATION_HTTP_CACHE=1` and `AUTOMATION_HTTP_CACHE_TTL=<seconds>` to scripts.
+- Pair with provider throttling: combine `--github-workers`, `--microsoft-workers`, `--google-workers` limits with caching to stay under rate limits.
+
+```bash
+# Enable caching for 20 minutes
+python scripts/update-all.py --http-cache --http-cache-ttl 1200
+
+# Disable caching (default)
+python scripts/update-all.py --retry 2
+```
+
 ## 🎨 Custom Script Templates
 
 ### Creating Custom Templates

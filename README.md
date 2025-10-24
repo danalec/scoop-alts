@@ -104,6 +104,21 @@ python scripts/automate-scoop.py wizard
 
 **See [AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md) for complete setup and usage documentation.**
 
+### Orchestrator quick start
+Run all updates (parallel by default):
+```bash
+python scripts/update-all.py
+```
+Common flags:
+```bash
+python scripts/update-all.py --workers 6
+python scripts/update-all.py --sequential --delay 0.5
+python scripts/update-all.py --fast
+python scripts/update-all.py --retry 2
+python scripts/update-all.py --structured-output
+python scripts/update-all.py --http-cache --http-cache-ttl 1800
+```
+
 ## 🤝 Contributing
 
 ### **For Users**
