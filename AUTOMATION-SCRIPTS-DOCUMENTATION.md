@@ -405,6 +405,22 @@ python scripts/update-all.py --http-cache --http-cache-ttl 1800
 python scripts/automate-scoop.py test
 ```
 
+### Structured Output Schema
+- Scripts should emit a single JSON object per run for orchestrator consumption.
+- Fields:
+  - `updated` (bool): whether a manifest was updated
+  - `name` (string): software name
+  - `version` (string, optional): detected or current version
+  - `error` (string, optional): error code when the update failed
+- Examples:
+```json
+{"updated": true, "name": "Example App", "version": "1.2.3"}
+```
+```json
+{"updated": false, "name": "Example App", "version": "1.2.3", "error": "save_failed"}
+```
+- The orchestrator will prefer JSON when `--structured-output` is set; otherwise it falls back to text heuristics.
+
 ### File Locations
 - **Configurations**: `scripts/software-configs.json` (temporary)
 - **Generated Manifests**: `bucket/*.json`

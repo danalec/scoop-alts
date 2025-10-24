@@ -485,7 +485,7 @@ def main():
     parser.add_argument("--delay", "-D", type=float, default=0.0,
                        help="Delay (seconds) between scripts in sequential mode (default: 0.0)")
     parser.add_argument("--fast", "-f", action="store_true",
-                       help="Enable fast mode: parallel execution with an optimized worker count")
+                       help="Enable fast mode: parallel execution with an optimized worker count (recommended for network-bound scripts)")
     parser.add_argument("--timeout", "-t", type=int, default=120,
                        help="Timeout per script in seconds (default: 120)")
     parser.add_argument("--github-workers", type=int, default=3,
