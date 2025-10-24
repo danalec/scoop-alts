@@ -16,12 +16,18 @@ import os
 import json
 from typing import List, Tuple, Dict
 import threading
+import logging
 
 # Set UTF-8 encoding for Windows console
 if sys.platform == "win32":
-    import codecs
-    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
-    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    try:
+        import codecs
+        if hasattr(sys.stdout, "detach"):
+            sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        if hasattr(sys.stderr, "detach"):
+            sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    except Exception:
+        os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 # Configuration
 SCRIPTS_DIR = Path(__file__).parent
@@ -176,9 +182,9 @@ def stage_and_commit_per_package(updated_results: List["UpdateResult"]) -> None:
         version_str = get_manifest_version(pkg)
 
         if new_file:
-            msg = f"{pkg}: Add version {version_str}" if version_str else f"{pkg}: Add manifest"
+            msg = f"{pkg}: Add version {version_str} (script: {r.script_name})" if version_str else f"{pkg}: Add manifest (script: {r.script_name})"
         else:
-            msg = f"{pkg}: Update to version {version_str}" if version_str else f"{pkg}: Update manifest"
+            msg = f"{pkg}: Update to version {version_str} (script: {r.script_name})" if version_str else f"{pkg}: Update manifest (script: {r.script_name})"
         commit_with_message(msg)
 
 def discover_update_scripts() -> List[str]:
@@ -241,23 +247,23 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
         # Check if update was successful and if anything was updated
         output = result.stdout + result.stderr
 
-        # Prefer structured JSON result if the last non-empty line is a JSON object
+        # Prefer structured JSON result: search the last up to 10 non-empty lines for a JSON object
         structured_updated = None
         try:
             lines = [ln for ln in output.strip().splitlines() if ln.strip()]
-            if lines:
-                last = lines[-1].strip()
+            for ln in reversed(lines[-10:]):
+                last = ln.strip()
                 if last.startswith('{') and last.endswith('}'):
                     import json as _json
                     parsed = _json.loads(last)
-                    if isinstance(parsed, dict):
-                        if 'updated' in parsed:
-                            structured_updated = bool(parsed.get('updated'))
+                    if isinstance(parsed, dict) and 'updated' in parsed:
+                        structured_updated = bool(parsed.get('updated'))
                         # Prime version cache if provided
                         pkg = script_name.replace('update-', '').replace('.py', '')
                         v = parsed.get('version')
                         if isinstance(v, str) and v:
                             MANIFEST_VERSION_CACHE[pkg] = v
+                        break
         except Exception:
             # Ignore JSON parsing issues; fall back to text heuristics
             pass
@@ -296,18 +302,35 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
         print(f"💥 {script_name} - Error: {e}")
         return UpdateResult(script_name, False, str(e), duration, False)
 
-def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0) -> List[UpdateResult]:
+# New: retry wrapper for robustness
+def run_update_script_with_retry(script_path: Path, timeout: int = 300, retries: int = 0) -> UpdateResult:
+    attempt = 0
+    last_result: UpdateResult = None  # type: ignore
+    while attempt <= retries:
+        result = run_update_script(script_path, timeout)
+        if result.success:
+            return result
+        last_result = result
+        attempt += 1
+        if attempt <= retries:
+            backoff = min(30, 2 ** attempt)
+            print(f"🔁 Retrying {script_path.name} in {backoff}s (attempt {attempt}/{retries})")
+            time.sleep(backoff)
+    return last_result
+
+def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0, retries: int = 0) -> List[UpdateResult]:
     """Run update scripts sequentially.
 
     Args:
         scripts: List of script paths to run
         timeout: Timeout per script in seconds
         delay: Optional delay (in seconds) between scripts to avoid overwhelming APIs
+        retries: Number of retry attempts per script (default: 0)
     """
     results = []
     
     for script_path in scripts:
-        result = run_update_script(script_path, timeout)
+        result = run_update_script_with_retry(script_path, timeout, retries)
         results.append(result)
         
         # Optional delay between scripts
@@ -316,39 +339,48 @@ def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0) -> Lis
     
     return results
 
-def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_workers: int = 3) -> List[UpdateResult]:
+def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_workers: int = 3, microsoft_workers: int = 3, google_workers: int = 4, retries: int = 0) -> List[UpdateResult]:
     """Run update scripts in parallel with provider-aware throttling."""
     results = []
 
-    # Helper: determine if a script is GitHub-heavy (uses GitHub API or downloads)
-    def is_github_script(p: Path) -> bool:
+    # Helper: classify provider based on script content
+    def classify_provider(p: Path) -> str:
         try:
             with open(p, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read(4000)
-                return ('github.com' in content) or ('api.github.com' in content)
+                if ('github.com' in content) or ('api.github.com' in content):
+                    return 'github'
+                if ('learn.microsoft.com' in content) or ('go.microsoft.com' in content) or ('download.microsoft.com' in content) or ('visualstudio.microsoft.com' in content):
+                    return 'microsoft'
+                if ('googleapis.com' in content) or ('storage.googleapis.com' in content) or ('dl.google.com' in content) or ('cloudfront.net' in content):
+                    return 'google'
+                return 'other'
         except Exception:
-            return False
+            return 'other'
 
     # Cap workers to the number of scripts to avoid oversubscription
     max_workers = max(1, min(max_workers, len(scripts)))
 
-    # Compute provider classification and throttling semaphore for GitHub
-    gh_map: Dict[Path, bool] = {p: is_github_script(p) for p in scripts}
-    gh_count = sum(1 for v in gh_map.values() if v)
-    non_gh_count = len(scripts) - gh_count
-    # Default GitHub concurrency cap
-    github_workers = max(1, min(github_workers, max_workers))
-    gh_sem = threading.BoundedSemaphore(value=github_workers)
-    if gh_count:
-        print(f"🔗 Provider-aware throttling: {gh_count} GitHub-related script(s) limited to {github_workers} concurrent")
+    # Compute provider classification and throttling semaphores
+    prov_map: Dict[Path, str] = {p: classify_provider(p) for p in scripts}
+    counts = {
+        'github': sum(1 for v in prov_map.values() if v == 'github'),
+        'microsoft': sum(1 for v in prov_map.values() if v == 'microsoft'),
+        'google': sum(1 for v in prov_map.values() if v == 'google'),
+        'other': sum(1 for v in prov_map.values() if v == 'other'),
+    }
+    sems = {
+        'github': threading.BoundedSemaphore(value=max(1, min(github_workers, max_workers))),
+        'microsoft': threading.BoundedSemaphore(value=max(1, min(microsoft_workers, max_workers))),
+        'google': threading.BoundedSemaphore(value=max(1, min(google_workers, max_workers))),
+        'other': threading.BoundedSemaphore(value=max(1, max_workers)),
+    }
+    print(f"🔗 Provider-aware throttling: GitHub={counts['github']} (max {github_workers}), Microsoft={counts['microsoft']} (max {microsoft_workers}), Google={counts['google']} (max {google_workers}), Other={counts['other']}")
 
     def _task(script_path: Path, timeout: int) -> UpdateResult:
-        if gh_map.get(script_path, False):
-            # Limit GitHub-related tasks to avoid rate limits
-            with gh_sem:
-                return run_update_script(script_path, timeout)
-        else:
-            return run_update_script(script_path, timeout)
+        prov = prov_map.get(script_path, 'other')
+        with sems.get(prov, sems['other']):
+            return run_update_script_with_retry(script_path, timeout, retries)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all scripts with throttling wrapper
@@ -458,6 +490,10 @@ def main():
                        help="Timeout per script in seconds (default: 120)")
     parser.add_argument("--github-workers", type=int, default=3,
                        help="Max concurrent GitHub-related scripts (default: 3) to avoid hitting rate limits")
+    parser.add_argument("--microsoft-workers", type=int, default=3,
+                       help="Max concurrent Microsoft-related scripts (default: 3)")
+    parser.add_argument("--google-workers", type=int, default=4,
+                       help="Max concurrent Google-related scripts (default: 4)")
     parser.add_argument("--scripts", "-s", nargs="+", 
                        help="Run only specific scripts (e.g., corecycler esptool)")
     parser.add_argument("--dry-run", "-d", action="store_true",
@@ -474,8 +510,20 @@ def main():
                        help="Enable short-lived HTTP response caching for update scripts during this run")
     parser.add_argument("--http-cache-ttl", type=int, default=1800,
                        help="HTTP cache TTL in seconds when --http-cache is enabled (default: 1800)")
+    parser.add_argument("--retry", type=int, default=0,
+                       help="Number of retry attempts per script on failure (default: 0)")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                       help="Enable verbose logging")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                       help="Reduce logging output")
     
     args = parser.parse_args()
+    
+    # Configure logging
+    logging.basicConfig(
+        level=(logging.WARNING if args.quiet else logging.DEBUG if args.verbose else logging.INFO),
+        format="%(levelname)s: %(message)s"
+    )
     
     # Check dependencies
     if not check_dependencies():
@@ -526,8 +574,7 @@ def main():
     if args.sequential:
         args.parallel = False
     else:
-        # Default to parallel if not explicitly sequential
-        args.parallel = True if args.parallel else True
+        args.parallel = True
 
     print(f"🎯 Mode: {'Parallel' if args.parallel else 'Sequential'}")
     if args.parallel:
@@ -566,9 +613,9 @@ def main():
         print(f"⚡ Fast mode enabled: workers set to {args.workers}")
     
     if args.parallel:
-        results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers)
+        results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers, microsoft_workers=args.microsoft_workers, google_workers=args.google_workers, retries=args.retry)
     else:
-        results = run_sequential(script_paths, args.timeout, args.delay)
+        results = run_sequential(script_paths, args.timeout, args.delay, retries=args.retry)
     
     total_duration = time.time() - start_time
     
@@ -614,12 +661,12 @@ def main():
                         print("ℹ️  No staged changes found under bucket/ to commit.")
                     else:
                         if updated_apps:
-                            # Include versions in grouped commit
+                            # Include versions in grouped commit with count
                             updated_with_versions = []
                             for app in updated_apps:
                                 v = get_manifest_version(app)
                                 updated_with_versions.append(f"{app} {v}" if v else app)
-                            msg = "updated: " + ", ".join(updated_with_versions)
+                            msg = f"updated ({len(updated_with_versions)}): " + ", ".join(updated_with_versions)
                             print(f"📝 Committing: {msg}")
                             commit_with_message(msg)
                         if added_apps:
@@ -627,7 +674,7 @@ def main():
                             for app in added_apps:
                                 v = get_manifest_version(app)
                                 added_with_versions.append(f"{app} {v}" if v else app)
-                            msg = "added: " + ", ".join(added_with_versions)
+                            msg = f"added ({len(added_with_versions)}): " + ", ".join(added_with_versions)
                             print(f"📝 Committing: {msg}")
                             commit_with_message(msg)
                         push_changes()
