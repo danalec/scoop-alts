@@ -194,7 +194,7 @@ def discover_update_scripts() -> List[str]:
     # Find all update-*.py files
     for script_file in SCRIPTS_DIR.glob("update-*.py"):
         # Skip the update-all.py script itself and utility scripts
-        if script_file.name not in ["update-all.py", "update-script-generator.py"]:
+        if script_file.name not in ["update-all.py", "update-script-generator.py"] and not script_file.name.startswith("_"):
             update_scripts.append(script_file.name)
     
     # Sort for consistent ordering
