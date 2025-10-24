@@ -72,7 +72,8 @@ def update_manifest():
     # Ensure bin and shortcuts point to the correct versioned executable name
     # Upstream distributes a single EXE named HDDLLF.<version>.exe
     exe_name = f"HDDLLF.{version}.exe"
-    manifest['bin'] = exe_name
+    # Prefer descriptive alias for bin
+    manifest['bin'] = [[exe_name, "HDD Low-Level Format Tool"]]
     try:
         # shortcuts is a list of [target, name]
         if isinstance(manifest.get('shortcuts'), list) and len(manifest['shortcuts']) > 0:
@@ -80,10 +81,10 @@ def update_manifest():
             manifest['shortcuts'][0][0] = exe_name
         else:
             # Create a sensible default shortcut if missing
-            manifest['shortcuts'] = [[exe_name, "HDD Low Level Format Tool"]]
+            manifest['shortcuts'] = [[exe_name, "HDD Low-Level Format Tool"]]
     except Exception:
         # Fallback in case structure isn't as expected
-        manifest['shortcuts'] = [[exe_name, "HDD Low Level Format Tool"]]
+        manifest['shortcuts'] = [[exe_name, "HDD Low-Level Format Tool"]]
     
     # Save updated manifest
     try:
