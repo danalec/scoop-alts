@@ -13,6 +13,12 @@ import subprocess
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass
+# Optional semantic version parsing
+try:
+    from packaging.version import Version as _PVersion, InvalidVersion as _PInvalid
+except Exception:  # pragma: no cover
+    _PVersion = None
+    _PInvalid = Exception
 
 # Optional adapters/retries for robust and efficient HTTP requests
 try:
@@ -152,19 +158,27 @@ class VersionDetector:
                             all_versions.append(v)
 
             if all_versions:
-                # Pick the highest semantic-ish version (compare by integer parts)
-                def version_key(v: str) -> List[int]:
-                    parts = re.split(r"[._-]", v)
-                    key: List[int] = []
-                    for p in parts:
-                        try:
-                            key.append(int(p))
-                        except ValueError:
-                            # Non-numeric parts sort after numeric
-                            key.append(-1)
-                    return key
+                # Prefer semantic version ordering when available
+                best: Optional[str] = None
+                if _PVersion is not None:
+                    try:
+                        best = sorted(all_versions, key=lambda v: _PVersion(v), reverse=True)[0]
+                    except _PInvalid:
+                        best = None
+                if not best:
+                    # Fallback: compare by integer parts
+                    def version_key(v: str) -> List[int]:
+                        parts = re.split(r"[._-]", v)
+                        key: List[int] = []
+                        for p in parts:
+                            try:
+                                key.append(int(p))
+                            except ValueError:
+                                # Non-numeric parts sort after numeric
+                                key.append(-1)
+                        return key
 
-                best = sorted(all_versions, key=version_key, reverse=True)[0]
+                    best = sorted(all_versions, key=version_key, reverse=True)[0]
                 print(f"✅ Found version: {best}")
                 # Store conditional metadata and parsed version
                 self._version_cache[homepage_url] = {
@@ -243,8 +257,13 @@ class VersionDetector:
             response.raise_for_status()
             
             sha256_hash = hashlib.sha256()
+            total_bytes = 0
+            content_len = int(response.headers.get('Content-Length', '0') or '0')
+            if content_len:
+                print(f"⬇️  Content-Length: {content_len} bytes")
             for chunk in response.iter_content(chunk_size=8192):
                 sha256_hash.update(chunk)
+                total_bytes += len(chunk)
             
             hash_value = sha256_hash.hexdigest()
             print(f"✅ Hash: {hash_value}")
@@ -628,4 +647,3 @@ def create_software_config_from_manifest(manifest_path: Path) -> Optional[Softwa
         
     except Exception as e:
         print(f"❌ Failed to create config from manifest {manifest_path}: {e}")
-        return None
