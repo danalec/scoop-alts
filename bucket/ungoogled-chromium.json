@@ -1,10 +1,10 @@
 {
-  "version": "141.0.7390.107-1.1",
+  "version": "141.0.7390.122-1.1",
   "description": "Ungoogled Chromium - Google Chromium without Google's integration",
   "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
   "license": "BSD-3-Clause",
-  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/141.0.7390.107-1.1/ungoogled-chromium_141.0.7390.107-1.1_windows_x64.zip",
-  "hash": "sha256:95e21fc9dd4c41e8ea35aacef6e39ad67ec63194fc2a89637ec35bf286899817",
+  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/141.0.7390.122-1.1/ungoogled-chromium_141.0.7390.122-1.1_windows_x64.zip",
+  "hash": "sha256:5588f83f5b45064042b9b03928e2bdddff7d947f6a957b6185e3681331595c5b",
   "bin": [
     [
       "chrome.exe",
@@ -19,7 +19,7 @@
       "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check --profile-directory=\"Default\""
     ]
   ],
-  "extract_dir": "ungoogled-chromium_141.0.7390.107-1.1_windows_x64",
+  "extract_dir": "ungoogled-chromium_141.0.7390.122-1.1_windows_x64",
   "post_install": [
     "$shouldRun = $false",
     "if ($env:SCOOP_SET_DEFAULT_BROWSER -eq '1') { $shouldRun = $true }",
