@@ -69,6 +69,21 @@ scoop uninstall ungoogled-chromium
 scoop install danalec_scoop-alts/ungoogled-chromium
 ```
 
+#### Clean uninstall (remove persisted profile)
+
+Scoop’s persist keeps your Chromium profile under:
+```
+%USERPROFILE%\scoop\persist\ungoogled-chromium\User Data
+```
+If you want a fully clean removal (including your profile), use the purge flag:
+```powershell
+scoop uninstall ungoogled-chromium --purge
+```
+Notes:
+- This deletes the persisted “User Data” folder shown above.
+- The bucket’s uninstaller also offers prompts to clean related registry entries (default‑browser associations) safely. You’ll be asked to confirm each removal.
+
+
 ### Browse All Packages
 Online:
 https://github.com/danalec/scoop-alts/tree/main/bucket
@@ -77,6 +92,26 @@ Locally (after adding the bucket):
 ```powershell
 Get-ChildItem "$env:SCOOP\\buckets\\danalec_scoop-alts\\bucket\\*.json" | Select-Object -ExpandProperty BaseName
 ```
+
+### Other packages with persist and purge
+
+Some packages in this bucket use Scoop’s persist to keep app data across updates and standard uninstalls. Use the --purge flag to remove those data folders during uninstall.
+
+- Windhawk
+  - Persisted path:
+    ``
+    %USERPROFILE%\scoop\persist\windhawk\windhawk\AppData
+    ``
+  - Clean uninstall (remove settings/mods):
+    ```powershell
+    scoop uninstall windhawk --purge
+    ```
+  - Verify the junction (optional):
+    ```powershell
+    Get-Item "$env:USERPROFILE\scoop\apps\windhawk\current\windhawk\AppData" | Format-List *
+    ```
+    LinkType should be Junction and Target should point to the persist path above.
+
 
 ## 🤖 Automation
 
