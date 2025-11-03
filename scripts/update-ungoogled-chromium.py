@@ -16,6 +16,22 @@ HOMEPAGE_URL = "https://api.github.com/repos/ungoogled-software/ungoogled-chromi
 DOWNLOAD_URL_TEMPLATE = "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "ungoogled-chromium.json"
 
+def _apply_updates_with_whitelist(manifest: dict, updates: dict, allowed_keys: list) -> None:
+    """Set only allowed top-level keys in the manifest.
+
+    This prevents accidental overwrites of fields like post_install, uninstaller, or persist.
+    """
+    for k in allowed_keys:
+        if k in updates:
+            manifest[k] = updates[k]
+
+    # Handle autoupdate subkeys safely
+    if 'autoupdate' in updates:
+        if 'autoupdate' not in manifest or not isinstance(manifest['autoupdate'], dict):
+            manifest['autoupdate'] = {}
+        for sub_k, sub_v in updates['autoupdate'].items():
+            manifest['autoupdate'][sub_k] = sub_v
+
 def update_manifest():
     """Update the Scoop manifest using shared version detection"""
     print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -60,22 +76,21 @@ def update_manifest():
         return True
     
     # Update manifest
-    manifest['version'] = version
-    manifest['url'] = download_url
-    manifest['hash'] = f"sha256:{hash_value}"
-    # Ensure extract_dir matches the versioned folder inside the zip
-    manifest['extract_dir'] = f"ungoogled-chromium_{version}_windows_x64"
-    # Also set autoupdate.extract_dir to keep it in sync for automatic updates
-    try:
-        if 'autoupdate' not in manifest or not isinstance(manifest['autoupdate'], dict):
-            manifest['autoupdate'] = {}
-        manifest['autoupdate']['extract_dir'] = f"ungoogled-chromium_$version_windows_x64"
-    except Exception:
-        # Fallback: ensure autoupdate exists
-        manifest['autoupdate'] = {
+    updates = {
+        'version': version,
+        'url': download_url,
+        'hash': f"sha256:{hash_value}",
+        'extract_dir': f"ungoogled-chromium_{version}_windows_x64",
+        'autoupdate': {
+            'extract_dir': "ungoogled-chromium_$version_windows_x64",
             'url': DOWNLOAD_URL_TEMPLATE,
-            'extract_dir': "ungoogled-chromium_$version_windows_x64"
         }
+    }
+    _apply_updates_with_whitelist(
+        manifest,
+        updates,
+        allowed_keys=['version', 'url', 'hash', 'extract_dir', 'autoupdate']
+    )
     
     # Save updated manifest
     try:

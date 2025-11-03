@@ -1,12 +1,23 @@
 # Advanced Automation Guide
 
+Quick links:
+- [Advanced Configuration Examples](#advanced-configuration-examples)
+- [Complex Version Detection](#complex-version-detection)
+- [Performance Optimization](#performance-optimization)
+- [Advanced Troubleshooting](#advanced-troubleshooting)
+- [CI/CD Integration](#cicd-integration)
+- [Custom Script Templates](#custom-script-templates)
+- [Monitoring & Metrics](#monitoring--metrics)
+- [Advanced Configuration Management](#advanced-configuration-management)
+- [Additional Resources](#additional-resources)
+
 This document contains advanced scenarios, complex configurations, and detailed technical information for the Scoop automation system.
 
 > **Prerequisites**: Complete the basic setup in [AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md) first.
 
 ## Navigation
 
-- **[README.md](README.md)** - Project overview and quick start
+- **[README.md](../README.md)** - Project overview and quick start
 - **[AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md)** - Basic setup and common usage
 - **[AUTOMATION-SCRIPTS-DOCUMENTATION.md](AUTOMATION-SCRIPTS-DOCUMENTATION.md)** - Technical API reference
 - **AUTOMATION-ADVANCED.md** (this document) - Advanced scenarios and troubleshooting
@@ -83,13 +94,13 @@ For software with non-standard version formats:
 # Custom version detection in update script
 def detect_custom_version():
     """Handle complex version detection scenarios."""
-    
+
     # Example: Version embedded in JavaScript
     js_pattern = r'version:\s*["\']([0-9]+\.[0-9]+(?:\.[0-9]+)?)["\']'
-    
+
     # Example: Version in XML/RSS feed
     xml_pattern = r'<version>([^<]+)</version>'
-    
+
     # Example: Version from API endpoint
     api_url = "https://api.example.com/latest"
     response = requests.get(api_url)
@@ -102,16 +113,16 @@ def detect_custom_version():
 ```python
 def build_complex_download_url(version: str) -> str:
     """Build download URLs with complex logic."""
-    
+
     # Example: Different URL patterns based on version
     if version.startswith('2.'):
         base_url = "https://new-cdn.example.com"
     else:
         base_url = "https://legacy.example.com"
-    
+
     # Example: URL encoding for special characters
     encoded_version = urllib.parse.quote(version)
-    
+
     return f"{base_url}/releases/{encoded_version}/app.zip"
 ```
 
@@ -167,7 +178,7 @@ python scripts/automate-scoop.py test --debug --verbose
 ```python
 def robust_version_detection(url: str, patterns: list) -> str:
     """Implement fallback version detection."""
-    
+
     for attempt, pattern in enumerate(patterns, 1):
         try:
             response = requests.get(url, timeout=10)
@@ -177,7 +188,7 @@ def robust_version_detection(url: str, patterns: list) -> str:
         except Exception as e:
             logger.warning(f"Pattern {attempt} failed: {e}")
             continue
-    
+
     raise ValueError("All version detection patterns failed")
 ```
 
@@ -213,20 +224,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-          
+
       - name: Install dependencies
-        run: pip install -r requirements-automation.txt
-        
+        run: pip install -r scripts/requirements-automation.txt
+
       - name: Run automation
         run: |
           # Parallel by default; customize workers and providers as needed
           python scripts/update-all.py --workers 6 --github-workers 3 --microsoft-workers 3 --google-workers 4
-          
+
       - name: Create Pull Request
         if: success()
         uses: peter-evans/create-pull-request@v5
@@ -282,16 +293,16 @@ from pathlib import Path
 
 def update_{software_name_safe}():
     """Update {software_name} with custom logic."""
-    
+
     # Custom version detection
     version = detect_version_custom()
-    
+
     # Custom URL construction
     download_url = build_download_url(version)
-    
+
     # Custom hash calculation
     file_hash = calculate_hash_with_retry(download_url)
-    
+
     # Update manifest
     update_manifest(version, download_url, file_hash)
 
@@ -310,15 +321,15 @@ class AutomationMetrics:
         self.success_count = 0
         self.failure_count = 0
         self.execution_times = []
-    
+
     def record_success(self, execution_time: float):
         self.success_count += 1
         self.execution_times.append(execution_time)
-    
+
     def record_failure(self, error: Exception):
         self.failure_count += 1
         logger.error(f"Automation failed: {error}")
-    
+
     def get_success_rate(self) -> float:
         total = self.success_count + self.failure_count
         return (self.success_count / total) * 100 if total > 0 else 0
@@ -358,11 +369,11 @@ python scripts/automate-scoop.py health-check --component manifest-generation
 ```python
 def load_environment_config(env: str = "production") -> dict:
     """Load environment-specific configuration."""
-    
+
     config_file = Path(f"configs/{env}.json")
     if config_file.exists():
         return json.loads(config_file.read_text())
-    
+
     # Fallback to default configuration
     return load_default_config()
 ```
@@ -382,3 +393,7 @@ def load_environment_config(env: str = "production") -> dict:
 - **GitHub Discussions**: Share advanced configurations
 - **Issue Tracker**: Report complex automation scenarios
 - **Wiki**: Community-contributed examples
+
+---
+
+[← Back to Docs Index](index.md)

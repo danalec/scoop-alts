@@ -1,5 +1,14 @@
 # 🐍 Scripts Technical Reference
 
+Quick links:
+- [Script Architecture Overview](#script-architecture-overview)
+- [Core Automation Scripts](#core-automation-scripts)
+- [Generated Update Scripts](#generated-update-scripts)
+- [Configuration System](#configuration-system)
+- [Testing & Validation](#testing--validation)
+- [Quick Reference](#quick-reference)
+- [File Locations](#file-locations)
+
 > **Technical documentation for developers working with the automation scripts**
 
 This document provides technical details about classes, functions, and integration patterns for developers who need to understand or modify the automation system internals.
@@ -432,3 +441,7 @@ python scripts/automate-scoop.py test
 - `automate-scoop.py` orchestrates the entire workflow
 - `update-all.py` manages execution of generated scripts
 - Configuration flows from JSON → Manifests + Scripts → Execution
+
+---
+
+[← Back to Docs Index](index.md)

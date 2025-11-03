@@ -1,5 +1,5 @@
 # Requirements for Scoop Automation Suite
-# Install with: pip install -r requirements-automation.txt
+# Install with: pip install -r scripts/requirements-automation.txt
 
 # Core dependencies
 requests>=2.31.0

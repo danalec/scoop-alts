@@ -103,7 +103,7 @@ def get_session(
 
 class VersionDetector:
     """Shared class for version detection and URL construction"""
-    
+
     def __init__(self):
         # Use shared session with pooling, retries, and compressed responses
         # Enable cache if env variables request it
@@ -112,15 +112,15 @@ class VersionDetector:
         self.session = get_session(use_cache=use_cache, cache_expire_seconds=ttl)
         # Per-URL conditional request metadata and cached parsed version
         self._version_cache: Dict[str, Dict[str, str]] = {}
-    
+
     def fetch_latest_version(self, homepage_url: str, version_patterns: List[str]) -> Optional[str]:
         """
         Fetch the latest version from a homepage using provided regex patterns
-        
+
         Args:
             homepage_url: URL to scrape for version information
             version_patterns: List of regex patterns to match version numbers
-            
+
         Returns:
             Latest version string if found, None otherwise
         """
@@ -137,14 +137,14 @@ class VersionDetector:
 
             response = self.session.get(homepage_url, timeout=DEFAULT_TIMEOUT, headers=headers)
             response.raise_for_status()
-            
+
             # If not modified, return cached version immediately
             if response.status_code == 304 and cached and cached.get('version'):
                 print("ℹ️  Not modified (304), using cached version")
                 return cached['version']
 
             content = response.text
-            
+
             # Try each pattern and collect all matches
             all_versions: List[str] = []
             for pattern in version_patterns:
@@ -187,7 +187,7 @@ class VersionDetector:
                     'version': best,
                 }
                 return best
-            
+
             print("❌ No version found with any pattern")
             # Cache response metadata even when not found, to enable future 304
             self._version_cache[homepage_url] = {
@@ -196,29 +196,29 @@ class VersionDetector:
                 'version': '',
             }
             return None
-            
+
         except requests.RequestException as e:
             print(f"❌ Failed to fetch version info: {e}")
             return None
         except Exception as e:
             print(f"❌ Error during version detection: {e}")
             return None
-    
+
     def construct_download_url(self, url_template: str, version: str) -> str:
         """
         Construct download URL from template and version
-        
+
         Args:
             url_template: URL template with $version placeholder
             version: Version string to substitute
-            
+
         Returns:
             Constructed download URL
         """
         download_url = url_template.replace("$version", version)
         print(f"📦 Download URL: {download_url}")
         return download_url
-    
+
     def validate_url(self, url: str) -> bool:
         """Validate if URL is accessible without downloading the full file"""
         try:
@@ -236,10 +236,10 @@ class VersionDetector:
     def calculate_hash(self, url: str) -> Optional[str]:
         """
         Download file and calculate SHA256 hash with URL validation
-        
+
         Args:
             url: URL of file to download and hash
-            
+
         Returns:
             SHA256 hash string if successful, None otherwise
         """
@@ -250,12 +250,12 @@ class VersionDetector:
         if not self.validate_url(clean_url):
             print(f"❌ URL not accessible: {clean_url}")
             return None
-            
+
         try:
             print("🔍 Calculating hash...")
             response = self.session.get(clean_url, timeout=max(30, DEFAULT_TIMEOUT), stream=True)
             response.raise_for_status()
-            
+
             sha256_hash = hashlib.sha256()
             total_bytes = 0
             content_len = int(response.headers.get('Content-Length', '0') or '0')
@@ -264,11 +264,11 @@ class VersionDetector:
             for chunk in response.iter_content(chunk_size=8192):
                 sha256_hash.update(chunk)
                 total_bytes += len(chunk)
-            
+
             hash_value = sha256_hash.hexdigest()
             print(f"✅ Hash: {hash_value}")
             return hash_value
-            
+
         except requests.RequestException as e:
             print(f"❌ Failed to calculate hash: {e}")
             return None
@@ -368,17 +368,17 @@ class VersionDetector:
                 f"(Get-ItemProperty '{exe_path}').VersionInfo.FileVersion"
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            
+
             if result.returncode == 0 and result.stdout.strip():
                 version = result.stdout.strip()
                 # Clean up version string
                 version = re.sub(r'[^\d\.]', '', version)
                 if re.match(r'^\d+\.\d+', version):
                     return version
-                    
+
         except Exception as e:
             print(f"PowerShell version extraction failed: {e}")
-        
+
         return None
 
     def _extract_version_alternative(self, exe_path: Path) -> Optional[str]:
@@ -390,17 +390,17 @@ class VersionDetector:
                 'get', 'Version', '/value'
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            
+
             if result.returncode == 0:
                 for line in result.stdout.split('\n'):
                     if line.startswith('Version='):
                         version = line.split('=', 1)[1].strip()
                         if version and re.match(r'^\d+\.\d+', version):
                             return version
-                            
+
         except Exception as e:
             print(f"Alternative version extraction failed: {e}")
-        
+
         return None
 
     def get_msi_version(self, msi_url: str) -> Optional[str]:
@@ -427,15 +427,15 @@ class VersionDetector:
 
             # 4) Fallback: full download and query MSI properties
             print(f"🔍 Downloading MSI to analyze: {msi_url}")
-            
+
             response = self.session.get(msi_url, stream=True, timeout=60)
             response.raise_for_status()
-            
+
             with tempfile.NamedTemporaryFile(delete=False, suffix='.msi') as temp_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     temp_file.write(chunk)
                 temp_path = Path(temp_file.name)
-            
+
             try:
                 # Use msiexec to query MSI properties
                 cmd = [
@@ -443,19 +443,19 @@ class VersionDetector:
                     f"Get-MSIProperty -Path '{temp_path}' -Property ProductVersion"
                 ]
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                
+
                 if result.returncode == 0 and result.stdout.strip():
                     version = result.stdout.strip()
                     if re.match(r'^\d+\.\d+', version):
                         print(f"✅ Found MSI version: {version}")
                         return version
-                        
+
             finally:
                 temp_path.unlink(missing_ok=True)
-                
+
         except Exception as e:
             print(f"❌ Error extracting MSI version: {e}")
-        
+
         return None
 
     # Lightweight version inference helpers
@@ -528,16 +528,18 @@ class SoftwareConfig:
     extract_dir: Optional[str] = None
     pre_install: Optional[List[str]] = None
     post_install: Optional[List[str]] = None
+    # Support for Scoop uninstaller script lines
+    uninstaller_script: Optional[List[str]] = None
     # Scoop allows persist to be a string or a list; keep it flexible
     persist: Optional[Any] = None
     architecture: Optional[Dict[str, Any]] = None
-    
+
     def __post_init__(self):
         """Handle backward compatibility and defaults"""
         # Ensure version_patterns is a list
         if self.version_patterns is None:
             self.version_patterns = []
-        
+
         # Handle backward compatibility for homepage_url
         if not hasattr(self, 'homepage_url'):
             self.homepage_url = self.homepage
@@ -548,28 +550,28 @@ SoftwareVersionConfig = SoftwareConfig
 def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
     """
     Get complete version information for a software package
-    
+
     Args:
         config: Software configuration object
-        
+
     Returns:
         Dictionary with version, download_url, and hash if successful
     """
     detector = VersionDetector()
-    
+
     # Get latest version
     version = detector.fetch_latest_version(config.homepage, config.version_patterns)
     if not version:
         return None
-    
+
     # Construct download URL
     download_url = detector.construct_download_url(config.download_url_template, version)
-    
+
     # Calculate hash
     hash_value = detector.calculate_hash(download_url)
     if not hash_value:
         return None
-    
+
     return {
         'version': version,
         'download_url': download_url,
@@ -596,23 +598,23 @@ COMMON_VERSION_PATTERNS = {
 def create_software_config_from_manifest(manifest_path: Path) -> Optional[SoftwareVersionConfig]:
     """
     Create a SoftwareVersionConfig from an existing Scoop manifest
-    
+
     Args:
         manifest_path: Path to the manifest JSON file
-        
+
     Returns:
         SoftwareVersionConfig object if successful
     """
     try:
         import json
-        
+
         with open(manifest_path, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
-        
+
         # Extract information from manifest
         name = manifest_path.stem
         homepage = manifest.get('homepage', '')
-        
+
         # Get checkver configuration
         checkver = manifest.get('checkver', {})
         if isinstance(checkver, dict):
@@ -621,19 +623,19 @@ def create_software_config_from_manifest(manifest_path: Path) -> Optional[Softwa
         else:
             homepage_url = homepage
             version_regex = str(checkver) if checkver else ''
-        
+
         # Get autoupdate configuration
         autoupdate = manifest.get('autoupdate', {})
         download_url_template = autoupdate.get('url', '')
-        
+
         # Build version patterns
         version_patterns = []
         if version_regex:
             version_patterns.append(version_regex)
-        
+
         # Add common patterns as fallback
         version_patterns.extend(COMMON_VERSION_PATTERNS['standard'])
-        
+
         return SoftwareVersionConfig(
             name=name,
             homepage=homepage_url,
@@ -644,6 +646,6 @@ def create_software_config_from_manifest(manifest_path: Path) -> Optional[Softwa
             bin_name=manifest.get('bin'),
             shortcuts=manifest.get('shortcuts', [])
         )
-        
+
     except Exception as e:
         print(f"❌ Failed to create config from manifest {manifest_path}: {e}")

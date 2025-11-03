@@ -166,6 +166,11 @@ class ManifestGenerator:
         
         if config.post_install:
             manifest["post_install"] = [cmd.replace("$version", version) for cmd in config.post_install]
+        # Add uninstaller script if provided
+        if getattr(config, "uninstaller_script", None):
+            manifest["uninstaller"] = {
+                "script": [cmd.replace("$version", version) for cmd in config.uninstaller_script]
+            }
         
         # Add persist (string or list)
         if getattr(config, "persist", None):

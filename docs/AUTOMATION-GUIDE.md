@@ -1,5 +1,17 @@
 # Scoop Bucket Automation Guide
 
+Quick links:
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Understanding the File Structure](#understanding-the-file-structure)
+- [Step-by-Step Automation Creation](#step-by-step-automation-creation)
+- [Core Commands](#core-commands)
+- [Update Management Commands](#update-management-commands)
+- [Testing & Validation](#testing--validation)
+- [Troubleshooting](#troubleshooting)
+- [Architecture Overview](#architecture-overview)
+- [Configuration System](#configuration-system)
+
 This guide explains how to use and maintain the comprehensive automation system for this Scoop bucket.
 
 ## Overview
@@ -27,7 +39,7 @@ git clone https://github.com/danalec/scoop-alts
 cd scoop-alts
 
 # 2. Install dependencies
-pip install -r requirements-automation.txt
+pip install -r scripts/requirements-automation.txt
 
 # 3. Test the system
 python scripts/automate-scoop.py test
@@ -151,7 +163,7 @@ Add your software to `scripts/software-configs.json` (this file will be automati
 {
   "software": [
     // ... existing software ...
-    
+
     {
       "name": "example-app",                    // 📝 Package identifier
       "description": "Example App - Demo application for automation",
@@ -370,8 +382,8 @@ For complex scenarios including multi-architecture support, custom installers, a
 
 ### Common Patterns
 
-**GitHub Releases**: `"tag_name\":\\s*\"v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"`  
-**Direct Pages**: `"Version:?\\s*([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"`  
+**GitHub Releases**: `"tag_name\":\\s*\"v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"`
+**Direct Pages**: `"Version:?\\s*([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"`
 **SourceForge**: `"([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)/"`
 
 ### Testing Version Detection
@@ -587,13 +599,13 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
-        run: pip install -r requirements-automation.txt
-      
+        run: pip install -r scripts/requirements-automation.txt
+
       - name: Run updates
         run: python scripts/update-all.py
-      
+
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
@@ -624,6 +636,11 @@ python scripts/automate-scoop.py test --software app-name --verbose
 - **Download 404 errors**: Verify version regex captures complete version string
 - **Hash mismatches**: Use `--force` flag to recalculate
 - **Import errors**: Run `pip install -r requirements-automation.txt`
+- **Import errors**: Run `pip install -r scripts/requirements-automation.txt`
 - **Performance issues**: Use `--timeout 60` for slow networks
 
 For detailed troubleshooting scenarios, see **[AUTOMATION-ADVANCED.md](AUTOMATION-ADVANCED.md)**.
+
+---
+
+[← Back to Docs Index](index.md)
