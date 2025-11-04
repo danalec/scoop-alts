@@ -1,10 +1,10 @@
 {
-  "version": "141.0.7390.122-1.1",
+  "version": "142.0.7444.59-1.1",
   "description": "Ungoogled Chromium - Google Chromium without Google's integration",
   "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
   "license": "BSD-3-Clause",
-  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/141.0.7390.122-1.1/ungoogled-chromium_141.0.7390.122-1.1_windows_x64.zip",
-  "hash": "sha256:5588f83f5b45064042b9b03928e2bdddff7d947f6a957b6185e3681331595c5b",
+  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/142.0.7444.59-1.1/ungoogled-chromium_142.0.7444.59-1.1_windows_x64.zip",
+  "hash": "sha256:60e47a140bf406ace64586009445c23efb403b90282922462fdb8e65b2d34859",
   "depends": [
     "widevinecdm",
     "chromium-crlset"
@@ -23,7 +23,7 @@
       "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check --profile-directory=\"Default\""
     ]
   ],
-  "extract_dir": "ungoogled-chromium_141.0.7390.122-1.1_windows_x64",
+  "extract_dir": "ungoogled-chromium_142.0.7444.59-1.1_windows_x64",
   "post_install": [
     "$componentPackage = @{",
     "  'WidevineCdm' = 'widevinecdm'",
@@ -167,25 +167,25 @@
       "    }",
       "  }",
       "}",
-    "# 0) Restore http/https open command from backup if present",
-    "$backupFile = Join-Path $dir 'default-association-backup.json'",
-    "if (Test-Path $backupFile) {",
-    "  try {",
-    "    $backup = Get-Content -Path $backupFile -Raw | ConvertFrom-Json",
-    "    foreach ($scheme in @('http','https')) {",
-    "      $val = $backup.$scheme",
-    "      if ($null -ne $val) {",
-    "        if (Confirm-Action (\"Restore $scheme open command to saved value?\")) {",
-    "          $key = \"HKCU:\\Software\\Classes\\$scheme\\shell\\open\\command\"",
-    "          New-Item -Path $key -Force | Out-Null",
-    "          Set-ItemProperty -Path $key -Name '(Default)' -Value $val",
-    "          Write-Host (\"Restored $scheme open command.\") -ForegroundColor Green",
-    "        }",
-    "      }",
-    "    }",
-    "  } catch { Write-Host 'Backup restore failed; continuing cleanup.' -ForegroundColor Yellow }",
-    "}",
-    "Write-Host 'Cleanup complete.' -ForegroundColor Green",
+      "# 0) Restore http/https open command from backup if present",
+      "$backupFile = Join-Path $dir 'default-association-backup.json'",
+      "if (Test-Path $backupFile) {",
+      "  try {",
+      "    $backup = Get-Content -Path $backupFile -Raw | ConvertFrom-Json",
+      "    foreach ($scheme in @('http','https')) {",
+      "      $val = $backup.$scheme",
+      "      if ($null -ne $val) {",
+      "        if (Confirm-Action (\"Restore $scheme open command to saved value?\")) {",
+      "          $key = \"HKCU:\\Software\\Classes\\$scheme\\shell\\open\\command\"",
+      "          New-Item -Path $key -Force | Out-Null",
+      "          Set-ItemProperty -Path $key -Name '(Default)' -Value $val",
+      "          Write-Host (\"Restored $scheme open command.\") -ForegroundColor Green",
+      "        }",
+      "      }",
+      "    }",
+      "  } catch { Write-Host 'Backup restore failed; continuing cleanup.' -ForegroundColor Yellow }",
+      "}",
+      "Write-Host 'Cleanup complete.' -ForegroundColor Green",
       "if ($removed.Count -gt 0) {",
       "  Write-Host 'Removed the following entries:' -ForegroundColor Green",
       "  $removed | ForEach-Object { Write-Host (' - {0}' -f $_) }",
@@ -205,7 +205,7 @@
     "regex": "\"tag_name\":\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.[0-9]+)\""
   },
   "autoupdate": {
-    "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip",
-    "extract_dir": "ungoogled-chromium_$version_windows_x64"
+    "extract_dir": "ungoogled-chromium_$version_windows_x64",
+    "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip"
   }
 }
