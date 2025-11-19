@@ -1,0 +1,16 @@
+{
+    "version": "0.10.10",
+    "description": "Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
+    "homepage": "https://github.com/danalec/ripgrep-all",
+    "license": "AGPL-3.0-or-later",
+    "changelog": "https://github.com/danalec/ripgrep-all/releases",
+    "url": "https://github.com/danalec/ripgrep-all/releases/download/v0.10.10/ripgrep-all-0.10.10-windows-x86_64.zip",
+    "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "bin": "rga.exe",
+    "checkver": {
+        "github": "https://github.com/danalec/ripgrep-all"
+    },
+    "autoupdate": {
+        "url": "https://github.com/danalec/ripgrep-all/releases/download/v$version/ripgrep-all-$version-windows-x86_64.zip"
+    }
+}
