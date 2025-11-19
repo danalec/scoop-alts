@@ -1,0 +1,17 @@
+{
+  "version": "10.12.7.7",
+  "description": "Visual Novel Translator",
+  "homepage": "https://github.com/HIllya51/LunaTranslator",
+  "license": "GPL-3.0-or-later",
+  "changelog": "https://github.com/HIllya51/LunaTranslator/releases",
+  "url": "https://github.com/HIllya51/LunaTranslator/releases/download/v10.12.7.7/LunaTranslator_x64_win10.zip",
+  "hash": "sha256:70a18d80692bb4a37c35e34853595b07a1182e77c146a145e39215d1f4c5dbae",
+  "bin": "LunaTranslator.exe",
+  "shortcuts": [["LunaTranslator.exe", "LunaTranslator"]],
+  "checkver": {
+    "github": "https://github.com/HIllya51/LunaTranslator"
+  },
+  "autoupdate": {
+    "url": "https://github.com/HIllya51/LunaTranslator/releases/download/v$version/LunaTranslator_x64_win10.zip"
+  }
+}
