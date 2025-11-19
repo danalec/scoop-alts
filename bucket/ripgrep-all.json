@@ -5,7 +5,7 @@
     "license": "AGPL-3.0-or-later",
     "changelog": "https://github.com/danalec/ripgrep-all/releases",
     "url": "https://github.com/danalec/ripgrep-all/releases/download/v0.10.10/ripgrep-all-0.10.10-windows-x86_64.zip",
-    "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "sha256:8394ff6d460ce85b03ff8c5268f8c1d76c82919d3400fa0ec4dc8b0c3abbab18",
     "bin": "rga.exe",
     "checkver": {
         "github": "https://github.com/danalec/ripgrep-all"
