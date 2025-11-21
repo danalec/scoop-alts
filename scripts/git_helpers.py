@@ -8,6 +8,10 @@ individual update scripts can auto-commit their manifest changes.
 import subprocess
 from pathlib import Path
 import json
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -20,9 +24,11 @@ def run_git_command(args, cwd: Path = REPO_ROOT):
             text=True,
             cwd=str(cwd),
             encoding="utf-8",
+            errors="replace"  # Handle encoding errors gracefully
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except Exception as e:
+        logger.error(f"Git command failed: {e}")
         return 1, "", str(e)
 
 def get_manifest_version_from_file(manifest_path: Path) -> str:
@@ -30,8 +36,17 @@ def get_manifest_version_from_file(manifest_path: Path) -> str:
     try:
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
-            return str(manifest.get("version", "")).strip()
-    except Exception:
+            version = str(manifest.get("version", "")).strip()
+            logger.debug(f"Found version '{version}' in {manifest_path}")
+            return version
+    except FileNotFoundError:
+        logger.error(f"Manifest file not found: {manifest_path}")
+        return ""
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in manifest {manifest_path}: {e}")
+        return ""
+    except Exception as e:
+        logger.error(f"Error reading manifest {manifest_path}: {e}")
         return ""
 
 def commit_manifest_change(app_name: str, manifest_path: str, push: bool = False) -> bool:

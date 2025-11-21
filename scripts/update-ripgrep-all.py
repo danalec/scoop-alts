@@ -7,36 +7,57 @@ Automatically checks for updates and updates the Scoop manifest using shared ver
 import json
 import sys
 import os
+import requests
 from pathlib import Path
-from version_detector import SoftwareVersionConfig, get_version_info
+from version_detector import SoftwareVersionConfig, get_version_info, VersionDetector
 
 # Configuration
 SOFTWARE_NAME = "ripgrep-all"
-HOMEPAGE_URL = "https://api.github.com/repos/danalec/ripgrep-all/releases/latest"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/danalec/ripgrep-all/releases/download/v$version/ripgrep-all-$version-windows-x86_64.zip"
+HOMEPAGE_URL = "https://api.github.com/repos/phiresky/ripgrep-all/releases/latest"
+DOWNLOAD_URL_TEMPLATE = "https://github.com/phiresky/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "ripgrep-all.json"
+
+def find_latest_windows_version():
+    """Find the latest version that has Windows assets available."""
+    try:
+        # Get all releases
+        response = requests.get("https://api.github.com/repos/phiresky/ripgrep-all/releases", timeout=30)
+        response.raise_for_status()
+        releases = response.json()
+        
+        for release in releases:
+            version = release['tag_name'].lstrip('v')
+            # Check if this release has Windows assets
+            windows_assets = [asset for asset in release['assets'] 
+                            if 'windows' in asset['name'].lower() and asset['name'].endswith('.zip')]
+            if windows_assets:
+                return version, windows_assets[0]['browser_download_url']
+                
+        return None, None
+    except Exception as e:
+        print(f"❌ Failed to fetch releases: {e}")
+        return None, None
 
 def update_manifest():
     print(f"🔄 Updating {SOFTWARE_NAME}...")
 
-    config = SoftwareVersionConfig(
-        name=SOFTWARE_NAME,
-        homepage=HOMEPAGE_URL,
-        version_patterns=[r'tag_name"\s*:\s*"v?([0-9]+\.[0-9]+\.[0-9]+)'],
-        download_url_template=DOWNLOAD_URL_TEMPLATE,
-        description="Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
-        license="AGPL-3.0-or-later",
-    )
-
-    version_info = get_version_info(config)
-    if not version_info:
-        print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
+    # Find the latest version with Windows assets
+    version, download_url = find_latest_windows_version()
+    if not version or not download_url:
+        print(f"❌ No Windows assets found for any {SOFTWARE_NAME} release")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "no_windows_assets"}))
         return False
 
-    version = version_info['version']
-    download_url = version_info['download_url']
-    hash_value = version_info['hash']
+    print(f"✅ Found latest Windows version: {version}")
+    print(f"📦 Download URL: {download_url}")
+
+    # Calculate hash for the download URL
+    detector = VersionDetector()
+    hash_value = detector.calculate_hash(download_url)
+    if not hash_value:
+        print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "hash_calculation_failed"}))
+        return False
 
     try:
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:

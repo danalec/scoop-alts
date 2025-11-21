@@ -33,6 +33,14 @@ if sys.platform == "win32":
 SCRIPTS_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPTS_DIR.parent
 
+# Constants for better maintainability
+DEFAULT_TIMEOUT = 120
+DEFAULT_WORKERS = 6
+DEFAULT_RETRY_ATTEMPTS = 0
+MAX_GITHUB_WORKERS = 3
+MAX_MICROSOFT_WORKERS = 3
+MAX_GOOGLE_WORKERS = 4
+
 # Cache manifest versions in-memory during one orchestrator run to avoid
 # repeated disk reads when printing summaries and composing commit messages.
 MANIFEST_VERSION_CACHE: Dict[str, str] = {}
@@ -46,9 +54,11 @@ def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, s
             text=True,
             cwd=str(cwd),
             encoding="utf-8",
+            errors="replace"  # Handle encoding errors gracefully
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except Exception as e:
+        logging.error(f"Git command failed: {e}")
         return 1, "", str(e)
 
 def is_file_tracked(path: Path) -> bool:
@@ -215,12 +225,45 @@ class UpdateResult:
         self.duration = duration
         self.updated = updated
 
+def parse_script_output(output: str, script_name: str) -> tuple[bool, bool]:
+    """Parse script output to determine update status."""
+    # Prefer structured JSON result: search the last up to 10 non-empty lines for a JSON object
+    structured_updated = None
+    try:
+        lines = [ln for ln in output.strip().splitlines() if ln.strip()]
+        for ln in reversed(lines[-10:]):
+            last = ln.strip()
+            if last.startswith('{') and last.endswith('}'):
+                import json as _json
+                parsed = _json.loads(last)
+                if isinstance(parsed, dict) and 'updated' in parsed:
+                    structured_updated = bool(parsed.get('updated'))
+                    # Prime version cache if provided
+                    pkg = script_name.replace('update-', '').replace('.py', '')
+                    v = parsed.get('version')
+                    if isinstance(v, str) and v:
+                        MANIFEST_VERSION_CACHE[pkg] = v
+                    break
+    except Exception:
+        # Ignore JSON parsing issues; fall back to text heuristics
+        pass
+
+    if structured_updated is not None:
+        updated = structured_updated
+        no_update_needed = not updated
+    else:
+        updated = "update completed successfully" in output.lower() or "updated" in output.lower()
+        no_update_needed = "no update needed" in output.lower() or "up to date" in output.lower()
+    
+    return updated, no_update_needed
+
 def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
     """Run a single update script and return the result."""
     script_name = script_path.name
     start_time = time.time()
     
     try:
+        logging.info(f"Running {script_name}...")
         print(f"🚀 Running {script_name}...")
         
         # Run the script
@@ -246,59 +289,40 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
         
         # Check if update was successful and if anything was updated
         output = result.stdout + result.stderr
-
-        # Prefer structured JSON result: search the last up to 10 non-empty lines for a JSON object
-        structured_updated = None
-        try:
-            lines = [ln for ln in output.strip().splitlines() if ln.strip()]
-            for ln in reversed(lines[-10:]):
-                last = ln.strip()
-                if last.startswith('{') and last.endswith('}'):
-                    import json as _json
-                    parsed = _json.loads(last)
-                    if isinstance(parsed, dict) and 'updated' in parsed:
-                        structured_updated = bool(parsed.get('updated'))
-                        # Prime version cache if provided
-                        pkg = script_name.replace('update-', '').replace('.py', '')
-                        v = parsed.get('version')
-                        if isinstance(v, str) and v:
-                            MANIFEST_VERSION_CACHE[pkg] = v
-                        break
-        except Exception:
-            # Ignore JSON parsing issues; fall back to text heuristics
-            pass
-
-        if structured_updated is not None:
-            updated = structured_updated
-            no_update_needed = not updated
-        else:
-            updated = "update completed successfully" in output.lower() or "updated" in output.lower()
-            no_update_needed = "no update needed" in output.lower() or "up to date" in output.lower()
+        
+        # Parse output for update status
+        updated, no_update_needed = parse_script_output(output, script_name)
         
         if result.returncode == 0:
             if updated:
                 print(f"✅ {script_name} - Updated successfully ({duration:.1f}s)")
+                logging.info(f"{script_name} updated successfully")
             elif no_update_needed:
                 print(f"ℹ️  {script_name} - No update needed ({duration:.1f}s)")
+                logging.info(f"{script_name} no update needed")
             else:
                 print(f"✅ {script_name} - Completed ({duration:.1f}s)")
+                logging.info(f"{script_name} completed without updates")
             
             return UpdateResult(script_name, True, output, duration, updated)
         else:
             error_msg = result.stderr.strip() if result.stderr else 'Unknown error'
             stdout_msg = result.stdout.strip() if result.stdout else ''
             detailed_error = f"Exit code: {result.returncode}\nSTDERR: {error_msg}\nSTDOUT: {stdout_msg}"
+            logging.error(f"{script_name} failed: {detailed_error}")
             print(f"❌ {script_name} - Failed ({duration:.1f}s)")
             print(f"   Error details: {detailed_error}")
             return UpdateResult(script_name, False, detailed_error, duration, False)
             
     except subprocess.TimeoutExpired:
         duration = time.time() - start_time
+        logging.error(f"{script_name} timed out after {timeout}s")
         print(f"⏰ {script_name} - Timeout after {timeout}s")
         return UpdateResult(script_name, False, f"Script timed out after {timeout} seconds", duration, False)
         
     except Exception as e:
         duration = time.time() - start_time
+        logging.error(f"{script_name} error: {e}")
         print(f"💥 {script_name} - Error: {e}")
         return UpdateResult(script_name, False, str(e), duration, False)
 
@@ -454,46 +478,95 @@ def print_summary(results: List[UpdateResult], total_duration: float):
 
 def check_dependencies():
     """Check if required dependencies are installed."""
+    missing_deps = []
+    optional_deps = []
+    
+    # Check core dependencies
     try:
         import requests
-        import packaging
-    except ImportError as e:
-        print(f"❌ Missing dependency: {e}")
-        print("Please install required packages:")
-        print("pip install requests packaging")
-        return False
+    except ImportError:
+        missing_deps.append("requests")
     
-    # Check for BeautifulSoup (needed for website scraping scripts)
+    try:
+        import packaging
+    except ImportError:
+        missing_deps.append("packaging")
+    
+    # Check optional dependencies
     try:
         import bs4
     except ImportError:
-        print("⚠️  Warning: BeautifulSoup4 not found. Website scraping scripts may fail.")
-        print("Install with: pip install beautifulsoup4")
+        optional_deps.append("beautifulsoup4")
+    
+    if missing_deps:
+        print(f"❌ Missing required dependencies: {', '.join(missing_deps)}")
+        print("Please install required packages:")
+        print(f"pip install {' '.join(missing_deps)}")
+        return False
+    
+    if optional_deps:
+        print(f"⚠️  Warning: Optional dependencies not found: {', '.join(optional_deps)}")
+        print("Some features may be limited. Install with:")
+        print(f"pip install {' '.join(optional_deps)}")
     
     return True
 
+def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
+    """Configure logging based on verbosity settings."""
+    if quiet:
+        level = logging.WARNING
+    elif verbose:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%H:%M:%S"
+    )
+
 def main():
     """Main function to orchestrate all update scripts."""
-    parser = argparse.ArgumentParser(description="Run all Scoop bucket update scripts")
-    # Default to parallel execution; allow forcing sequential with --sequential
-    parser.add_argument("--parallel", "-p", action="store_true", default=True,
-                       help="Run scripts in parallel (default). Use --sequential to run sequentially.")
-    parser.add_argument("--sequential", action="store_true",
-                       help="Force sequential execution.")
-    parser.add_argument("--workers", "-w", type=int, default=6,
-                       help="Number of parallel workers (default: 6)")
-    parser.add_argument("--delay", "-D", type=float, default=0.0,
-                       help="Delay (seconds) between scripts in sequential mode (default: 0.0)")
-    parser.add_argument("--fast", "-f", action="store_true",
-                       help="Enable fast mode: parallel execution with an optimized worker count (recommended for network-bound scripts)")
-    parser.add_argument("--timeout", "-t", type=int, default=120,
-                       help="Timeout per script in seconds (default: 120)")
-    parser.add_argument("--github-workers", type=int, default=3,
-                       help="Max concurrent GitHub-related scripts (default: 3) to avoid hitting rate limits")
-    parser.add_argument("--microsoft-workers", type=int, default=3,
-                       help="Max concurrent Microsoft-related scripts (default: 3)")
-    parser.add_argument("--google-workers", type=int, default=4,
-                       help="Max concurrent Google-related scripts (default: 4)")
+    parser = argparse.ArgumentParser(
+        description="Run all Scoop bucket update scripts",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/update-all.py                    # Run all scripts in parallel
+  python scripts/update-all.py --sequential       # Run scripts sequentially
+  python scripts/update-all.py --workers 8        # Use 8 parallel workers
+  python scripts/update-all.py --scripts corecycler esptool  # Run specific scripts
+  python scripts/update-all.py --fast --retry 2   # Fast mode with retries
+        """
+    )
+    
+    # Execution mode
+    execution_group = parser.add_argument_group('Execution Mode')
+    execution_group.add_argument("--parallel", "-p", action="store_true", default=True,
+                       help="Run scripts in parallel (default)")
+    execution_group.add_argument("--sequential", action="store_true",
+                       help="Force sequential execution")
+    execution_group.add_argument("--fast", "-f", action="store_true",
+                       help="Enable fast mode with optimized worker count")
+    
+    # Performance tuning
+    performance_group = parser.add_argument_group('Performance')
+    performance_group.add_argument("--workers", "-w", type=int, default=DEFAULT_WORKERS,
+                       help=f"Number of parallel workers (default: {DEFAULT_WORKERS})")
+    performance_group.add_argument("--timeout", "-t", type=int, default=DEFAULT_TIMEOUT,
+                       help=f"Timeout per script in seconds (default: {DEFAULT_TIMEOUT})")
+    performance_group.add_argument("--delay", "-D", type=float, default=0.0,
+                       help="Delay (seconds) between scripts in sequential mode")
+    
+    # Provider-specific throttling
+    throttling_group = parser.add_argument_group('Provider Throttling')
+    throttling_group.add_argument("--github-workers", type=int, default=MAX_GITHUB_WORKERS,
+                       help=f"Max concurrent GitHub-related scripts (default: {MAX_GITHUB_WORKERS})")
+    throttling_group.add_argument("--microsoft-workers", type=int, default=MAX_MICROSOFT_WORKERS,
+                       help=f"Max concurrent Microsoft-related scripts (default: {MAX_MICROSOFT_WORKERS})")
+    throttling_group.add_argument("--google-workers", type=int, default=MAX_GOOGLE_WORKERS,
+                       help=f"Max concurrent Google-related scripts (default: {MAX_GOOGLE_WORKERS})")
     parser.add_argument("--scripts", "-s", nargs="+", 
                        help="Run only specific scripts (e.g., corecycler esptool)")
     parser.add_argument("--dry-run", "-d", action="store_true",
@@ -520,10 +593,7 @@ def main():
     args = parser.parse_args()
     
     # Configure logging
-    logging.basicConfig(
-        level=(logging.WARNING if args.quiet else logging.DEBUG if args.verbose else logging.INFO),
-        format="%(levelname)s: %(message)s"
-    )
+    setup_logging(args.verbose, args.quiet)
     
     # Check dependencies
     if not check_dependencies():
@@ -567,28 +637,37 @@ def main():
         sys.exit(1)
     
     # Show what will be run
+    logging.info("Starting Scoop Bucket Update Orchestrator")
     print("🔧 Scoop Bucket Update Orchestrator")
     print(f"📅 Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📂 Scripts directory: {SCRIPTS_DIR}")
+    
     # Resolve mode: if --sequential is set, override parallel
     if args.sequential:
         args.parallel = False
+        logging.info("Running in sequential mode")
     else:
         args.parallel = True
+        logging.info("Running in parallel mode")
 
     print(f"🎯 Mode: {'Parallel' if args.parallel else 'Sequential'}")
     if args.parallel:
         # Clamp workers to number of scripts
         args.workers = max(1, min(args.workers, len(script_paths)))
         print(f"👥 Workers: {args.workers}")
+        logging.info(f"Using {args.workers} parallel workers")
     else:
         print(f"⏳ Sequential delay: {args.delay:.1f}s")
+        if args.delay > 0:
+            logging.info(f"Sequential delay set to {args.delay}s")
+    
     print(f"⏱️  Timeout: {args.timeout}s per script")
     print(f"📋 Scripts to run ({len(script_paths)}):")
     
     for script_path in script_paths:
         package_name = script_path.name.replace('update-', '').replace('.py', '')
         print(f"   • {package_name}")
+        logging.debug(f"Will run script for package: {package_name}")
 
     if args.dry_run:
         print("\n🔍 DRY RUN - No scripts will be executed")

@@ -10,6 +10,7 @@ import requests
 import hashlib
 import tempfile
 import subprocess
+import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass
@@ -35,6 +36,10 @@ except Exception:  # pragma: no cover
     requests_cache = None
 
 DEFAULT_TIMEOUT = 15  # seconds
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def get_session(
     *,
@@ -125,7 +130,9 @@ class VersionDetector:
             Latest version string if found, None otherwise
         """
         try:
+            logger.info(f"Scraping version from: {homepage_url}")
             print(f"🔍 Scraping version from: {homepage_url}")
+            
             # Use conditional headers when we have prior metadata
             headers: Dict[str, str] = {}
             cached = self._version_cache.get(homepage_url)
@@ -140,6 +147,7 @@ class VersionDetector:
 
             # If not modified, return cached version immediately
             if response.status_code == 304 and cached and cached.get('version'):
+                logger.info("Using cached version (304 Not Modified)")
                 print("ℹ️  Not modified (304), using cached version")
                 return cached['version']
 
@@ -179,6 +187,7 @@ class VersionDetector:
                         return key
 
                     best = sorted(all_versions, key=version_key, reverse=True)[0]
+                logger.info(f"Found version: {best}")
                 print(f"✅ Found version: {best}")
                 # Store conditional metadata and parsed version
                 self._version_cache[homepage_url] = {
@@ -188,6 +197,7 @@ class VersionDetector:
                 }
                 return best
 
+            logger.warning("No version found with any pattern")
             print("❌ No version found with any pattern")
             # Cache response metadata even when not found, to enable future 304
             self._version_cache[homepage_url] = {
@@ -198,9 +208,11 @@ class VersionDetector:
             return None
 
         except requests.RequestException as e:
+            logger.error(f"Failed to fetch version info from {homepage_url}: {e}")
             print(f"❌ Failed to fetch version info: {e}")
             return None
         except Exception as e:
+            logger.error(f"Error during version detection for {homepage_url}: {e}")
             print(f"❌ Error during version detection: {e}")
             return None
 
@@ -215,7 +227,12 @@ class VersionDetector:
         Returns:
             Constructed download URL
         """
+        if not url_template or not version:
+            logger.error("Invalid url_template or version provided")
+            raise ValueError("url_template and version cannot be empty")
+            
         download_url = url_template.replace("$version", version)
+        logger.info(f"Constructed download URL: {download_url}")
         print(f"📦 Download URL: {download_url}")
         return download_url
 
