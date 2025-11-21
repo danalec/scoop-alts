@@ -33,13 +33,48 @@ if sys.platform == "win32":
 SCRIPTS_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPTS_DIR.parent
 
-# Constants for better maintainability
-DEFAULT_TIMEOUT = 120
-DEFAULT_WORKERS = 6
-DEFAULT_RETRY_ATTEMPTS = 0
-MAX_GITHUB_WORKERS = 3
-MAX_MICROSOFT_WORKERS = 3
-MAX_GOOGLE_WORKERS = 4
+# Performance and Concurrency Constants
+DEFAULT_TIMEOUT = int(os.environ.get('SCOOP_UPDATE_TIMEOUT', '120'))  # seconds per script execution
+DEFAULT_WORKERS = int(os.environ.get('SCOOP_UPDATE_WORKERS', '6'))    # default parallel workers
+DEFAULT_RETRY_ATTEMPTS = int(os.environ.get('SCOOP_RETRY_ATTEMPTS', '0'))  # no retries by default
+
+# Provider-specific rate limiting
+MAX_GITHUB_WORKERS = int(os.environ.get('MAX_GITHUB_WORKERS', '3'))      # GitHub API rate limit consideration
+MAX_MICROSOFT_WORKERS = int(os.environ.get('MAX_MICROSOFT_WORKERS', '3'))   # Microsoft servers rate limit
+MAX_GOOGLE_WORKERS = int(os.environ.get('MAX_GOOGLE_WORKERS', '4'))      # Google APIs rate limit
+
+# Provider-specific configuration
+PROVIDER_CONFIGS = {
+    'github': {
+        'max_workers': MAX_GITHUB_WORKERS,
+        'base_url': 'https://api.github.com',
+        'rate_limit_buffer': 100  # requests per hour buffer
+    },
+    'microsoft': {
+        'max_workers': MAX_MICROSOFT_WORKERS,
+        'base_url': 'https://www.microsoft.com',
+        'retry_delay': 2.0  # seconds between retries
+    },
+    'google': {
+        'max_workers': MAX_GOOGLE_WORKERS,
+        'base_url': 'https://www.googleapis.com',
+        'timeout_multiplier': 1.5  # longer timeouts for Google APIs
+    }
+}
+
+# Logging configuration
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_DATE_FORMAT = '%H:%M:%S'
+
+# File and directory constants
+BUCKET_DIR = REPO_ROOT / 'bucket'
+SCRIPTS_GLOB = 'update-*.py'
+MANIFEST_EXTENSION = '.json'
+MAX_MANIFEST_SIZE = 10 * 1024 * 1024  # 10MB max manifest file size
+
+# Cache configuration
+CACHE_EXPIRY_SECONDS = int(os.environ.get('CACHE_EXPIRY_SECONDS', '1800'))  # 30 minutes cache TTL
 
 # Cache manifest versions in-memory during one orchestrator run to avoid
 # repeated disk reads when printing summaries and composing commit messages.
@@ -90,7 +125,7 @@ def get_staged_bucket_changes() -> Tuple[List[str], List[str]]:
             continue
         status, path = parts
         # Only consider manifests in bucket/
-        if not path.startswith("bucket/") or not path.endswith(".json"):
+        if not path.startswith(f"{BUCKET_DIR.name}/") or not path.endswith(MANIFEST_EXTENSION):
             continue
         app_name = Path(path).stem
         if status.startswith("A"):  # Added
@@ -130,21 +165,28 @@ def get_manifest_version(app_name: str) -> str:
     if app_name in MANIFEST_VERSION_CACHE:
         return MANIFEST_VERSION_CACHE.get(app_name, "")
 
-    manifest_path = REPO_ROOT / "bucket" / f"{app_name}.json"
+    manifest_path = BUCKET_DIR / f"{app_name}{MANIFEST_EXTENSION}"
     try:
+        # Check file size before reading
+        if manifest_path.exists() and manifest_path.stat().st_size > MAX_MANIFEST_SIZE:
+            logging.warning(f"Manifest file too large: {manifest_path} ({manifest_path.stat().st_size} bytes)")
+            MANIFEST_VERSION_CACHE[app_name] = ""
+            return ""
+        
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
             version = str(manifest.get("version", "")).strip()
             MANIFEST_VERSION_CACHE[app_name] = version
             return version
-    except Exception:
+    except Exception as e:
+        logging.debug(f"Failed to read manifest {manifest_path}: {e}")
         # Cache miss with empty value to avoid reattempting in this run
         MANIFEST_VERSION_CACHE[app_name] = ""
         return ""
 
 def list_untracked_manifests() -> List[Tuple[str, Path]]:
     """Return a list of (app_name, path) for untracked manifests under bucket/."""
-    rc, out, err = run_git_command(["git", "ls-files", "--others", "--exclude-standard", "bucket"])
+    rc, out, err = run_git_command(["git", "ls-files", "--others", "--exclude-standard", str(BUCKET_DIR)])
     if rc != 0:
         print(f"⚠️  git ls-files failed: {err or out}")
         return []
@@ -153,9 +195,9 @@ def list_untracked_manifests() -> List[Tuple[str, Path]]:
         rel = rel.strip()
         if not rel:
             continue
-        if not rel.endswith('.json'):
+        if not rel.endswith(MANIFEST_EXTENSION):
             continue
-        if not rel.startswith('bucket/'):
+        if not rel.startswith(f"{BUCKET_DIR.name}/"):
             continue
         p = REPO_ROOT / rel
         app_name = Path(rel).stem
@@ -167,7 +209,7 @@ def stage_and_commit_per_package(updated_results: List["UpdateResult"]) -> None:
     for r in updated_results:
         # Derive package name from script name: update-<pkg>.py
         pkg = r.script_name.replace('update-', '').replace('.py', '')
-        manifest_path = REPO_ROOT / "bucket" / f"{pkg}.json"
+        manifest_path = BUCKET_DIR / f"{pkg}{MANIFEST_EXTENSION}"
 
         if not manifest_path.exists():
             # If the script updated something else or the manifest name differs, skip gracefully
@@ -202,7 +244,7 @@ def discover_update_scripts() -> List[str]:
     update_scripts = []
     
     # Find all update-*.py files
-    for script_file in SCRIPTS_DIR.glob("update-*.py"):
+    for script_file in SCRIPTS_DIR.glob(SCRIPTS_GLOB):
         # Skip the update-all.py script itself and utility scripts
         if script_file.name not in ["update-all.py", "update-script-generator.py"] and not script_file.name.startswith("_"):
             update_scripts.append(script_file.name)
@@ -520,10 +562,14 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     else:
         level = logging.INFO
     
+    # Override with environment variable if set
+    if LOG_LEVEL != 'INFO':
+        level = getattr(logging, LOG_LEVEL, logging.INFO)
+    
     logging.basicConfig(
         level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%H:%M:%S"
+        format=LOG_FORMAT,
+        datefmt=LOG_DATE_FORMAT
     )
 
 def main():
