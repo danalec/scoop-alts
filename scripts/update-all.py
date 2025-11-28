@@ -647,7 +647,19 @@ def send_webhook_if_configured(args) -> None:
         headers = {'Content-Type': 'application/json'}
         if args.webhook_header_name and args.webhook_header_value:
             headers[args.webhook_header_name] = args.webhook_header_value
-        from scripts.summary_utils import format_webhook_body
+        try:
+            from summary_utils import format_webhook_body  # when running from scripts/ as working dir
+        except Exception:
+            try:
+                import importlib.util
+                su_path = SCRIPTS_DIR / 'summary_utils.py'
+                spec = importlib.util.spec_from_file_location('summary_utils', str(su_path))
+                su = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(su)  # type: ignore
+                format_webhook_body = su.format_webhook_body
+            except Exception:
+                def format_webhook_body(payload, webhook_type):
+                    return payload
         body = format_webhook_body(payload, getattr(args, 'webhook_type', 'generic'))
         attempts = [0.5, 1.0, 2.0]
         for i, delay in enumerate(attempts):

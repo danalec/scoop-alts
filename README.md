@@ -144,6 +144,7 @@ python scripts/update-all.py --circuit-threshold 3 --circuit-sleep 5.0
 python scripts/update-all.py --no-error-exit
 python scripts/update-all.py --only-providers github microsoft
 python scripts/update-all.py --skip-providers google
+python scripts/update-all.py --skip-scripts windhawk esptool
 ```
 
 ### Structured output
