@@ -541,6 +541,22 @@ def write_json_summary(results: List[UpdateResult], total_duration: float, args,
         print(f"🧾 JSON summary written to: {summary_path}")
     except Exception as e:
         print(f"⚠️  Failed to write JSON summary: {e}")
+
+def filter_resume_paths(script_paths: List[Path], resume_path: Path) -> List[Path]:
+    try:
+        with open(resume_path, 'r', encoding='utf-8') as f:
+            prev = json.load(f)
+        failed_scripts = set()
+        for item in prev.get('results', []):
+            if not bool(item.get('success', False)):
+                s = item.get('script')
+                if isinstance(s, str) and s:
+                    failed_scripts.add(s)
+        if failed_scripts:
+            return [p for p in script_paths if p.name in failed_scripts]
+        return script_paths
+    except Exception:
+        return script_paths
     print("📊 UPDATE SUMMARY")
     print("="*80)
 
@@ -755,22 +771,14 @@ Examples:
         else:
             print(f"⚠️  Script not found: {script_path}")
 
-    # Optional resume filter: keep only failed from previous run
     if args.resume:
-        try:
-            with open(args.resume, 'r', encoding='utf-8') as f:
-                prev = json.load(f)
-            failed_scripts = set()
-            for item in prev.get('results', []):
-                if not bool(item.get('success', False)):
-                    failed_scripts.add(item.get('script'))
-            if failed_scripts:
-                script_paths = [p for p in script_paths if p.name in failed_scripts]
-                print(f"🔁 Resuming: {len(script_paths)} failed script(s) will be rerun")
-            else:
-                print("ℹ️  Resume requested but no failed scripts found; running full selection")
-        except Exception as e:
-            print(f"⚠️  Failed to read resume file: {e}")
+        before = len(script_paths)
+        script_paths = filter_resume_paths(script_paths, Path(args.resume))
+        after = len(script_paths)
+        if after < before:
+            print(f"🔁 Resuming: {after} failed script(s) will be rerun")
+        else:
+            print("ℹ️  Resume requested but no failed scripts found; running full selection")
 
     if not script_paths:
         print("❌ No valid script files found")
