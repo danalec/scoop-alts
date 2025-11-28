@@ -305,7 +305,7 @@ class VersionDetector:
             print(f"❌ Error during hash calculation: {e}")
             return None
 
-def get_version_from_executable(self, download_url: str) -> Optional[str]:
+    def get_version_from_executable(self, download_url: str) -> Optional[str]:
         """
         Download executable and extract version from metadata
 
@@ -315,28 +315,23 @@ def get_version_from_executable(self, download_url: str) -> Optional[str]:
         Returns:
             Version string if found, None otherwise
         """
-        # Try cheaper strategies first to avoid full downloads
         try:
-            # 1) Try to guess version from URL/filename
             v_guess = self.guess_version_from_url(download_url)
             if v_guess:
                 print(f"✅ Version guessed from URL: {v_guess}")
                 return v_guess
 
-            # 2) Try HEAD for headers-based hints (e.g., Content-Disposition)
             head_resp = self.head(download_url)
             v_head = self.guess_version_from_headers(head_resp) if head_resp else None
             if v_head:
                 print(f"✅ Version guessed from headers: {v_head}")
                 return v_head
 
-            # 3) Try partial content scan for common version strings
             v_partial = self.guess_version_from_partial_content(download_url)
             if v_partial:
                 print(f"✅ Version inferred from partial content: {v_partial}")
                 return v_partial
 
-            # 4) Fallback to full download and metadata extraction
             if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1':
                 return None
             print(f"🔍 Downloading executable to analyze metadata: {download_url}")
@@ -350,13 +345,11 @@ def get_version_from_executable(self, download_url: str) -> Optional[str]:
                 temp_path = Path(temp_file.name)
 
             try:
-                # Extract version using PowerShell
                 version = self._extract_version_powershell(temp_path)
                 if version:
                     print(f"✅ Found version in executable metadata: {version}")
                     return version
 
-                # Fallback: Try alternative methods
                 version = self._extract_version_alternative(temp_path)
                 if version:
                     print(f"✅ Found version using alternative method: {version}")
@@ -364,9 +357,7 @@ def get_version_from_executable(self, download_url: str) -> Optional[str]:
 
                 print("❌ No version found in executable metadata")
                 return None
-
             finally:
-                # Clean up temporary file
                 temp_path.unlink(missing_ok=True)
 
         except Exception as e:

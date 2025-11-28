@@ -603,6 +603,36 @@ def write_json_summary(results: List[UpdateResult], total_duration: float, args,
     except Exception as e:
         print(f"⚠️  Failed to write JSON summary: {e}")
 
+def write_md_summary(results: List[UpdateResult], total_duration: float, args, mode_label: str) -> None:
+    try:
+        if not getattr(args, 'md_summary', None):
+            return
+        out_path = Path(args.md_summary)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        counts_total = len(results)
+        counts_success = len([r for r in results if r.success])
+        counts_failed = len([r for r in results if not r.success])
+        counts_updated = len([r for r in results if r.updated])
+        lines = []
+        lines.append("# Update Health Dashboard")
+        lines.append("")
+        lines.append(f"- Mode: {mode_label}")
+        lines.append(f"- Total: {counts_total}")
+        lines.append(f"- Successful: {counts_success}")
+        lines.append(f"- Failed: {counts_failed}")
+        lines.append(f"- Updated: {counts_updated}")
+        lines.append("")
+        lines.append("| Package | Version | Success | Updated | Duration (s) |")
+        lines.append("|---|---|---|---|---|")
+        for r in results:
+            pkg = r.script_name.replace('update-', '').replace('.py', '')
+            version = get_manifest_version(pkg) or ""
+            lines.append(f"| {pkg} | {version} | {str(r.success)} | {str(r.updated)} | {round(r.duration, 3)} |")
+        out_path.write_text("\n".join(lines), encoding="utf-8")
+        print(f"🧾 Markdown summary written to: {out_path}")
+    except Exception as e:
+        print(f"⚠️  Failed to write Markdown summary: {e}")
+
 def send_webhook_if_configured(args) -> None:
     try:
         if not args.webhook_url or not args.json_summary:
@@ -808,6 +838,8 @@ Examples:
                        help="Number of retry attempts per script on failure (default: 0)")
     parser.add_argument("--json-summary", type=Path,
                        help="Write machine-readable JSON summary to the given file path")
+    parser.add_argument("--md-summary", type=Path,
+                       help="Write human-friendly Markdown summary to the given file path")
     parser.add_argument("--webhook-url", type=str,
                        help="POST the JSON summary to the given webhook URL")
     parser.add_argument("--webhook-type", type=str, choices=["generic", "slack", "discord"], default="generic",
@@ -834,6 +866,10 @@ Examples:
                        help="Reduce logging output")
 
     args = parser.parse_args()
+    if not getattr(args, 'json_summary', None) and os.environ.get('AUTOMATION_JSON_SUMMARY'):
+        args.json_summary = Path(os.environ['AUTOMATION_JSON_SUMMARY'])
+    if not getattr(args, 'md_summary', None) and os.environ.get('AUTOMATION_MD_SUMMARY'):
+        args.md_summary = Path(os.environ['AUTOMATION_MD_SUMMARY'])
 
     # Configure logging
     setup_logging(args.verbose, args.quiet)
@@ -1000,8 +1036,8 @@ Examples:
 
     # Print summary
     print_summary(results, total_duration)
-    # Optional JSON summary output
     write_json_summary(results, total_duration, args, 'Parallel' if args.parallel else 'Sequential')
+    write_md_summary(results, total_duration, args, 'Parallel' if args.parallel else 'Sequential')
     # Optional webhook delivery
     send_webhook_if_configured(args)
 

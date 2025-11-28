@@ -12,3 +12,9 @@ def test_construct_download_url_template():
     vd = VersionDetector()
     url = vd.construct_download_url("https://host/app-$version.exe", "3.4.5")
     assert url == "https://host/app-3.4.5.exe"
+
+
+def test_get_version_from_executable_url_guess():
+    vd = VersionDetector()
+    url = "https://example.com/app-1.2.3.exe"
+    assert vd.get_version_from_executable(url) == "1.2.3"
