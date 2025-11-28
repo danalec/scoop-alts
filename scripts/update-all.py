@@ -729,7 +729,7 @@ def check_dependencies():
 
     return True
 
-def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
+def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Path | None = None) -> None:
     """Configure logging based on verbosity settings."""
     if quiet:
         level = logging.WARNING
@@ -747,6 +747,12 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
         format=LOG_FORMAT,
         datefmt=LOG_DATE_FORMAT
     )
+    if log_file:
+        fh = logging.FileHandler(str(log_file), encoding="utf-8")
+        fh.setLevel(level)
+        formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+        fh.setFormatter(formatter)
+        logging.getLogger().addHandler(fh)
 
 def main():
     """Main function to orchestrate all update scripts."""
@@ -841,15 +847,19 @@ Examples:
                        help="Enable verbose logging")
     parser.add_argument("--quiet", "-q", action="store_true",
                        help="Reduce logging output")
+    parser.add_argument("--log-file", type=Path,
+                       help="Write run log to the given file path")
 
     args = parser.parse_args()
     if not getattr(args, 'json_summary', None) and os.environ.get('AUTOMATION_JSON_SUMMARY'):
         args.json_summary = Path(os.environ['AUTOMATION_JSON_SUMMARY'])
     if not getattr(args, 'md_summary', None) and os.environ.get('AUTOMATION_MD_SUMMARY'):
         args.md_summary = Path(os.environ['AUTOMATION_MD_SUMMARY'])
+    if not getattr(args, 'log_file', None) and os.environ.get('AUTOMATION_LOG_FILE'):
+        args.log_file = Path(os.environ['AUTOMATION_LOG_FILE'])
 
     # Configure logging
-    setup_logging(args.verbose, args.quiet)
+    setup_logging(args.verbose, args.quiet, args.log_file)
 
     # Set structured output preference for parsers
     global PREFER_STRUCTURED_OUTPUT

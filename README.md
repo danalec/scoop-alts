@@ -143,6 +143,7 @@ python scripts/update-all.py --structured-output
 python scripts/update-all.py --http-cache --http-cache-ttl 1800
 python scripts/update-all.py --json-summary .temp/update-summary.json
 python scripts/update-all.py --md-summary .temp/update-summary.md
+python scripts/update-all.py --log-file .temp/run.log
 python scripts/update-all.py --sequential --fail-fast
 python scripts/update-all.py --sequential --max-fail 2
 python scripts/update-all.py --circuit-threshold 3 --circuit-sleep 5.0
@@ -179,6 +180,7 @@ python scripts/update-all.py --skip-scripts windhawk esptool
 - `AUTOMATION_WEBHOOK_URL`, `AUTOMATION_WEBHOOK_HEADER_NAME`, `AUTOMATION_WEBHOOK_HEADER_VALUE` can provide webhook settings.
 - `AUTOMATION_JSON_SUMMARY` and `AUTOMATION_MD_SUMMARY` can provide default output paths for summaries.
 - `SCOOP_GIT_REMOTE` and `SCOOP_GIT_BRANCH` can control which remote/branch is used for auto push.
+- `AUTOMATION_LOG_FILE` can specify a default path for the orchestrator run log.
 
 ### Update dashboard
 - Generate a Markdown dashboard from a summary JSON: `python scripts/generate-dashboard.py .temp/update-summary.json docs/update-health.md`.

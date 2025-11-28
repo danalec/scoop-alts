@@ -36,3 +36,26 @@ def test_guess_version_from_partial_content_bytes():
     vd = VersionDetector()
     vd.get_range_bytes = lambda url, start=0, end=65535, timeout=15: b"FileVersion 5.6.7"  # type: ignore
     assert vd.guess_version_from_partial_content("http://example.com/app.exe") == "5.6.7"
+
+
+def test_get_msi_version_url_guess():
+    vd = VersionDetector()
+    assert vd.get_msi_version("https://example.com/setup-1.2.3.msi") == "1.2.3"
+
+
+def test_get_msi_version_headers_guess():
+    vd = VersionDetector()
+
+    class FakeResp:
+        headers = {"Content-Disposition": "attachment; filename=tool-7.8.9.msi"}
+
+    vd.head = lambda url, timeout=15, allow_redirects=True: FakeResp()  # type: ignore
+    vd.guess_version_from_url = lambda u: None  # type: ignore
+    vd.guess_version_from_partial_content = lambda u: None  # type: ignore
+    assert vd.get_msi_version("https://host/download") == "7.8.9"
+
+
+def test_get_msi_version_partial_content_bytes():
+    vd = VersionDetector()
+    vd.get_range_bytes = lambda url, start=0, end=65535, timeout=15: b"ProductVersion 9.9.9"  # type: ignore
+    assert vd.guess_version_from_partial_content("http://example.com/app.msi") == "9.9.9"
