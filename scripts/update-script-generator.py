@@ -166,8 +166,6 @@ if __name__ == "__main__":
     main()'''
         
         return script_content
-        
-        return script_content
     
     def _to_class_name(self, manifest_name: str) -> str:
         """Convert manifest name to class name"""

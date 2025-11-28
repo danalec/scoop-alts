@@ -87,6 +87,13 @@ def get_session(
         'Upgrade-Insecure-Requests': '1',
     })
 
+    token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+    if token:
+        session.headers.update({
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json',
+        })
+
     # Configure connection pooling and retries if available
     if HTTPAdapter is not None and Retry is not None:
         retry = Retry(
