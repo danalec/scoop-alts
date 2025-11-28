@@ -139,6 +139,9 @@ python scripts/update-all.py --http-cache --http-cache-ttl 1800
 python scripts/update-all.py --json-summary .temp/update-summary.json
 ```
 
+### Manifest validation
+- Manifests are validated against a JSON Schema during CI and via `python scripts/automate-scoop.py validate`.
+
 ### GitHub API rate limits
 - Set `GITHUB_TOKEN` (or `GH_TOKEN`) in the environment to enable authenticated requests and higher GitHub API rate limits used by the version detector.
 

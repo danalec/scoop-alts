@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scoop Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "homepage": { "type": "string" },
+    "license": { "type": ["string", "object"] },
+    "url": { "type": ["string", "array"] },
+    "hash": { "type": ["string", "array"] },
+    "bin": { "type": ["string", "array"] },
+    "shortcuts": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": { "type": "string" },
+        "minItems": 2
+      }
+    },
+    "installer": { "type": ["object", "array"] },
+    "extract_dir": { "type": "string" },
+    "pre_install": { "type": "array" },
+    "post_install": { "type": "array" },
+    "uninstaller": { "type": ["object", "array"] },
+    "persist": { "type": ["string", "array", "object"] },
+    "architecture": { "type": "object" },
+    "checkver": { "type": ["string", "object"] },
+    "autoupdate": { "type": ["object", "array"] }
+  },
+  "required": ["version", "description", "homepage", "url", "hash"]
+}

@@ -16,6 +16,7 @@ import tempfile
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from version_detector import SoftwareConfig
+from pathlib import Path
 
 # Add current directory to path for imports
 scripts_dir = Path(__file__).parent
@@ -440,20 +441,42 @@ class ScoopAutomation:
 
         all_valid = True
 
+        schema = None
+        try:
+            from jsonschema import Draft202012Validator  # type: ignore
+            schema_path = self.scripts_dir / "manifest_schema.json"
+            if schema_path.exists():
+                import json as _json
+                with open(schema_path, 'r', encoding='utf-8') as f:
+                    schema = _json.load(f)
+                validator = Draft202012Validator(schema)
+            else:
+                validator = None
+        except Exception:
+            validator = None
+
         for manifest_path in manifest_paths:
             try:
                 with open(manifest_path, 'r', encoding='utf-8') as f:
                     manifest = json.load(f)
 
-                # Basic validation
-                required_fields = ['version', 'description', 'homepage', 'url', 'hash']
-                missing_fields = [field for field in required_fields if field not in manifest]
-
-                if missing_fields:
-                    print(f"❌ {manifest_path.name}: Missing fields: {', '.join(missing_fields)}")
-                    all_valid = False
+                if validator:
+                    errors = list(validator.iter_errors(manifest))
+                    if errors:
+                        all_valid = False
+                        print(f"❌ {manifest_path.name}: Schema validation failed")
+                        for e in errors[:5]:
+                            print(f"   - {e.message}")
+                    else:
+                        print(f"✅ {manifest_path.name}: Valid")
                 else:
-                    print(f"✅ {manifest_path.name}: Valid")
+                    required_fields = ['version', 'description', 'homepage', 'url', 'hash']
+                    missing_fields = [field for field in required_fields if field not in manifest]
+                    if missing_fields:
+                        print(f"❌ {manifest_path.name}: Missing fields: {', '.join(missing_fields)}")
+                        all_valid = False
+                    else:
+                        print(f"✅ {manifest_path.name}: Valid")
 
             except json.JSONDecodeError as e:
                 print(f"❌ {manifest_path.name}: Invalid JSON: {e}")
