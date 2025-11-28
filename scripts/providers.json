@@ -1,1 +1,16 @@
-{}
+{
+  "update-ripgrep-all.py": "github",
+  "update-ungoogled-chromium.py": "github",
+  "update-windhawk.py": "github",
+  "update-depressurizer.py": "github",
+  "update-corecycler.py": "github",
+  "update-esptool.py": "github",
+  "update-lazyeat.py": "github",
+  "update-widevinecdm.py": "google",
+  "update-ntoptimizer.py": "other",
+  "update-hdd-lff-portable.py": "other",
+  "update-usb-safely-remove-portable.py": "other",
+  "update-usb-safely-remove.py": "other",
+  "update-wifiscanner.py": "other",
+  "update-unraid-usb-creator.py": "other"
+}

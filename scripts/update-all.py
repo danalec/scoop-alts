@@ -158,6 +158,9 @@ def push_changes() -> None:
     """Push committed changes to the remote (env overrides supported)."""
     remote = os.environ.get("SCOOP_GIT_REMOTE", "origin")
     branch = os.environ.get("SCOOP_GIT_BRANCH")
+    if os.environ.get("SCOOP_GIT_DRY_RUN") == "1":
+        print(f"ℹ️  Dry-run: would push to {remote}{' ' + branch if branch else ''}")
+        return
     args = ["git", "push", remote] + ([branch] if branch else [])
     rc, out, err = run_git_command(args)
     if rc != 0:
