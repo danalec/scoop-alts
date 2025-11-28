@@ -155,8 +155,11 @@ def commit_with_message(message: str) -> bool:
     return True
 
 def push_changes() -> None:
-    """Push committed changes to the remote."""
-    rc, out, err = run_git_command(["git", "push"])
+    """Push committed changes to the remote (env overrides supported)."""
+    remote = os.environ.get("SCOOP_GIT_REMOTE", "origin")
+    branch = os.environ.get("SCOOP_GIT_BRANCH")
+    args = ["git", "push", remote] + ([branch] if branch else [])
+    rc, out, err = run_git_command(args)
     if rc != 0:
         print(f"⚠️  git push failed: {err or out}")
     else:
