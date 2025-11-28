@@ -154,6 +154,9 @@ python scripts/update-all.py --json-summary .temp/update-summary.json
 ### Resume failed scripts
 - Use `--resume .temp/update-summary.json` to rerun only the scripts that failed in the previous run.
 
+### CI environment guard
+- Set `AUTOMATION_DISABLE_WINMETA=1` to disable Windows-specific metadata extraction paths in the version detector (useful on non-Windows CI runners).
+
 ## 🤝 Contributing
 
 ### **For Users**

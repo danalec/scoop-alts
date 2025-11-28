@@ -300,7 +300,7 @@ class VersionDetector:
             print(f"❌ Error during hash calculation: {e}")
             return None
 
-    def get_version_from_executable(self, download_url: str) -> Optional[str]:
+def get_version_from_executable(self, download_url: str) -> Optional[str]:
         """
         Download executable and extract version from metadata
 
@@ -332,6 +332,8 @@ class VersionDetector:
                 return v_partial
 
             # 4) Fallback to full download and metadata extraction
+            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1':
+                return None
             print(f"🔍 Downloading executable to analyze metadata: {download_url}")
 
             response = self.session.get(download_url, stream=True, timeout=max(30, DEFAULT_TIMEOUT))
@@ -450,6 +452,8 @@ class VersionDetector:
                 return v_partial
 
             # 4) Fallback: full download and query MSI properties
+            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1':
+                return None
             print(f"🔍 Downloading MSI to analyze: {msi_url}")
 
             response = self.session.get(msi_url, stream=True, timeout=60)
