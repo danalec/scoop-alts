@@ -37,6 +37,19 @@ def run_git_command(args, cwd: Path = REPO_ROOT):
         logger.error(f"Git command failed: {e}")
         return 1, "", str(e)
 
+def _detect_repo_root() -> Path:
+    try:
+        rc, out, err = run_git_command(["git", "rev-parse", "--show-toplevel"], cwd=Path(__file__).parent.parent)
+        if rc == 0 and out:
+            p = Path(out)
+            if p.exists():
+                return p
+    except Exception:
+        pass
+    return Path(__file__).parent.parent
+
+REPO_ROOT = _detect_repo_root()
+
 def get_manifest_version_from_file(manifest_path: Path) -> str:
     """Read version field from a manifest JSON file."""
     try:

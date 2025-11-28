@@ -816,6 +816,8 @@ Examples:
                        help=f"Max concurrent Google-related scripts (default: {MAX_GOOGLE_WORKERS})")
     parser.add_argument("--scripts", "-s", nargs="+",
                        help="Run only specific scripts (e.g., corecycler esptool)")
+    parser.add_argument("--skip-scripts", nargs="+",
+                       help="Skip specific scripts (e.g., corecycler esptool)")
     parser.add_argument("--only-providers", nargs="+", choices=["github", "microsoft", "google", "other"],
                        help="Run only scripts classified to these providers")
     parser.add_argument("--skip-providers", nargs="+", choices=["github", "microsoft", "google", "other"],
@@ -905,6 +907,14 @@ Examples:
         scripts_to_run = selected_scripts
     else:
         scripts_to_run = available_scripts
+
+    if args.skip_scripts:
+        normalized_skips = []
+        for s in args.skip_scripts:
+            if not s.startswith('update-') or not s.endswith('.py'):
+                s = f'update-{s}.py'
+            normalized_skips.append(s)
+        scripts_to_run = [s for s in scripts_to_run if s not in set(normalized_skips)]
 
     # Verify all script files exist
     script_paths = []

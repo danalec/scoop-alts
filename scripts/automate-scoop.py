@@ -713,7 +713,7 @@ def main():
     parser.add_argument("command", choices=[
         "generate-manifests", "generate-scripts", "generate-all",
         "validate", "test", "update-orchestrator", "wizard",
-        "auto-discover", "suggest-patterns", "test-version"
+        "auto-discover", "suggest-patterns", "test-version", "audit-providers"
     ], help="Command to execute")
     parser.add_argument("--software", nargs="+", help="Specific software names to process")
     parser.add_argument("--bucket-dir", type=Path, help="Bucket directory path")
@@ -722,6 +722,7 @@ def main():
     parser.add_argument("--sources", nargs="+", choices=["github", "chocolatey"],
                        help="Sources for auto-discovery (auto-discover command)")
     parser.add_argument("--url", type=str, help="URL to analyze for version patterns (suggest-patterns command)")
+    parser.add_argument("--write-map", action="store_true", help="Write inferred provider map to scripts/providers.json (audit-providers)")
 
     args = parser.parse_args()
 
@@ -823,6 +824,55 @@ def main():
         except Exception as e:
             print(f"❌ Error testing version detection: {e}")
             sys.exit(1)
+
+    elif args.command == "audit-providers":
+        print("🔎 Auditing provider classification for update scripts...")
+        providers_path = automation.scripts_dir / "providers.json"
+        try:
+            existing = {}
+            if providers_path.exists():
+                import json as _json
+                existing = _json.loads(providers_path.read_text("utf-8"))
+        except Exception:
+            existing = {}
+
+        def classify(p: Path) -> str:
+            name = p.name
+            pkg = name.replace("update-", "").replace(".py", "")
+            mapped = existing.get(name) or existing.get(pkg)
+            if isinstance(mapped, str) and mapped:
+                return mapped
+            try:
+                content = p.read_text("utf-8", errors="ignore")[:4000]
+                if ("github.com" in content) or ("api.github.com" in content):
+                    return "github"
+                if ("learn.microsoft.com" in content) or ("go.microsoft.com" in content) or ("download.microsoft.com" in content) or ("visualstudio.microsoft.com" in content):
+                    return "microsoft"
+                if ("googleapis.com" in content) or ("storage.googleapis.com" in content) or ("dl.google.com" in content) or ("cloudfront.net" in content):
+                    return "google"
+                return "other"
+            except Exception:
+                return "other"
+
+        scripts = sorted([p for p in automation.scripts_dir.glob("update-*.py") if p.name != "update-all.py"])
+        inferred = {}
+        counts = {"github": 0, "microsoft": 0, "google": 0, "other": 0}
+        for p in scripts:
+            prov = classify(p)
+            inferred[p.name] = prov
+            counts[prov] += 1
+            print(f"  • {p.name}: {prov}")
+        print(f"\nTotals → GitHub: {counts['github']} | Microsoft: {counts['microsoft']} | Google: {counts['google']} | Other: {counts['other']}")
+
+        if args.write_map:
+            try:
+                import json as _json
+                merged = dict(existing)
+                merged.update(inferred)
+                providers_path.write_text(_json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
+                print(f"✅ Wrote providers map: {providers_path}")
+            except Exception as e:
+                print(f"⚠️  Failed to write providers map: {e}")
 
 if __name__ == "__main__":
     main()
