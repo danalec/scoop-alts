@@ -1103,3 +1103,31 @@ Examples:
 
 if __name__ == "__main__":
     main()
+def filter_by_providers(script_paths: List[Path], provider_map: Dict[str, str], only: List[str] | None = None, skip: List[str] | None = None) -> List[Path]:
+    def classify_provider_for_path(p: Path) -> str:
+        name = p.name
+        pkg = name.replace('update-', '').replace('.py', '')
+        mapped = provider_map.get(name) or provider_map.get(pkg)
+        if isinstance(mapped, str) and mapped:
+            return mapped
+        try:
+            with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read(4000)
+                if ('github.com' in content) or ('api.github.com' in content):
+                    return 'github'
+                if ('learn.microsoft.com' in content) or ('go.microsoft.com' in content) or ('download.microsoft.com' in content) or ('visualstudio.microsoft.com' in content):
+                    return 'microsoft'
+                if ('googleapis.com' in content) or ('storage.googleapis.com' in content) or ('dl.google.com' in content) or ('cloudfront.net' in content):
+                    return 'google'
+                return 'other'
+        except Exception:
+            return 'other'
+
+    result = script_paths[:]
+    if only:
+        allowed = set(only)
+        result = [p for p in result if classify_provider_for_path(p) in allowed]
+    if skip:
+        skipped = set(skip)
+        result = [p for p in result if classify_provider_for_path(p) not in skipped]
+    return result
