@@ -13,6 +13,12 @@ import logging
 # Set up logging
 logger = logging.getLogger(__name__)
 
+import os
+if os.environ.get('AUTOMATION_LIB_SILENT') == '1':
+    def _noop_print(*args, **kwargs):
+        return None
+    print = _noop_print
+
 REPO_ROOT = Path(__file__).parent.parent
 
 def run_git_command(args, cwd: Path = REPO_ROOT):

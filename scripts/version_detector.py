@@ -41,6 +41,11 @@ DEFAULT_TIMEOUT = 15  # seconds
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+if os.environ.get('AUTOMATION_LIB_SILENT') == '1':
+    def _noop_print(*args, **kwargs):
+        return None
+    print = _noop_print
+
 def get_session(
     *,
     retries: int = 2,

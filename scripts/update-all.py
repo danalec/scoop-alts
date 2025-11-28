@@ -641,11 +641,35 @@ def send_webhook_if_configured(args) -> None:
                 lines.append(f"Updated: {first}")
             body = {"content": "\n".join(lines)}
 
+        body = payload
+        if getattr(args, 'webhook_type', 'generic') == 'slack':
+            counts = payload.get('counts', {})
+            updated = [r for r in payload.get('results', []) if r.get('updated')]
+            lines = [
+                f"Scoop Update Summary",
+                f"Total: {counts.get('total', 0)} | Success: {counts.get('successful', 0)} | Failed: {counts.get('failed', 0)} | Updated: {counts.get('updated', 0)}",
+            ]
+            if updated:
+                first = ", ".join([f"{u.get('package','')} {u.get('version','')}".strip() for u in updated[:10]])
+                lines.append(f"Updated: {first}")
+            body = {"text": "\n".join(lines)}
+        elif getattr(args, 'webhook_type', 'generic') == 'discord':
+            counts = payload.get('counts', {})
+            updated = [r for r in payload.get('results', []) if r.get('updated')]
+            lines = [
+                f"Scoop Update Summary",
+                f"Total: {counts.get('total', 0)} | Success: {counts.get('successful', 0)} | Failed: {counts.get('failed', 0)} | Updated: {counts.get('updated', 0)}",
+            ]
+            if updated:
+                first = ", ".join([f"{u.get('package','')} {u.get('version','')}".strip() for u in updated[:10]])
+                lines.append(f"Updated: {first}")
+            body = {"content": "\n".join(lines)}
+
         resp = requests.post(args.webhook_url, json=body, headers=headers, timeout=15)
         if 200 <= resp.status_code < 300:
             print(f"📣 Webhook delivered: {resp.status_code}")
         else:
-            print(f"⚠️  Webhook failed: {resp.status_code} {resp.text[:200]}")
+            print(f"⚠️  Webhook failed: {resp.status_code}")
     except Exception as e:
         print(f"⚠️  Webhook error: {e}")
 
@@ -786,6 +810,8 @@ Examples:
                        help="Write machine-readable JSON summary to the given file path")
     parser.add_argument("--webhook-url", type=str,
                        help="POST the JSON summary to the given webhook URL")
+    parser.add_argument("--webhook-type", type=str, choices=["generic", "slack", "discord"], default="generic",
+                       help="Webhook payload format: generic (JSON), slack (text), or discord (content)")
     parser.add_argument("--webhook-header-name", type=str,
                        help="Optional single HTTP header name for webhook request")
     parser.add_argument("--webhook-header-value", type=str,
