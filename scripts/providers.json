@@ -12,5 +12,7 @@
   "update-usb-safely-remove-portable.py": "other",
   "update-usb-safely-remove.py": "other",
   "update-wifiscanner.py": "other",
-  "update-unraid-usb-creator.py": "other"
+  "update-unraid-usb-creator.py": "other",
+  "update-chromium-crlset.py": "other",
+  "update-script-generator.py": "other"
 }

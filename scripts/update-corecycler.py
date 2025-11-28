@@ -18,8 +18,9 @@ DOWNLOAD_URL_TEMPLATE = "https://github.com/sp00n/CoreCycler/releases/download/v
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "corecycler.json"
 
 def update_manifest():
-    """Update the Scoop manifest using shared version detection"""
-    print(f"🔄 Updating {SOFTWARE_NAME}...")
+    structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
+    if not structured_only:
+        print(f"🔄 Updating {SOFTWARE_NAME}...")
 
     # Configure software version detection
     config = SoftwareVersionConfig(
@@ -38,7 +39,8 @@ def update_manifest():
     # Get version information using shared detector
     version_info = get_version_info(config)
     if not version_info:
-        print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
+        if not structured_only:
+            print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
         return False
 
@@ -51,16 +53,19 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        if not structured_only:
+            print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON in manifest: {e}")
+        if not structured_only:
+            print(f"❌ Invalid JSON in manifest: {e}")
         return False
 
     # Check if update is needed
     current_version = manifest.get('version', '')
     if current_version == version:
-        print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        if not structured_only:
+            print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
 
@@ -75,13 +80,14 @@ def update_manifest():
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-
-        print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        if not structured_only:
+            print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
 
     except Exception as e:
-        print(f"❌ Failed to save manifest: {e}")
+        if not structured_only:
+            print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
 

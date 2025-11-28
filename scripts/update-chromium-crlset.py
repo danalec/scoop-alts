@@ -23,8 +23,9 @@ CRX_UPDATE_URL = (
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "chromium-crlset.json"
 
 def update_manifest():
-    """Update the Scoop manifest using Google's CRX update service"""
-    print(f"🔄 Updating {SOFTWARE_NAME}...")
+    structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
+    if not structured_only:
+        print(f"🔄 Updating {SOFTWARE_NAME}...")
 
     session = requests.Session()
     session.headers.update({'Accept-Encoding': 'gzip'})
@@ -34,7 +35,8 @@ def update_manifest():
         resp.raise_for_status()
         content = resp.text
     except Exception as e:
-        print(f"❌ Failed to query CRX update service: {e}")
+        if not structured_only:
+            print(f"❌ Failed to query CRX update service: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "query_failed"}))
         return False
 
@@ -44,7 +46,8 @@ def update_manifest():
     hash_match = re.search(r'hash_sha256=\"([a-fA-F0-9]{64})\"', content)
 
     if not (version_match and url_match and hash_match):
-        print("❌ Failed to parse CRX update response for version/url/hash")
+        if not structured_only:
+            print("❌ Failed to parse CRX update response for version/url/hash")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "parse_failed"}))
         return False
 
@@ -57,16 +60,19 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        if not structured_only:
+            print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON in manifest: {e}")
+        if not structured_only:
+            print(f"❌ Invalid JSON in manifest: {e}")
         return False
     
     # Check if update is needed
     current_version = manifest.get('version', '')
     if current_version == version:
-        print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        if not structured_only:
+            print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
     
@@ -80,13 +86,14 @@ def update_manifest():
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-        
-        print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        if not structured_only:
+            print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
         
     except Exception as e:
-        print(f"❌ Failed to save manifest: {e}")
+        if not structured_only:
+            print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
 

@@ -83,20 +83,23 @@ def validate_url(url: str) -> bool:
         return False
 
 def update_manifest():
-    """Update the Scoop manifest by parsing XML for version, tokens, and hashes."""
-    print(f"Updating {SOFTWARE_NAME}...")
+    structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
+    if not structured_only:
+        print(f"Updating {SOFTWARE_NAME}...")
 
     # Fetch and parse XML
     try:
         xml = fetch_update_xml()
     except Exception as e:
-        print(f"Error: Failed to fetch XML: {e}")
+        if not structured_only:
+            print(f"Error: Failed to fetch XML: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "xml_fetch_failed"}))
         return False
 
     info = parse_version_and_tokens(xml)
     if not info:
-        print("Error: Failed to parse version/tokens from XML")
+        if not structured_only:
+            print("Error: Failed to parse version/tokens from XML")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "xml_parse_failed"}))
         return False
 
@@ -138,7 +141,8 @@ def update_manifest():
             pass
 
     if not (validate_url(url32) and validate_url(url64)):
-        print("Error: Generated Widevine URLs are not accessible (404). Skipping manifest update to avoid broken links.")
+        if not structured_only:
+            print("Error: Generated Widevine URLs are not accessible (404). Skipping manifest update to avoid broken links.")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "urls_inaccessible"}))
         return False
 
@@ -156,7 +160,8 @@ def update_manifest():
     # Check if update is needed
     current_version = manifest.get('version', '')
     if current_version == version and manifest.get('architecture', {}).get('64bit', {}).get('url', '') == url64:
-        print(f"{SOFTWARE_NAME} is already up to date (v{version})")
+        if not structured_only:
+            print(f"{SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
 
@@ -199,14 +204,16 @@ def update_manifest():
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-        print(f"Updated {SOFTWARE_NAME}: {current_version} -> {version}")
-        print(f"   64-bit URL: {url64}")
-        print(f"   32-bit URL: {url32}")
+        if not structured_only:
+            print(f"Updated {SOFTWARE_NAME}: {current_version} -> {version}")
+            print(f"   64-bit URL: {url64}")
+            print(f"   32-bit URL: {url32}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
 
     except Exception as e:
-        print(f"Error: Failed to save manifest: {e}")
+        if not structured_only:
+            print(f"Error: Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
 
