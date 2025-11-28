@@ -862,6 +862,8 @@ Examples:
     if args.http_cache:
         os.environ['AUTOMATION_HTTP_CACHE'] = '1'
         os.environ['AUTOMATION_HTTP_CACHE_TTL'] = str(args.http_cache_ttl)
+    if args.structured_output:
+        os.environ['STRUCTURED_ONLY'] = '1'
 
     # If fast mode is enabled, force parallel with an optimized worker count
     if args.fast:
