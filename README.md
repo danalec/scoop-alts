@@ -164,10 +164,14 @@ python scripts/update-all.py --circuit-threshold 3 --circuit-sleep 5.0
 
 ### Webhook notifications
 - Provide `--webhook-url` (and optionally `--webhook-header-name`/`--webhook-header-value`) to POST the JSON summary to a webhook endpoint after a run.
+- Set `--webhook-type` to `slack` or `discord` to format payloads for those platforms (`generic` by default sends the raw JSON summary).
 
 ### Environment overrides
 - `AUTOMATION_WEBHOOK_URL`, `AUTOMATION_WEBHOOK_HEADER_NAME`, `AUTOMATION_WEBHOOK_HEADER_VALUE` can provide webhook settings.
 - `AUTOMATION_JSON_SUMMARY` and `AUTOMATION_MD_SUMMARY` can provide default output paths for summaries.
+
+### Update dashboard
+- Generate a Markdown dashboard from a summary JSON: `python scripts/generate-dashboard.py .temp/update-summary.json docs/update-health.md`.
 
 ## 🤝 Contributing
 
