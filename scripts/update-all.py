@@ -419,7 +419,7 @@ def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0, retrie
 
     return results
 
-def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_workers: int = 3, microsoft_workers: int = 3, google_workers: int = 4, retries: int = 0) -> List[UpdateResult]:
+def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_workers: int = 3, microsoft_workers: int = 3, google_workers: int = 4, retries: int = 0, circuit_threshold: int = 3, circuit_sleep: float = 5.0) -> List[UpdateResult]:
     """Run update scripts in parallel with provider-aware throttling."""
     results = []
 
@@ -472,8 +472,16 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_
     }
     print(f"🔗 Provider-aware throttling: GitHub={counts['github']} (max {github_workers}), Microsoft={counts['microsoft']} (max {microsoft_workers}), Google={counts['google']} (max {google_workers}), Other={counts['other']}")
 
+    prov_paused_until: Dict[str, float] = {k: 0.0 for k in ['github', 'microsoft', 'google', 'other']}
+    prov_failures: Dict[str, int] = {k: 0 for k in ['github', 'microsoft', 'google', 'other']}
+    lock = threading.Lock()
+
     def _task(script_path: Path, timeout: int) -> UpdateResult:
         prov = prov_map.get(script_path, 'other')
+        now = time.time()
+        until = prov_paused_until.get(prov, 0.0)
+        if until and now < until:
+            time.sleep(min(circuit_sleep, until - now))
         with sems.get(prov, sems['other']):
             return run_update_script_with_retry(script_path, timeout, retries)
 
@@ -490,6 +498,14 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_
             try:
                 result = future.result()
                 results.append(result)
+                if not result.success:
+                    prov = prov_map.get(script_path, 'other')
+                    with lock:
+                        prov_failures[prov] = prov_failures.get(prov, 0) + 1
+                        if circuit_threshold > 0 and prov_failures[prov] >= circuit_threshold:
+                            prov_paused_until[prov] = time.time() + circuit_sleep
+                            prov_failures[prov] = 0
+                            print(f"⏸️  Pausing {prov} tasks for {circuit_sleep:.1f}s due to failures")
             except Exception as e:
                 print(f"💥 {script_path.name} - Unexpected error: {e}")
                 results.append(UpdateResult(script_path.name, False, str(e), 0, False))
@@ -750,6 +766,10 @@ Examples:
                        help="Stop sequential execution on first failure")
     parser.add_argument("--max-fail", type=int, default=0,
                        help="Stop sequential execution after N failures (0 = no limit)")
+    parser.add_argument("--circuit-threshold", type=int, default=3,
+                       help="Trigger provider pause after N failures (parallel mode)")
+    parser.add_argument("--circuit-sleep", type=float, default=5.0,
+                       help="Provider pause duration in seconds (parallel mode)")
     parser.add_argument("--resume", type=Path,
                        help="Resume by rerunning only failed scripts from a previous JSON summary file")
     parser.add_argument("--verbose", "-v", action="store_true",
@@ -874,7 +894,7 @@ Examples:
         print(f"⚡ Fast mode enabled: workers set to {args.workers}")
 
     if args.parallel:
-        results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers, microsoft_workers=args.microsoft_workers, google_workers=args.google_workers, retries=args.retry)
+        results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers, microsoft_workers=args.microsoft_workers, google_workers=args.google_workers, retries=args.retry, circuit_threshold=args.circuit_threshold, circuit_sleep=args.circuit_sleep)
     else:
         results = run_sequential(script_paths, args.timeout, args.delay, retries=args.retry, fail_fast=bool(args.fail_fast), max_fail=int(args.max_fail or 0))
 
