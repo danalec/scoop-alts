@@ -198,6 +198,54 @@ python scripts/automate-scoop.py generate-all --software example-app
 # ✅ scripts/update-example-app.py (Update script)
 ```
 
+### Orchestrator Flags and Structured Output
+
+Use the orchestrator to run all update scripts with resilient execution and consistent summaries:
+
+```bash
+python scripts/update-all.py --fast --retry 2 --structured-output \
+  --json-summary .temp/update-summary.json --md-summary docs/update-health.md \
+  --log-file .temp/run.log
+
+# Run only or skip specific scripts
+python scripts/update-all.py --scripts corecycler esptool
+python scripts/update-all.py --skip-scripts windhawk esptool
+
+# Filter by provider classification
+python scripts/update-all.py --only-providers github google
+python scripts/update-all.py --skip-providers other
+```
+
+When `--structured-output` is set, child scripts honor `STRUCTURED_ONLY=1` and emit a single JSON line like:
+
+```json
+{"updated": true, "name": "corecycler", "version": "1.2.3"}
+```
+
+### Provider Audit and Throttling Map
+
+Audit and optionally write provider mappings used for throttling in parallel runs:
+
+```bash
+python scripts/automate-scoop.py audit-providers --write-map
+```
+
+This populates `scripts/providers.json` with entries such as:
+
+```json
+{
+  "update-corecycler.py": "github",
+  "update-widevinecdm.py": "google",
+  "update-wifiscanner.py": "other"
+}
+```
+
+### Environment Overrides
+
+- `AUTOMATION_JSON_SUMMARY` and `AUTOMATION_MD_SUMMARY` provide default summary paths
+- `AUTOMATION_LOG_FILE` writes orchestrator logs to a file
+- `SCOOP_GIT_REMOTE` and `SCOOP_GIT_BRANCH` control auto-push target; set `SCOOP_GIT_DRY_RUN=1` to skip pushing
+
 #### Step 4: Test Version Detection
 
 Verify your configuration works:
