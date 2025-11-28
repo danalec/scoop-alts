@@ -137,6 +137,7 @@ python scripts/update-all.py --retry 2
 python scripts/update-all.py --structured-output
 python scripts/update-all.py --http-cache --http-cache-ttl 1800
 python scripts/update-all.py --json-summary .temp/update-summary.json
+python scripts/update-all.py --md-summary .temp/update-summary.md
 ```
 
 ### Structured output
@@ -159,6 +160,10 @@ python scripts/update-all.py --json-summary .temp/update-summary.json
 
 ### Webhook notifications
 - Provide `--webhook-url` (and optionally `--webhook-header-name`/`--webhook-header-value`) to POST the JSON summary to a webhook endpoint after a run.
+
+### Environment overrides
+- `AUTOMATION_WEBHOOK_URL`, `AUTOMATION_WEBHOOK_HEADER_NAME`, `AUTOMATION_WEBHOOK_HEADER_VALUE` can provide webhook settings.
+- `AUTOMATION_JSON_SUMMARY` and `AUTOMATION_MD_SUMMARY` can provide default output paths for summaries.
 
 ## 🤝 Contributing
 

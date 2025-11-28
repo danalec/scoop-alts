@@ -495,6 +495,44 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_
 def print_summary(results: List[UpdateResult], total_duration: float):
     """Print a summary of all update results."""
     print("\n" + "="*80)
+    print("📊 UPDATE SUMMARY")
+    print("="*80)
+    successful = [r for r in results if r.success]
+    failed = [r for r in results if not r.success]
+    updated = [r for r in results if r.updated]
+    print(f"📈 Total Scripts: {len(results)}")
+    print(f"✅ Successful: {len(successful)}")
+    print(f"❌ Failed: {len(failed)}")
+    print(f"🔄 Updated: {len(updated)}")
+    print(f"⏱️  Total Duration: {total_duration:.1f}s")
+    if updated:
+        print(f"\n🎉 PACKAGES UPDATED:")
+        for result in updated:
+            package_name = result.script_name.replace('update-', '').replace('.py', '')
+            version = get_manifest_version(package_name)
+            if version:
+                print(f"   • {package_name}: Update to version {version} ({result.duration:.1f}s)")
+            else:
+                print(f"   • {package_name} ({result.duration:.1f}s)")
+    if failed:
+        print(f"\n❌ FAILED SCRIPTS:")
+        for result in failed:
+            print(f"   • {result.script_name} ({result.duration:.1f}s)")
+            error_lines = result.output.strip().split('\n')[:3]
+            for line in error_lines:
+                if line.strip():
+                    print(f"     {line.strip()}")
+    no_updates = [r for r in successful if not r.updated]
+    if no_updates:
+        print(f"\nℹ️  NO UPDATES NEEDED:")
+        for result in no_updates:
+            package_name = result.script_name.replace('update-', '').replace('.py', '')
+            version = get_manifest_version(package_name)
+            if version:
+                print(f"   • {package_name} (version {version})")
+            else:
+                print(f"   • {package_name}")
+    print("\n" + "="*80)
 
 def write_json_summary(results: List[UpdateResult], total_duration: float, args, mode_label: str) -> None:
     try:
@@ -580,51 +618,6 @@ def filter_resume_paths(script_paths: List[Path], resume_path: Path) -> List[Pat
         return script_paths
     except Exception:
         return script_paths
-    print("📊 UPDATE SUMMARY")
-    print("="*80)
-
-    successful = [r for r in results if r.success]
-    failed = [r for r in results if not r.success]
-    updated = [r for r in results if r.updated]
-
-    print(f"📈 Total Scripts: {len(results)}")
-    print(f"✅ Successful: {len(successful)}")
-    print(f"❌ Failed: {len(failed)}")
-    print(f"🔄 Updated: {len(updated)}")
-    print(f"⏱️  Total Duration: {total_duration:.1f}s")
-
-    if updated:
-        print(f"\n🎉 PACKAGES UPDATED:")
-        for result in updated:
-            package_name = result.script_name.replace('update-', '').replace('.py', '')
-            version = get_manifest_version(package_name)
-            if version:
-                print(f"   • {package_name}: Update to version {version} ({result.duration:.1f}s)")
-            else:
-                print(f"   • {package_name} ({result.duration:.1f}s)")
-
-    if failed:
-        print(f"\n❌ FAILED SCRIPTS:")
-        for result in failed:
-            print(f"   • {result.script_name} ({result.duration:.1f}s)")
-            # Show first few lines of error output
-            error_lines = result.output.strip().split('\n')[:3]
-            for line in error_lines:
-                if line.strip():
-                    print(f"     {line.strip()}")
-
-    no_updates = [r for r in successful if not r.updated]
-    if no_updates:
-        print(f"\nℹ️  NO UPDATES NEEDED:")
-        for result in no_updates:
-            package_name = result.script_name.replace('update-', '').replace('.py', '')
-            version = get_manifest_version(package_name)
-            if version:
-                print(f"   • {package_name} (version {version})")
-            else:
-                print(f"   • {package_name}")
-
-    print("\n" + "="*80)
 
 def check_dependencies():
     """Check if required dependencies are installed."""
