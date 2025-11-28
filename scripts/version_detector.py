@@ -6,6 +6,7 @@ Provides reusable functions for version detection and URL construction.
 
 import re
 import os
+import sys
 import requests
 import hashlib
 import tempfile
@@ -332,7 +333,7 @@ class VersionDetector:
                 print(f"✅ Version inferred from partial content: {v_partial}")
                 return v_partial
 
-            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1':
+            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1' or sys.platform != 'win32':
                 return None
             print(f"🔍 Downloading executable to analyze metadata: {download_url}")
 
@@ -448,7 +449,7 @@ class VersionDetector:
                 return v_partial
 
             # 4) Fallback: full download and query MSI properties
-            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1':
+            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1' or sys.platform != 'win32':
                 return None
             print(f"🔍 Downloading MSI to analyze: {msi_url}")
 

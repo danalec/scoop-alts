@@ -123,6 +123,11 @@ python scripts/automate-scoop.py wizard
 
 **See [AUTOMATION-GUIDE.md](docs/AUTOMATION-GUIDE.md) for complete setup and usage documentation.**
 
+Audit provider classification and write a map:
+```bash
+python scripts/automate-scoop.py audit-providers --write-map
+```
+
 ### Orchestrator quick start
 Run all updates (parallel by default):
 ```bash
