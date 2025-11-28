@@ -19,7 +19,9 @@ BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "ntoptimizer.json"
 
 def update_manifest():
     """Update the Scoop manifest using static URL and executable metadata"""
-    print(f"🔄 Updating {SOFTWARE_NAME}...")
+    structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
+    if not structured_only:
+        print(f"🔄 Updating {SOFTWARE_NAME}...")
 
     detector = VersionDetector()
 
@@ -29,15 +31,17 @@ def update_manifest():
     # Try to derive version from executable metadata
     version = detector.get_version_from_executable(download_url) or ""
     if not version:
-        print("⚠️ Could not extract version from executable; will keep current manifest version.")
+        if not structured_only:
+            print("⚠️ Could not extract version from executable; will keep current manifest version.")
 
     # Calculate hash
     hash_value = detector.calculate_hash(download_url)
     if not hash_value:
-        print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
+        if not structured_only:
+            print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "hash_failed"}))
         return False
-    
+
     # Load existing manifest
     try:
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
@@ -48,32 +52,34 @@ def update_manifest():
     except json.JSONDecodeError as e:
         print(f"❌ Invalid JSON in manifest: {e}")
         return False
-    
+
     # Check if update is needed
     current_version = manifest.get('version', '')
     if version and current_version == version:
-        print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
+        if not structured_only:
+            print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
-    
+
     # Update manifest
     if version:
         manifest['version'] = version
     manifest['url'] = download_url
     # Keep sha256: prefix to match manifest style
     manifest['hash'] = f"sha256:{hash_value}"
-    
+
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-        
-        print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
+        if not structured_only:
+            print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version or manifest.get('version', '')}))
         return True
-        
+
     except Exception as e:
-        print(f"❌ Failed to save manifest: {e}")
+        if not structured_only:
+            print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version or manifest.get('version', ''), "error": "save_failed"}))
         return False
 
