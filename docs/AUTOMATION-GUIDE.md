@@ -214,6 +214,7 @@ python scripts/update-all.py --skip-scripts windhawk esptool
 # Filter by provider classification
 python scripts/update-all.py --only-providers github google
 python scripts/update-all.py --skip-providers other
+python scripts/update-all.py --git-dry-run --git-remote origin --git-branch main
 ```
 
 When `--structured-output` is set, child scripts honor `STRUCTURED_ONLY=1` and emit a single JSON line like:

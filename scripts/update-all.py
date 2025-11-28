@@ -814,6 +814,12 @@ Examples:
                        help="Stage & commit each updated manifest individually with its own message")
     parser.add_argument("--git-aggregate", action="store_true",
                        help="Stage & commit all changes in aggregate groups (overrides per-package default)")
+    parser.add_argument("--git-dry-run", action="store_true",
+                       help="Do not push changes, only stage/commit locally")
+    parser.add_argument("--git-remote", type=str,
+                       help="Remote name to push to (default: origin)")
+    parser.add_argument("--git-branch", type=str,
+                       help="Branch name to push to (default: current branch)")
     parser.add_argument("--structured-output", action="store_true",
                        help="Prefer structured JSON output from update scripts (falls back to text heuristics)")
     parser.add_argument("--http-cache", action="store_true",
@@ -863,6 +869,12 @@ Examples:
 
     # Configure logging
     setup_logging(args.verbose, args.quiet, args.log_file)
+    if args.git_dry_run:
+        os.environ["SCOOP_GIT_DRY_RUN"] = "1"
+    if args.git_remote:
+        os.environ["SCOOP_GIT_REMOTE"] = args.git_remote
+    if args.git_branch:
+        os.environ["SCOOP_GIT_BRANCH"] = args.git_branch
 
     # Set structured output preference for parsers
     global PREFER_STRUCTURED_OUTPUT
