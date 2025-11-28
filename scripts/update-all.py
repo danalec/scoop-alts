@@ -80,6 +80,9 @@ CACHE_EXPIRY_SECONDS = int(os.environ.get('CACHE_EXPIRY_SECONDS', '1800'))  # 30
 # repeated disk reads when printing summaries and composing commit messages.
 MANIFEST_VERSION_CACHE: Dict[str, str] = {}
 
+# Structured output preference (set in main from CLI flag)
+PREFER_STRUCTURED_OUTPUT = False
+
 def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, str]:
     """Run a git command and return (returncode, stdout, stderr)."""
     try:
@@ -294,8 +297,13 @@ def parse_script_output(output: str, script_name: str) -> tuple[bool, bool]:
         updated = structured_updated
         no_update_needed = not updated
     else:
-        updated = "update completed successfully" in output.lower() or "updated" in output.lower()
-        no_update_needed = "no update needed" in output.lower() or "up to date" in output.lower()
+        if PREFER_STRUCTURED_OUTPUT:
+            updated = False
+            no_update_needed = False
+        else:
+            lower = output.lower()
+            updated = ("update completed successfully" in lower) or ("updated" in lower)
+            no_update_needed = ("no update needed" in lower) or ("up to date" in lower)
 
     return updated, no_update_needed
 
@@ -511,6 +519,7 @@ def write_json_summary(results: List[UpdateResult], total_duration: float, args,
                 "updated": r.updated,
                 "duration_seconds": round(r.duration, 3),
                 "version": version or "",
+                "error_preview": ("\n".join([ln for ln in r.output.strip().splitlines()[:3]]) if not r.success else ""),
             })
 
         with open(summary_path, 'w', encoding='utf-8') as f:
@@ -688,6 +697,10 @@ Examples:
 
     # Configure logging
     setup_logging(args.verbose, args.quiet)
+
+    # Set structured output preference for parsers
+    global PREFER_STRUCTURED_OUTPUT
+    PREFER_STRUCTURED_OUTPUT = bool(args.structured_output)
 
     # Check dependencies
     if not check_dependencies():

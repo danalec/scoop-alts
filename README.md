@@ -139,6 +139,9 @@ python scripts/update-all.py --http-cache --http-cache-ttl 1800
 python scripts/update-all.py --json-summary .temp/update-summary.json
 ```
 
+### Structured output
+- Use `--structured-output` to prefer strict JSON parsing from update scripts and avoid text heuristics in the orchestrator.
+
 ### Manifest validation
 - Manifests are validated against a JSON Schema during CI and via `python scripts/automate-scoop.py validate`.
 
