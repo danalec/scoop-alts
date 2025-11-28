@@ -16,3 +16,5 @@ requests-cache>=1.2.0
 pytest>=7.4.0  # For testing
 black>=23.0.0  # For code formatting
 flake8>=6.0.0  # For linting
+pre-commit>=3.6.0  # For git hook management
+ruff>=0.6.0  # Fast Python linter

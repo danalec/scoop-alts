@@ -172,7 +172,7 @@ def get_manifest_version(app_name: str) -> str:
             logging.warning(f"Manifest file too large: {manifest_path} ({manifest_path.stat().st_size} bytes)")
             MANIFEST_VERSION_CACHE[app_name] = ""
             return ""
-        
+
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
             version = str(manifest.get("version", "")).strip()
@@ -242,20 +242,20 @@ def stage_and_commit_per_package(updated_results: List["UpdateResult"]) -> None:
 def discover_update_scripts() -> List[str]:
     """Automatically discover all update-*.py scripts in the scripts directory"""
     update_scripts = []
-    
+
     # Find all update-*.py files
     for script_file in SCRIPTS_DIR.glob(SCRIPTS_GLOB):
         # Skip the update-all.py script itself and utility scripts
         if script_file.name not in ["update-all.py", "update-script-generator.py"] and not script_file.name.startswith("_"):
             update_scripts.append(script_file.name)
-    
+
     # Sort for consistent ordering
     update_scripts.sort()
-    
+
     print(f"🔍 Discovered {len(update_scripts)} update scripts:")
     for script in update_scripts:
         print(f"   • {script}")
-    
+
     return update_scripts
 
 class UpdateResult:
@@ -296,26 +296,26 @@ def parse_script_output(output: str, script_name: str) -> tuple[bool, bool]:
     else:
         updated = "update completed successfully" in output.lower() or "updated" in output.lower()
         no_update_needed = "no update needed" in output.lower() or "up to date" in output.lower()
-    
+
     return updated, no_update_needed
 
 def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
     """Run a single update script and return the result."""
     script_name = script_path.name
     start_time = time.time()
-    
+
     try:
         logging.info(f"Running {script_name}...")
         print(f"🚀 Running {script_name}...")
-        
+
         # Run the script
         # Change to the parent directory (where bucket/ is located) before running the script
         parent_dir = SCRIPTS_DIR.parent
-        
+
         # Set environment to handle Unicode properly
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = 'utf-8'
-        
+
         result = subprocess.run(
             [sys.executable, str(script_path)],
             capture_output=True,
@@ -326,15 +326,15 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
             errors='replace',
             env=env
         )
-        
+
         duration = time.time() - start_time
-        
+
         # Check if update was successful and if anything was updated
         output = result.stdout + result.stderr
-        
+
         # Parse output for update status
         updated, no_update_needed = parse_script_output(output, script_name)
-        
+
         if result.returncode == 0:
             if updated:
                 print(f"✅ {script_name} - Updated successfully ({duration:.1f}s)")
@@ -345,7 +345,7 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
             else:
                 print(f"✅ {script_name} - Completed ({duration:.1f}s)")
                 logging.info(f"{script_name} completed without updates")
-            
+
             return UpdateResult(script_name, True, output, duration, updated)
         else:
             error_msg = result.stderr.strip() if result.stderr else 'Unknown error'
@@ -355,13 +355,13 @@ def run_update_script(script_path: Path, timeout: int = 300) -> UpdateResult:
             print(f"❌ {script_name} - Failed ({duration:.1f}s)")
             print(f"   Error details: {detailed_error}")
             return UpdateResult(script_name, False, detailed_error, duration, False)
-            
+
     except subprocess.TimeoutExpired:
         duration = time.time() - start_time
         logging.error(f"{script_name} timed out after {timeout}s")
         print(f"⏰ {script_name} - Timeout after {timeout}s")
         return UpdateResult(script_name, False, f"Script timed out after {timeout} seconds", duration, False)
-        
+
     except Exception as e:
         duration = time.time() - start_time
         logging.error(f"{script_name} error: {e}")
@@ -394,15 +394,15 @@ def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0, retrie
         retries: Number of retry attempts per script (default: 0)
     """
     results = []
-    
+
     for script_path in scripts:
         result = run_update_script_with_retry(script_path, timeout, retries)
         results.append(result)
-        
+
         # Optional delay between scripts
         if delay and delay > 0:
             time.sleep(delay)
-    
+
     return results
 
 def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_workers: int = 3, microsoft_workers: int = 3, google_workers: int = 4, retries: int = 0) -> List[UpdateResult]:
@@ -472,19 +472,65 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_
 def print_summary(results: List[UpdateResult], total_duration: float):
     """Print a summary of all update results."""
     print("\n" + "="*80)
+
+def write_json_summary(results: List[UpdateResult], total_duration: float, args, mode_label: str) -> None:
+    try:
+        if not args.json_summary:
+            return
+        summary_path = Path(args.json_summary)
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+
+        data = {
+            "started_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "mode": mode_label,
+            "timeout": args.timeout,
+            "workers": args.workers if args.parallel else 1,
+            "provider_workers": {
+                "github": args.github_workers,
+                "microsoft": args.microsoft_workers,
+                "google": args.google_workers,
+            },
+            "total_duration_seconds": round(total_duration, 3),
+            "results": [],
+            "counts": {
+                "total": len(results),
+                "successful": len([r for r in results if r.success]),
+                "failed": len([r for r in results if not r.success]),
+                "updated": len([r for r in results if r.updated]),
+                "no_updates": len([r for r in results if r.success and not r.updated]),
+            },
+        }
+
+        for r in results:
+            pkg = r.script_name.replace('update-', '').replace('.py', '')
+            version = get_manifest_version(pkg)
+            data["results"].append({
+                "script": r.script_name,
+                "package": pkg,
+                "success": r.success,
+                "updated": r.updated,
+                "duration_seconds": round(r.duration, 3),
+                "version": version or "",
+            })
+
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"🧾 JSON summary written to: {summary_path}")
+    except Exception as e:
+        print(f"⚠️  Failed to write JSON summary: {e}")
     print("📊 UPDATE SUMMARY")
     print("="*80)
-    
+
     successful = [r for r in results if r.success]
     failed = [r for r in results if not r.success]
     updated = [r for r in results if r.updated]
-    
+
     print(f"📈 Total Scripts: {len(results)}")
     print(f"✅ Successful: {len(successful)}")
     print(f"❌ Failed: {len(failed)}")
     print(f"🔄 Updated: {len(updated)}")
     print(f"⏱️  Total Duration: {total_duration:.1f}s")
-    
+
     if updated:
         print(f"\n🎉 PACKAGES UPDATED:")
         for result in updated:
@@ -494,7 +540,7 @@ def print_summary(results: List[UpdateResult], total_duration: float):
                 print(f"   • {package_name}: Update to version {version} ({result.duration:.1f}s)")
             else:
                 print(f"   • {package_name} ({result.duration:.1f}s)")
-    
+
     if failed:
         print(f"\n❌ FAILED SCRIPTS:")
         for result in failed:
@@ -504,7 +550,7 @@ def print_summary(results: List[UpdateResult], total_duration: float):
             for line in error_lines:
                 if line.strip():
                     print(f"     {line.strip()}")
-    
+
     no_updates = [r for r in successful if not r.updated]
     if no_updates:
         print(f"\nℹ️  NO UPDATES NEEDED:")
@@ -515,42 +561,42 @@ def print_summary(results: List[UpdateResult], total_duration: float):
                 print(f"   • {package_name} (version {version})")
             else:
                 print(f"   • {package_name}")
-    
+
     print("\n" + "="*80)
 
 def check_dependencies():
     """Check if required dependencies are installed."""
     missing_deps = []
     optional_deps = []
-    
+
     # Check core dependencies
     try:
         import requests
     except ImportError:
         missing_deps.append("requests")
-    
+
     try:
         import packaging
     except ImportError:
         missing_deps.append("packaging")
-    
+
     # Check optional dependencies
     try:
         import bs4
     except ImportError:
         optional_deps.append("beautifulsoup4")
-    
+
     if missing_deps:
         print(f"❌ Missing required dependencies: {', '.join(missing_deps)}")
         print("Please install required packages:")
         print(f"pip install {' '.join(missing_deps)}")
         return False
-    
+
     if optional_deps:
         print(f"⚠️  Warning: Optional dependencies not found: {', '.join(optional_deps)}")
         print("Some features may be limited. Install with:")
         print(f"pip install {' '.join(optional_deps)}")
-    
+
     return True
 
 def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
@@ -561,11 +607,11 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
         level = logging.DEBUG
     else:
         level = logging.INFO
-    
+
     # Override with environment variable if set
     if LOG_LEVEL != 'INFO':
         level = getattr(logging, LOG_LEVEL, logging.INFO)
-    
+
     logging.basicConfig(
         level=level,
         format=LOG_FORMAT,
@@ -586,7 +632,7 @@ Examples:
   python scripts/update-all.py --fast --retry 2   # Fast mode with retries
         """
     )
-    
+
     # Execution mode
     execution_group = parser.add_argument_group('Execution Mode')
     execution_group.add_argument("--parallel", "-p", action="store_true", default=True,
@@ -595,7 +641,7 @@ Examples:
                        help="Force sequential execution")
     execution_group.add_argument("--fast", "-f", action="store_true",
                        help="Enable fast mode with optimized worker count")
-    
+
     # Performance tuning
     performance_group = parser.add_argument_group('Performance')
     performance_group.add_argument("--workers", "-w", type=int, default=DEFAULT_WORKERS,
@@ -604,7 +650,7 @@ Examples:
                        help=f"Timeout per script in seconds (default: {DEFAULT_TIMEOUT})")
     performance_group.add_argument("--delay", "-D", type=float, default=0.0,
                        help="Delay (seconds) between scripts in sequential mode")
-    
+
     # Provider-specific throttling
     throttling_group = parser.add_argument_group('Provider Throttling')
     throttling_group.add_argument("--github-workers", type=int, default=MAX_GITHUB_WORKERS,
@@ -613,7 +659,7 @@ Examples:
                        help=f"Max concurrent Microsoft-related scripts (default: {MAX_MICROSOFT_WORKERS})")
     throttling_group.add_argument("--google-workers", type=int, default=MAX_GOOGLE_WORKERS,
                        help=f"Max concurrent Google-related scripts (default: {MAX_GOOGLE_WORKERS})")
-    parser.add_argument("--scripts", "-s", nargs="+", 
+    parser.add_argument("--scripts", "-s", nargs="+",
                        help="Run only specific scripts (e.g., corecycler esptool)")
     parser.add_argument("--dry-run", "-d", action="store_true",
                        help="Show what would be run without executing")
@@ -631,44 +677,46 @@ Examples:
                        help="HTTP cache TTL in seconds when --http-cache is enabled (default: 1800)")
     parser.add_argument("--retry", type=int, default=0,
                        help="Number of retry attempts per script on failure (default: 0)")
+    parser.add_argument("--json-summary", type=Path,
+                       help="Write machine-readable JSON summary to the given file path")
     parser.add_argument("--verbose", "-v", action="store_true",
                        help="Enable verbose logging")
     parser.add_argument("--quiet", "-q", action="store_true",
                        help="Reduce logging output")
-    
+
     args = parser.parse_args()
-    
+
     # Configure logging
     setup_logging(args.verbose, args.quiet)
-    
+
     # Check dependencies
     if not check_dependencies():
         sys.exit(1)
-    
+
     # Discover available update scripts
     available_scripts = discover_update_scripts()
-    
+
     # Determine which scripts to run
     if args.scripts:
         # Validate provided script names
         available_scripts_set = set(available_scripts)
         selected_scripts = []
-        
+
         for script in args.scripts:
             if not script.startswith('update-') or not script.endswith('.py'):
                 script = f'update-{script}.py'
-            
+
             if script in available_scripts_set:
                 selected_scripts.append(script)
             else:
                 print(f"❌ Unknown script: {script}")
                 print(f"Available scripts: {', '.join(sorted(available_scripts_set))}")
                 sys.exit(1)
-        
+
         scripts_to_run = selected_scripts
     else:
         scripts_to_run = available_scripts
-    
+
     # Verify all script files exist
     script_paths = []
     for script_name in scripts_to_run:
@@ -677,17 +725,17 @@ Examples:
             script_paths.append(script_path)
         else:
             print(f"⚠️  Script not found: {script_path}")
-    
+
     if not script_paths:
         print("❌ No valid script files found")
         sys.exit(1)
-    
+
     # Show what will be run
     logging.info("Starting Scoop Bucket Update Orchestrator")
     print("🔧 Scoop Bucket Update Orchestrator")
     print(f"📅 Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📂 Scripts directory: {SCRIPTS_DIR}")
-    
+
     # Resolve mode: if --sequential is set, override parallel
     if args.sequential:
         args.parallel = False
@@ -706,10 +754,10 @@ Examples:
         print(f"⏳ Sequential delay: {args.delay:.1f}s")
         if args.delay > 0:
             logging.info(f"Sequential delay set to {args.delay}s")
-    
+
     print(f"⏱️  Timeout: {args.timeout}s per script")
     print(f"📋 Scripts to run ({len(script_paths)}):")
-    
+
     for script_path in script_paths:
         package_name = script_path.name.replace('update-', '').replace('.py', '')
         print(f"   • {package_name}")
@@ -728,7 +776,7 @@ Examples:
     if args.http_cache:
         os.environ['AUTOMATION_HTTP_CACHE'] = '1'
         os.environ['AUTOMATION_HTTP_CACHE_TTL'] = str(args.http_cache_ttl)
-    
+
     # If fast mode is enabled, force parallel with an optimized worker count
     if args.fast:
         args.parallel = True
@@ -736,17 +784,19 @@ Examples:
         recommended_workers = min(6, max(3, (os.cpu_count() or 4)))
         args.workers = min(recommended_workers, len(script_paths))
         print(f"⚡ Fast mode enabled: workers set to {args.workers}")
-    
+
     if args.parallel:
         results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers, microsoft_workers=args.microsoft_workers, google_workers=args.google_workers, retries=args.retry)
     else:
         results = run_sequential(script_paths, args.timeout, args.delay, retries=args.retry)
-    
+
     total_duration = time.time() - start_time
-    
+
     # Print summary
     print_summary(results, total_duration)
-    
+    # Optional JSON summary output
+    write_json_summary(results, total_duration, args, 'Parallel' if args.parallel else 'Sequential')
+
     # Exit with appropriate code
     failed_count = len([r for r in results if not r.success])
     if failed_count > 0:

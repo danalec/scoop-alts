@@ -136,6 +136,7 @@ python scripts/update-all.py --fast
 python scripts/update-all.py --retry 2
 python scripts/update-all.py --structured-output
 python scripts/update-all.py --http-cache --http-cache-ttl 1800
+python scripts/update-all.py --json-summary .temp/update-summary.json
 ```
 
 ## 🤝 Contributing
