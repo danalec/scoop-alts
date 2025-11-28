@@ -392,7 +392,7 @@ def run_update_script_with_retry(script_path: Path, timeout: int = 300, retries:
             time.sleep(backoff)
     return last_result
 
-def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0, retries: int = 0) -> List[UpdateResult]:
+def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0, retries: int = 0, *, fail_fast: bool = False, max_fail: int = 0) -> List[UpdateResult]:
     """Run update scripts sequentially.
 
     Args:
@@ -403,9 +403,15 @@ def run_sequential(scripts: List[Path], timeout: int, delay: float = 0.0, retrie
     """
     results = []
 
+    failures = 0
     for script_path in scripts:
         result = run_update_script_with_retry(script_path, timeout, retries)
         results.append(result)
+        if not result.success:
+            failures += 1
+            if fail_fast or (max_fail and failures >= max_fail):
+                print("⛔ Stopping sequential execution due to failures")
+                break
 
         # Optional delay between scripts
         if delay and delay > 0:
@@ -740,6 +746,10 @@ Examples:
                        help="Optional single HTTP header name for webhook request")
     parser.add_argument("--webhook-header-value", type=str,
                        help="Optional single HTTP header value for webhook request")
+    parser.add_argument("--fail-fast", action="store_true",
+                       help="Stop sequential execution on first failure")
+    parser.add_argument("--max-fail", type=int, default=0,
+                       help="Stop sequential execution after N failures (0 = no limit)")
     parser.add_argument("--resume", type=Path,
                        help="Resume by rerunning only failed scripts from a previous JSON summary file")
     parser.add_argument("--verbose", "-v", action="store_true",
@@ -864,7 +874,7 @@ Examples:
     if args.parallel:
         results = run_parallel(script_paths, args.timeout, args.workers, github_workers=args.github_workers, microsoft_workers=args.microsoft_workers, google_workers=args.google_workers, retries=args.retry)
     else:
-        results = run_sequential(script_paths, args.timeout, args.delay, retries=args.retry)
+        results = run_sequential(script_paths, args.timeout, args.delay, retries=args.retry, fail_fast=bool(args.fail_fast), max_fail=int(args.max_fail or 0))
 
     total_duration = time.time() - start_time
 

@@ -138,6 +138,8 @@ python scripts/update-all.py --structured-output
 python scripts/update-all.py --http-cache --http-cache-ttl 1800
 python scripts/update-all.py --json-summary .temp/update-summary.json
 python scripts/update-all.py --md-summary .temp/update-summary.md
+python scripts/update-all.py --sequential --fail-fast
+python scripts/update-all.py --sequential --max-fail 2
 ```
 
 ### Structured output
