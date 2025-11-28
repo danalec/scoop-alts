@@ -148,6 +148,12 @@ python scripts/update-all.py --json-summary .temp/update-summary.json
 ### GitHub API rate limits
 - Set `GITHUB_TOKEN` (or `GH_TOKEN`) in the environment to enable authenticated requests and higher GitHub API rate limits used by the version detector.
 
+### Provider throttling mapping
+- Optionally place `scripts/providers.json` to map scripts or packages to a provider (`github`, `microsoft`, `google`, `other`) to improve throttling accuracy.
+
+### Resume failed scripts
+- Use `--resume .temp/update-summary.json` to rerun only the scripts that failed in the previous run.
+
 ## 🤝 Contributing
 
 ### **For Users**

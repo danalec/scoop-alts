@@ -80,7 +80,6 @@ CACHE_EXPIRY_SECONDS = int(os.environ.get('CACHE_EXPIRY_SECONDS', '1800'))  # 30
 # repeated disk reads when printing summaries and composing commit messages.
 MANIFEST_VERSION_CACHE: Dict[str, str] = {}
 
-# Structured output preference (set in main from CLI flag)
 PREFER_STRUCTURED_OUTPUT = False
 
 def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, str]:
@@ -417,8 +416,23 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_
     """Run update scripts in parallel with provider-aware throttling."""
     results = []
 
-    # Helper: classify provider based on script content
+    # Optional provider mapping from JSON file
+    provider_map: Dict[str, str] = {}
+    try:
+        map_path = SCRIPTS_DIR / 'providers.json'
+        if map_path.exists():
+            with open(map_path, 'r', encoding='utf-8') as f:
+                import json as _json
+                provider_map = _json.load(f)
+    except Exception:
+        provider_map = {}
+
     def classify_provider(p: Path) -> str:
+        name = p.name
+        pkg = name.replace('update-', '').replace('.py', '')
+        mapped = provider_map.get(name) or provider_map.get(pkg)
+        if isinstance(mapped, str) and mapped:
+            return mapped
         try:
             with open(p, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read(4000)
@@ -688,6 +702,8 @@ Examples:
                        help="Number of retry attempts per script on failure (default: 0)")
     parser.add_argument("--json-summary", type=Path,
                        help="Write machine-readable JSON summary to the given file path")
+    parser.add_argument("--resume", type=Path,
+                       help="Resume by rerunning only failed scripts from a previous JSON summary file")
     parser.add_argument("--verbose", "-v", action="store_true",
                        help="Enable verbose logging")
     parser.add_argument("--quiet", "-q", action="store_true",
@@ -738,6 +754,23 @@ Examples:
             script_paths.append(script_path)
         else:
             print(f"⚠️  Script not found: {script_path}")
+
+    # Optional resume filter: keep only failed from previous run
+    if args.resume:
+        try:
+            with open(args.resume, 'r', encoding='utf-8') as f:
+                prev = json.load(f)
+            failed_scripts = set()
+            for item in prev.get('results', []):
+                if not bool(item.get('success', False)):
+                    failed_scripts.add(item.get('script'))
+            if failed_scripts:
+                script_paths = [p for p in script_paths if p.name in failed_scripts]
+                print(f"🔁 Resuming: {len(script_paths)} failed script(s) will be rerun")
+            else:
+                print("ℹ️  Resume requested but no failed scripts found; running full selection")
+        except Exception as e:
+            print(f"⚠️  Failed to read resume file: {e}")
 
     if not script_paths:
         print("❌ No valid script files found")
