@@ -157,6 +157,9 @@ python scripts/update-all.py --json-summary .temp/update-summary.json
 ### CI environment guard
 - Set `AUTOMATION_DISABLE_WINMETA=1` to disable Windows-specific metadata extraction paths in the version detector (useful on non-Windows CI runners).
 
+### Webhook notifications
+- Provide `--webhook-url` (and optionally `--webhook-header-name`/`--webhook-header-value`) to POST the JSON summary to a webhook endpoint after a run.
+
 ## 🤝 Contributing
 
 ### **For Users**

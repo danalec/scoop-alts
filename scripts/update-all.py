@@ -17,6 +17,7 @@ import json
 from typing import List, Tuple, Dict
 import threading
 import logging
+import requests
 
 # Set UTF-8 encoding for Windows console
 if sys.platform == "win32":
@@ -542,6 +543,28 @@ def write_json_summary(results: List[UpdateResult], total_duration: float, args,
     except Exception as e:
         print(f"⚠️  Failed to write JSON summary: {e}")
 
+def send_webhook_if_configured(args) -> None:
+    try:
+        if not args.webhook_url or not args.json_summary:
+            return
+        payload = None
+        try:
+            with open(args.json_summary, 'r', encoding='utf-8') as f:
+                payload = json.load(f)
+        except Exception as e:
+            print(f"⚠️  Webhook skipped: cannot read summary file: {e}")
+            return
+        headers = {'Content-Type': 'application/json'}
+        if args.webhook_header_name and args.webhook_header_value:
+            headers[args.webhook_header_name] = args.webhook_header_value
+        resp = requests.post(args.webhook_url, json=payload, headers=headers, timeout=15)
+        if 200 <= resp.status_code < 300:
+            print(f"📣 Webhook delivered: {resp.status_code}")
+        else:
+            print(f"⚠️  Webhook failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        print(f"⚠️  Webhook error: {e}")
+
 def filter_resume_paths(script_paths: List[Path], resume_path: Path) -> List[Path]:
     try:
         with open(resume_path, 'r', encoding='utf-8') as f:
@@ -718,6 +741,12 @@ Examples:
                        help="Number of retry attempts per script on failure (default: 0)")
     parser.add_argument("--json-summary", type=Path,
                        help="Write machine-readable JSON summary to the given file path")
+    parser.add_argument("--webhook-url", type=str,
+                       help="POST the JSON summary to the given webhook URL")
+    parser.add_argument("--webhook-header-name", type=str,
+                       help="Optional single HTTP header name for webhook request")
+    parser.add_argument("--webhook-header-value", type=str,
+                       help="Optional single HTTP header value for webhook request")
     parser.add_argument("--resume", type=Path,
                        help="Resume by rerunning only failed scripts from a previous JSON summary file")
     parser.add_argument("--verbose", "-v", action="store_true",
@@ -850,6 +879,8 @@ Examples:
     print_summary(results, total_duration)
     # Optional JSON summary output
     write_json_summary(results, total_duration, args, 'Parallel' if args.parallel else 'Sequential')
+    # Optional webhook delivery
+    send_webhook_if_configured(args)
 
     # Exit with appropriate code
     failed_count = len([r for r in results if not r.success])
