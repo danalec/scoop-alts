@@ -762,6 +762,10 @@ Examples:
                        help=f"Max concurrent Google-related scripts (default: {MAX_GOOGLE_WORKERS})")
     parser.add_argument("--scripts", "-s", nargs="+",
                        help="Run only specific scripts (e.g., corecycler esptool)")
+    parser.add_argument("--only-providers", nargs="+", choices=["github", "microsoft", "google", "other"],
+                       help="Run only scripts classified to these providers")
+    parser.add_argument("--skip-providers", nargs="+", choices=["github", "microsoft", "google", "other"],
+                       help="Skip scripts classified to these providers")
     parser.add_argument("--dry-run", "-d", action="store_true",
                        help="Show what would be run without executing")
     parser.add_argument("--skip-git", action="store_true",
@@ -796,6 +800,8 @@ Examples:
                        help="Provider pause duration in seconds (parallel mode)")
     parser.add_argument("--resume", type=Path,
                        help="Resume by rerunning only failed scripts from a previous JSON summary file")
+    parser.add_argument("--no-error-exit", action="store_true",
+                       help="Always exit with code 0 even if failures occurred")
     parser.add_argument("--verbose", "-v", action="store_true",
                        help="Enable verbose logging")
     parser.add_argument("--quiet", "-q", action="store_true",
@@ -855,6 +861,48 @@ Examples:
             print(f"🔁 Resuming: {after} failed script(s) will be rerun")
         else:
             print("ℹ️  Resume requested but no failed scripts found; running full selection")
+
+    # Provider-based filtering before execution
+    def load_provider_map() -> Dict[str, str]:
+        try:
+            p = SCRIPTS_DIR / 'providers.json'
+            if p.exists():
+                with open(p, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+
+    provider_map = load_provider_map()
+
+    def classify_provider_for_path(p: Path) -> str:
+        name = p.name
+        pkg = name.replace('update-', '').replace('.py', '')
+        mapped = provider_map.get(name) or provider_map.get(pkg)
+        if isinstance(mapped, str) and mapped:
+            return mapped
+        try:
+            with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read(4000)
+                if ('github.com' in content) or ('api.github.com' in content):
+                    return 'github'
+                if ('learn.microsoft.com' in content) or ('go.microsoft.com' in content) or ('download.microsoft.com' in content) or ('visualstudio.microsoft.com' in content):
+                    return 'microsoft'
+                if ('googleapis.com' in content) or ('storage.googleapis.com' in content) or ('dl.google.com' in content) or ('cloudfront.net' in content):
+                    return 'google'
+                return 'other'
+        except Exception:
+            return 'other'
+
+    if args.only_providers:
+        allowed = set(args.only_providers)
+        script_paths = [p for p in script_paths if classify_provider_for_path(p) in allowed]
+        print(f"🎛️ Provider include filter active: {', '.join(allowed)}")
+    if args.skip_providers:
+        skipped = set(args.skip_providers)
+        before = len(script_paths)
+        script_paths = [p for p in script_paths if classify_provider_for_path(p) not in skipped]
+        print(f"🚫 Provider skip filter active: {', '.join(skipped)} (removed {before - len(script_paths)})")
 
     if not script_paths:
         print("❌ No valid script files found")
@@ -933,7 +981,7 @@ Examples:
 
     # Exit with appropriate code
     failed_count = len([r for r in results if not r.success])
-    if failed_count > 0:
+    if failed_count > 0 and not args.no_error_exit:
         print(f"\n⚠️  {failed_count} script(s) failed")
         sys.exit(1)
     else:
