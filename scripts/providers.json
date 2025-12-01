@@ -6,6 +6,7 @@
   "update-corecycler.py": "github",
   "update-esptool.py": "github",
   "update-lazyeat.py": "github",
+  "update-windoctor.py": "github",
   "update-widevinecdm.py": "google",
   "update-ntoptimizer.py": "other",
   "update-hdd-lff-portable.py": "other",
