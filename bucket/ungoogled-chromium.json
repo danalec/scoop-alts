@@ -1,10 +1,10 @@
 {
-  "version": "143.0.7499.109-1.1",
+  "version": "143.0.7499.169-1.1",
   "description": "Ungoogled Chromium - Google Chromium without Google's integration",
   "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
   "license": "BSD-3-Clause",
-  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/143.0.7499.109-1.1/ungoogled-chromium_143.0.7499.109-1.1_windows_x64.zip",
-  "hash": "sha256:388088900a0adb378532fd2b943815d65719a7830f811aae03fe11f6c3ef190f",
+  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/143.0.7499.169-1.1/ungoogled-chromium_143.0.7499.169-1.1_windows_x64.zip",
+  "hash": "sha256:eae1ca44d32b80b536d9712ebbba1ed9fd197788aea959cd0e3f812e7f205bc4",
   "depends": [
     "widevinecdm",
     "chromium-crlset"
@@ -23,7 +23,7 @@
       "--user-data-dir=\"$dir\\User Data\" --disable-machine-id --disable-encryption --no-default-browser-check --profile-directory=\"Default\""
     ]
   ],
-  "extract_dir": "ungoogled-chromium_143.0.7499.109-1.1_windows_x64",
+  "extract_dir": "ungoogled-chromium_143.0.7499.169-1.1_windows_x64",
   "post_install": [
     "$componentPackage = @{",
     "  'WidevineCdm' = 'widevinecdm'",
