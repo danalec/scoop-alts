@@ -1,0 +1,34 @@
+version: "3.8"
+services:
+  scheduler:
+    build: .
+    image: scoop-alts-scheduler:latest
+    container_name: scoop-alts-scheduler
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    environment:
+      - TZ=UTC
+      - SCHEDULE_UPDATE_ALL=0 * * * *
+      - HEARTBEAT_SCHEDULE=*/5 * * * *
+      - ORCHESTRATOR_FLAGS=--fast --retry 1
+      # - NOTIFY_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./bucket:/app/bucket
+      - ./logs:/data/logs
+      - ./cache:/data/cache
+    healthcheck:
+      test: ["CMD", "/app/bin/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  data:
+    driver: local
