@@ -38,7 +38,7 @@
       "version_regex": "tag/v([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-zA-Z0-9]+)?)",
       "download_url_template": "https://github.com/sp00n/CoreCycler/releases/download/v$version/CoreCycler-v$version.7z",
       "extract_dir": "CoreCycler-v$version",
-      "bin_name": "corecycler.exe"
+      "bin_name": [["Run CoreCycler.bat", "corecycler"]]
     },
     {
       "name": "ungoogled-chromium",
@@ -136,10 +136,10 @@
     {
       "name": "ripgrep-all",
       "description": "Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
-      "homepage": "https://github.com/danalec/ripgrep-all/releases",
+      "homepage": "https://github.com/phiresky/ripgrep-all/releases",
       "license": "AGPL-3.0-or-later",
-      "version_regex": "releases/tag/v([0-9]+\\.[0-9]+\\.[0-9]+)",
-      "download_url_template": "https://github.com/danalec/ripgrep-all/releases/download/v$version/ripgrep-all-$version-windows-x86_64.zip",
+      "version_regex": "releases/tag/v(0\\.10\\.9)",
+      "download_url_template": "https://github.com/phiresky/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip",
       "bin_name": "rga.exe"
     }
   ]

@@ -137,8 +137,19 @@ class ManifestGenerator:
         
         # Add binary name
         if config.bin_name:
-            bin_name = config.bin_name.replace("$version", version)
-            manifest["bin"] = bin_name
+            if isinstance(config.bin_name, list):
+                processed_bin = []
+                for item in config.bin_name:
+                    if isinstance(item, list):
+                        processed_bin.append([str(s).replace("$version", version) for s in item])
+                    elif isinstance(item, str):
+                        processed_bin.append(item.replace("$version", version))
+                    else:
+                        processed_bin.append(item)
+                manifest["bin"] = processed_bin
+            else:
+                bin_name = config.bin_name.replace("$version", version)
+                manifest["bin"] = bin_name
         else:
             # Extract from URL
             filename = urlparse(download_url).path.split('/')[-1]
