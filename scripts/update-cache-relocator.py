@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ripgrep All Update Script
+Cache Relocator Update Script
 Automatically checks for updates and updates the Scoop manifest using shared version detector.
 """
 
@@ -11,10 +11,10 @@ from pathlib import Path
 from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
-SOFTWARE_NAME = "ripgrep-all"
-HOMEPAGE_URL = "https://github.com/phiresky/ripgrep-all/releases"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/phiresky/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip"
-BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "ripgrep-all.json"
+SOFTWARE_NAME = "cache-relocator"
+HOMEPAGE_URL = "https://www.softperfect.com/products/cacherelocator/"
+DOWNLOAD_URL_TEMPLATE = "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip"
+BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "cache-relocator.json"
 
 def update_manifest():
     """Update the Scoop manifest using shared version detection"""
@@ -26,10 +26,10 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['releases/tag/v(0\\.10\\.9)', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=['Latest version[\\s\\S]*?([0-9]+\\.[0-9]+)', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
-        description="Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
-        license="AGPL-3.0-or-later"
+        description="SoftPerfect Cache Relocator - Relocate browser and app caches to another drive",
+        license="Freeware"
     )
     
     # Get version information using shared detector

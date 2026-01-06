@@ -141,6 +141,22 @@
       "version_regex": "releases/tag/v(0\\.10\\.9)",
       "download_url_template": "https://github.com/phiresky/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip",
       "bin_name": "rga.exe"
+    },
+    {
+      "name": "thorium-avx2",
+      "description": "Thorium AVX2 - Chromium fork named after radioactive element No. 90. Optimized for AVX2.",
+      "homepage": "https://thorium.rocks/",
+      "license": "BSD-3-Clause",
+      "version_regex": "releases/tag/M([\\d.]+)",
+      "download_url_template": "https://github.com/Alex313031/Thorium-Win/releases/download/M$version/Thorium_AVX2_$version.zip",
+      "extract_dir": "BIN",
+      "bin_name": "thorium.exe",
+      "shortcuts": [
+        [
+          "thorium.exe",
+          "Thorium AVX2"
+        ]
+      ]
     }
   ]
 }

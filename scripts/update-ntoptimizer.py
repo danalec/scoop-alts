@@ -1,47 +1,49 @@
 #!/usr/bin/env python3
 """
 Ntoptimizer Update Script
-Uses a static download URL and extracts version from executable metadata. Keeps 'sha256:' hash style.
+Automatically checks for updates and updates the Scoop manifest using shared version detector.
 """
 
 import json
 import sys
 import os
 from pathlib import Path
-from version_detector import VersionDetector
+from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "ntoptimizer"
 HOMEPAGE_URL = "https://bestorderflow.com/"
-# Static download URL as per manifest
-STATIC_DOWNLOAD_URL = "https://www.netoptimizer.com/files/NetOptimizer.exe"
+DOWNLOAD_URL_TEMPLATE = ""
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "ntoptimizer.json"
 
 def update_manifest():
-    """Update the Scoop manifest using static URL and executable metadata"""
+    """Update the Scoop manifest using shared version detection"""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
-
-    detector = VersionDetector()
-
-    # Determine download URL (static)
-    download_url = STATIC_DOWNLOAD_URL
-
-    # Try to derive version from executable metadata
-    version = detector.get_version_from_executable(download_url) or ""
-    if not version:
+    
+    # Configure software version detection
+    config = SoftwareVersionConfig(
+        name=SOFTWARE_NAME,
+        homepage=HOMEPAGE_URL,
+        version_patterns=['([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        download_url_template=DOWNLOAD_URL_TEMPLATE,
+        description="Optimizer tool for NinjaTrader",
+        license="Proprietary"
+    )
+    
+    # Get version information using shared detector
+    version_info = get_version_info(config)
+    if not version_info:
         if not structured_only:
-            print("⚠️ Could not extract version from executable; will keep current manifest version.")
-
-    # Calculate hash
-    hash_value = detector.calculate_hash(download_url)
-    if not hash_value:
-        if not structured_only:
-            print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "hash_failed"}))
+            print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
         return False
-
+    
+    version = version_info['version']
+    download_url = version_info['download_url']
+    hash_value = version_info['hash']
+    
     # Load existing manifest
     try:
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
@@ -52,37 +54,36 @@ def update_manifest():
     except json.JSONDecodeError as e:
         print(f"❌ Invalid JSON in manifest: {e}")
         return False
-
+    
     # Check if update is needed
     current_version = manifest.get('version', '')
-    if version and current_version == version:
+    if current_version == version:
         if not structured_only:
             print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
-
+    
     # Update manifest
-    if version:
-        manifest['version'] = version
+    manifest['version'] = version
     manifest['url'] = download_url
-    # Keep sha256: prefix to match manifest style
     manifest['hash'] = f"sha256:{hash_value}"
-
+    
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
+        
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
-        print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version or manifest.get('version', '')}))
+        print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
-
+        
     except Exception as e:
         if not structured_only:
             print(f"❌ Failed to save manifest: {e}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version or manifest.get('version', ''), "error": "save_failed"}))
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
-
+    
 def main():
     """Main update function"""
     success = update_manifest()

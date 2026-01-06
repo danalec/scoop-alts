@@ -16,23 +16,8 @@ HOMEPAGE_URL = "https://api.github.com/repos/ungoogled-software/ungoogled-chromi
 DOWNLOAD_URL_TEMPLATE = "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "ungoogled-chromium.json"
 
-def _apply_updates_with_whitelist(manifest: dict, updates: dict, allowed_keys: list) -> None:
-    """Set only allowed top-level keys in the manifest.
-
-    This prevents accidental overwrites of fields like post_install, uninstaller, or persist.
-    """
-    for k in allowed_keys:
-        if k in updates:
-            manifest[k] = updates[k]
-
-    # Handle autoupdate subkeys safely
-    if 'autoupdate' in updates:
-        if 'autoupdate' not in manifest or not isinstance(manifest['autoupdate'], dict):
-            manifest['autoupdate'] = {}
-        for sub_k, sub_v in updates['autoupdate'].items():
-            manifest['autoupdate'][sub_k] = sub_v
-
 def update_manifest():
+    """Update the Scoop manifest using shared version detection"""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -41,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['"tag_name":\\s*"v?([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9.]+)?)"'],
+        version_patterns=['"tag_name":\\s*"([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.[0-9]+)"', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Ungoogled Chromium - Google Chromium without Google's integration",
         license="BSD-3-Clause"
@@ -64,12 +49,10 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        if not structured_only:
-            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        if not structured_only:
-            print(f"❌ Invalid JSON in manifest: {e}")
+        print(f"❌ Invalid JSON in manifest: {e}")
         return False
     
     # Check if update is needed
@@ -81,26 +64,15 @@ def update_manifest():
         return True
     
     # Update manifest
-    updates = {
-        'version': version,
-        'url': download_url,
-        'hash': f"sha256:{hash_value}",
-        'extract_dir': f"ungoogled-chromium_{version}_windows_x64",
-        'autoupdate': {
-            'extract_dir': "ungoogled-chromium_$version_windows_x64",
-            'url': DOWNLOAD_URL_TEMPLATE,
-        }
-    }
-    _apply_updates_with_whitelist(
-        manifest,
-        updates,
-        allowed_keys=['version', 'url', 'hash', 'extract_dir', 'autoupdate']
-    )
+    manifest['version'] = version
+    manifest['url'] = download_url
+    manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
+        
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
@@ -111,7 +83,7 @@ def update_manifest():
             print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
-
+    
 def main():
     """Main update function"""
     success = update_manifest()

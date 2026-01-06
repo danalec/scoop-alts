@@ -17,6 +17,7 @@ DOWNLOAD_URL_TEMPLATE = "https://hddguru.com/software/HDD-LLF-Low-Level-Format-T
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "hdd-lff-portable.json"
 
 def update_manifest():
+    """Update the Scoop manifest using shared version detection"""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -25,11 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        # Restrict patterns to avoid picking unrelated numbers from the page (e.g., 1.0-1.5 MB/s)
-        version_patterns=[
-            r"HDDLLF\.([0-9]+\.[0-9]+)\.exe",           # matches HDDLLF.4.50.exe
-            r"ver\.?\s*([0-9]+\.[0-9]+)"                 # matches 'ver.4.50'
-        ],
+        version_patterns=['HDDLLF\\.([\\d\\.]+)\\.exe', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="HDD Low Level Format Tool (Portable) - A utility for low-level formatting of SATA, IDE, SAS, SCSI or SSD drives",
         license="Freeware"
@@ -40,7 +37,6 @@ def update_manifest():
     if not version_info:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
-        # Emit structured result for orchestrator
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
         return False
     
@@ -53,20 +49,17 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        if not structured_only:
-            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        if not structured_only:
-            print(f"❌ Invalid JSON in manifest: {e}")
+        print(f"❌ Invalid JSON in manifest: {e}")
         return False
     
     # Check if update is needed
     current_version = manifest.get('version', '')
-    if current_version == version and manifest.get('hash', '').replace('sha256:', '') == hash_value:
+    if current_version == version:
         if not structured_only:
             print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
-        # Emit structured result for orchestrator
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
     
@@ -74,41 +67,23 @@ def update_manifest():
     manifest['version'] = version
     manifest['url'] = download_url
     manifest['hash'] = f"sha256:{hash_value}"
-    # Ensure bin and shortcuts point to the correct versioned executable name
-    # Upstream distributes a single EXE named HDDLLF.<version>.exe
-    exe_name = f"HDDLLF.{version}.exe"
-    # Prefer descriptive alias for bin
-    manifest['bin'] = [[exe_name, "HDD Low-Level Format Tool"]]
-    try:
-        # shortcuts is a list of [target, name]
-        if isinstance(manifest.get('shortcuts'), list) and len(manifest['shortcuts']) > 0:
-            # Update only the target (first element)
-            manifest['shortcuts'][0][0] = exe_name
-        else:
-            # Create a sensible default shortcut if missing
-            manifest['shortcuts'] = [[exe_name, "HDD Low-Level Format Tool"]]
-    except Exception:
-        # Fallback in case structure isn't as expected
-        manifest['shortcuts'] = [[exe_name, "HDD Low-Level Format Tool"]]
     
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-
+        
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
-        # Emit structured result for orchestrator
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
         
     except Exception as e:
         if not structured_only:
             print(f"❌ Failed to save manifest: {e}")
-        # Emit structured result for orchestrator
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
-
+    
 def main():
     """Main update function"""
     success = update_manifest()

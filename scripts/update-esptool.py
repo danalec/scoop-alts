@@ -12,13 +12,12 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "esptool"
-# Use GitHub Releases API for reliable version detection
-HOMEPAGE_URL = "https://api.github.com/repos/espressif/esptool/releases/latest"
-# Match the asset used in the manifest (windows-amd64)
-DOWNLOAD_URL_TEMPLATE = "https://github.com/espressif/esptool/releases/download/v$version/esptool-v$version-windows-amd64.zip"
+HOMEPAGE_URL = "https://github.com/espressif/esptool"
+DOWNLOAD_URL_TEMPLATE = "https://github.com/espressif/esptool/releases/download/v$version/esptool-v$version-win64.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "esptool.json"
 
 def update_manifest():
+    """Update the Scoop manifest using shared version detection"""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -27,8 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        # Extract semantic version from GitHub API response (tag_name)
-        version_patterns=[r'tag_name"\s*:\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)'],
+        version_patterns=['([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="A Python-based, open-source, platform-independent utility to communicate with the ROM bootloader in Espressif chips",
         license="GPL-2.0-or-later"
@@ -51,12 +49,10 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        if not structured_only:
-            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        if not structured_only:
-            print(f"❌ Invalid JSON in manifest: {e}")
+        print(f"❌ Invalid JSON in manifest: {e}")
         return False
     
     # Check if update is needed
@@ -70,13 +66,13 @@ def update_manifest():
     # Update manifest
     manifest['version'] = version
     manifest['url'] = download_url
-    # Use raw SHA256 hex to match manifest style
-    manifest['hash'] = hash_value
+    manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
+        
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
@@ -87,7 +83,7 @@ def update_manifest():
             print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
-
+    
 def main():
     """Main update function"""
     success = update_manifest()

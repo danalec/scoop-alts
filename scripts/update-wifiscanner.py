@@ -13,11 +13,11 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "wifiscanner"
 HOMEPAGE_URL = "https://lizardsystems.com/wi-fi-scanner/"
-# Static download URL used by upstream; shared detector will not need to inject version
-DOWNLOAD_URL_TEMPLATE = "https://lizardsystems.com/download/wifiscanner_setup.exe"
+DOWNLOAD_URL_TEMPLATE = ""
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "wifiscanner.json"
 
 def update_manifest():
+    """Update the Scoop manifest using shared version detection"""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -49,12 +49,10 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        if not structured_only:
-            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        if not structured_only:
-            print(f"❌ Invalid JSON in manifest: {e}")
+        print(f"❌ Invalid JSON in manifest: {e}")
         return False
     
     # Check if update is needed
@@ -68,13 +66,13 @@ def update_manifest():
     # Update manifest
     manifest['version'] = version
     manifest['url'] = download_url
-    # Manifest uses raw SHA256 hex (no "sha256:" prefix)
-    manifest['hash'] = hash_value
+    manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
+        
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
@@ -85,7 +83,7 @@ def update_manifest():
             print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
-
+    
 def main():
     """Main update function"""
     success = update_manifest()

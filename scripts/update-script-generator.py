@@ -162,7 +162,7 @@ def main():
             from git_helpers import commit_manifest_change
             commit_manifest_change(SOFTWARE_NAME, str(BUCKET_FILE), push=True)
         except Exception as e:
-            print(f"⚠️  Auto-commit failed: {e}")
+            print(f"⚠️  Auto-commit failed: {{e}}")
 
 if __name__ == "__main__":
     main()'''

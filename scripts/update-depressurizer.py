@@ -17,6 +17,7 @@ DOWNLOAD_URL_TEMPLATE = "https://github.com/julianxhokaxhiu/Depressurizer/releas
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "depressurizer.json"
 
 def update_manifest():
+    """Update the Scoop manifest using shared version detection"""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -48,12 +49,10 @@ def update_manifest():
         with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        if not structured_only:
-            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(f"❌ Manifest file not found: {BUCKET_FILE}")
         return False
     except json.JSONDecodeError as e:
-        if not structured_only:
-            print(f"❌ Invalid JSON in manifest: {e}")
+        print(f"❌ Invalid JSON in manifest: {e}")
         return False
     
     # Check if update is needed
@@ -73,6 +72,7 @@ def update_manifest():
     try:
         with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
+        
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
@@ -83,7 +83,7 @@ def update_manifest():
             print(f"❌ Failed to save manifest: {e}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
         return False
-
+    
 def main():
     """Main update function"""
     success = update_manifest()

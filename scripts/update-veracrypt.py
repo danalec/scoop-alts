@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VeraCrypt Update Script
+Veracrypt Update Script
 Automatically checks for updates and updates the Scoop manifest using shared version detector.
 """
 
@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "veracrypt"
 HOMEPAGE_URL = "https://api.github.com/repos/veracrypt/VeraCrypt/releases/latest"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/veracrypt/VeraCrypt/releases/download/VeraCrypt_$version/VeraCrypt_Setup_x64_$version.msi"
+DOWNLOAD_URL_TEMPLATE = ""
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "veracrypt.json"
 
 def update_manifest():
@@ -26,10 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=[
-            r'"tag_name"\s*:\s*"VeraCrypt_([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
-            r'"name"\s*:\s*"VeraCrypt_Setup_x64_([0-9]+\.[0-9]+(?:\.[0-9]+)?)\.msi"'
-        ],
+        version_patterns=['VeraCrypt_([\\d.]+)', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="VeraCrypt - Disk encryption with strong security based on TrueCrypt",
         license="Apache-2.0"
@@ -69,16 +66,7 @@ def update_manifest():
     # Update manifest
     manifest['version'] = version
     manifest['url'] = download_url
-    # store hex only (bucket style) without sha256: prefix
-    manifest['hash'] = hash_value
-    
-    # Also update architecture 64bit block if present
-    arch = manifest.get('architecture', {})
-    if isinstance(arch, dict) and '64bit' in arch:
-        if isinstance(arch['64bit'], dict):
-            arch['64bit']['url'] = download_url
-            arch['64bit']['hash'] = hash_value
-            manifest['architecture'] = arch
+    manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:
