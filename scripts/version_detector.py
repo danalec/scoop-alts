@@ -408,8 +408,9 @@ class VersionDetector:
         """Alternative version extraction using file properties"""
         try:
             # Try using wmic (Windows Management Instrumentation)
+            escaped_path = str(exe_path).replace("\\", "\\\\")
             cmd = [
-                'wmic', 'datafile', 'where', f'name="{str(exe_path).replace("\\", "\\\\")}"',
+                'wmic', 'datafile', 'where', f'name="{escaped_path}"',
                 'get', 'Version', '/value'
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
