@@ -470,10 +470,26 @@ class ScoopAutomation:
                     else:
                         print(f"✅ {manifest_path.name}: Valid")
                 else:
-                    required_fields = ['version', 'description', 'homepage', 'url', 'hash']
-                    missing_fields = [field for field in required_fields if field not in manifest]
-                    if missing_fields:
-                        print(f"❌ {manifest_path.name}: Missing fields: {', '.join(missing_fields)}")
+                    # Basic validation without schema: accept either top-level url/hash
+                    # or architecture-specific url/hash entries
+                    base_required = ['version', 'description', 'homepage']
+                    base_missing = [f for f in base_required if f not in manifest]
+
+                    has_top_level = ('url' in manifest) and ('hash' in manifest)
+                    has_arch = False
+                    if not has_top_level and isinstance(manifest.get('architecture'), dict):
+                        arch = manifest['architecture']
+                        # Consider valid if any architecture entry has both url and hash
+                        for k, v in arch.items():
+                            if isinstance(v, dict) and ('url' in v) and ('hash' in v):
+                                has_arch = True
+                                break
+
+                    if base_missing:
+                        print(f"❌ {manifest_path.name}: Missing fields: {', '.join(base_missing)}")
+                        all_valid = False
+                    elif not (has_top_level or has_arch):
+                        print(f"❌ {manifest_path.name}: Missing fields: url, hash (top-level or per-architecture)")
                         all_valid = False
                     else:
                         print(f"✅ {manifest_path.name}: Valid")

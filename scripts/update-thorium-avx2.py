@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "thorium-avx2"
 HOMEPAGE_URL = "https://github.com/Alex313031/Thorium-Win/releases"
-DOWNLOAD_URL_TEMPLATE = ""
+DOWNLOAD_URL_TEMPLATE = "https://github.com/Alex313031/Thorium-Win/releases/download/M$version/Thorium_AVX2_$version.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "thorium-avx2.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['releases/tag/M([\\d.]+)', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=['releases/tag/M([\\d.]+)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Thorium AVX2 - Chromium fork named after radioactive element No. 90. Optimized for AVX2.",
         license="BSD-3-Clause"
@@ -65,8 +65,23 @@ def update_manifest():
     
     # Update manifest
     manifest['version'] = version
-    manifest['url'] = download_url
-    manifest['hash'] = f"sha256:{hash_value}"
+    # Prefer architecture-specific update when manifest uses architecture blocks
+    arch = manifest.get('architecture')
+    if isinstance(arch, dict) and arch:
+        # Choose preferred architecture key
+        arch_key = '64bit' if '64bit' in arch else ('arm64' if 'arm64' in arch else ('32bit' if '32bit' in arch else next(iter(arch.keys()))))
+        if isinstance(arch.get(arch_key), dict):
+            arch_entry = arch[arch_key]
+            arch_entry['url'] = download_url
+            arch_entry['hash'] = f"sha256:{hash_value}"
+            manifest['architecture'][arch_key] = arch_entry
+        else:
+            # Fallback to top-level if architecture entry is not a dict
+            manifest['url'] = download_url
+            manifest['hash'] = f"sha256:{hash_value}"
+    else:
+        manifest['url'] = download_url
+        manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:

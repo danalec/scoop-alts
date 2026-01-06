@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "lazyeat"
 HOMEPAGE_URL = "https://api.github.com/repos/lanxiuyun/lazyeat/releases/latest"
-DOWNLOAD_URL_TEMPLATE = ""
+DOWNLOAD_URL_TEMPLATE = "https://github.com/lanxiuyun/lazyeat/releases/download/v$version/Lazyeat_$version_x64_en-US.msi"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "lazyeat.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['v([\\d.]+)', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=['v([\\d.]+)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Touch-free controller for use while eating. Control your device with gestures and voice commands without getting your hands dirty.",
         license="Freeware"
@@ -65,8 +65,23 @@ def update_manifest():
     
     # Update manifest
     manifest['version'] = version
-    manifest['url'] = download_url
-    manifest['hash'] = f"sha256:{hash_value}"
+    # Prefer architecture-specific update when manifest uses architecture blocks
+    arch = manifest.get('architecture')
+    if isinstance(arch, dict) and arch:
+        # Choose preferred architecture key
+        arch_key = '64bit' if '64bit' in arch else ('arm64' if 'arm64' in arch else ('32bit' if '32bit' in arch else next(iter(arch.keys()))))
+        if isinstance(arch.get(arch_key), dict):
+            arch_entry = arch[arch_key]
+            arch_entry['url'] = download_url
+            arch_entry['hash'] = f"sha256:{hash_value}"
+            manifest['architecture'][arch_key] = arch_entry
+        else:
+            # Fallback to top-level if architecture entry is not a dict
+            manifest['url'] = download_url
+            manifest['hash'] = f"sha256:{hash_value}"
+    else:
+        manifest['url'] = download_url
+        manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:

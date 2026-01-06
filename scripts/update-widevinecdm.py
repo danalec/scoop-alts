@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "widevinecdm"
 HOMEPAGE_URL = "https://scoopinstaller.github.io/UpdateTracker/googlechrome/chrome.min.xml"
-DOWNLOAD_URL_TEMPLATE = ""
+DOWNLOAD_URL_TEMPLATE = "https://dl.google.com/release2/chrome/$match64_$version/$version_chrome_installer_uncompressed.exe#/chrome.7z"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "widevinecdm.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['(?sm)<stable32><version>(?<version>[\\d.]+)</version>.+release2/chrome/(?<32>[\\w-]+)_.+<stable64>.+release2/chrome/(?<64>[\\w-]+)_.+</stable64>', '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=['(?sm)<stable32><version>(?<version>[\\d.]+)</version>.+release2/chrome/(?<32>[\\w-]+)_.+<stable64>.+release2/chrome/(?<64>[\\w-]+)_.+</stable64>'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="A browser plugin designed for the viewing of premium video content",
         license="{'identifier': 'Proprietary', 'url': 'https://chromium.googlesource.com/chromium/src/third_party/+/master/widevine/LICENSE'}"
@@ -65,8 +65,23 @@ def update_manifest():
     
     # Update manifest
     manifest['version'] = version
-    manifest['url'] = download_url
-    manifest['hash'] = f"sha256:{hash_value}"
+    # Prefer architecture-specific update when manifest uses architecture blocks
+    arch = manifest.get('architecture')
+    if isinstance(arch, dict) and arch:
+        # Choose preferred architecture key
+        arch_key = '64bit' if '64bit' in arch else ('arm64' if 'arm64' in arch else ('32bit' if '32bit' in arch else next(iter(arch.keys()))))
+        if isinstance(arch.get(arch_key), dict):
+            arch_entry = arch[arch_key]
+            arch_entry['url'] = download_url
+            arch_entry['hash'] = f"sha256:{hash_value}"
+            manifest['architecture'][arch_key] = arch_entry
+        else:
+            # Fallback to top-level if architecture entry is not a dict
+            manifest['url'] = download_url
+            manifest['hash'] = f"sha256:{hash_value}"
+    else:
+        manifest['url'] = download_url
+        manifest['hash'] = f"sha256:{hash_value}"
     
     # Save updated manifest
     try:

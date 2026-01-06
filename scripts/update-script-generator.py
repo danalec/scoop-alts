@@ -39,7 +39,16 @@ class UpdateScriptGenerator:
         # Get autoupdate info
         autoupdate = manifest.get('autoupdate', {})
         if isinstance(autoupdate, dict):
-            patterns['download_url_template'] = autoupdate.get('url', '')
+            url = autoupdate.get('url', '')
+            if not url and 'architecture' in autoupdate:
+                arch = autoupdate['architecture']
+                if '64bit' in arch:
+                    url = arch['64bit'].get('url', '')
+                elif '32bit' in arch:
+                    url = arch['32bit'].get('url', '')
+                elif 'arm64' in arch:
+                    url = arch['arm64'].get('url', '')
+            patterns['download_url_template'] = url
         else:
             patterns['download_url_template'] = ''
         
@@ -55,9 +64,7 @@ class UpdateScriptGenerator:
         
         # Build version patterns list
         version_patterns = [patterns['version_regex']]
-        if patterns['version_regex'] != r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)':
-            version_patterns.append(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)')
-        
+
         # Generate script content using shared version detector
         script_content = f'''#!/usr/bin/env python3
 """
@@ -126,8 +133,23 @@ def update_manifest():
     
     # Update manifest
     manifest['version'] = version
-    manifest['url'] = download_url
-    manifest['hash'] = f"sha256:{{hash_value}}"
+    # Prefer architecture-specific update when manifest uses architecture blocks
+    arch = manifest.get('architecture')
+    if isinstance(arch, dict) and arch:
+        # Choose preferred architecture key
+        arch_key = '64bit' if '64bit' in arch else ('arm64' if 'arm64' in arch else ('32bit' if '32bit' in arch else next(iter(arch.keys()))))
+        if isinstance(arch.get(arch_key), dict):
+            arch_entry = arch[arch_key]
+            arch_entry['url'] = download_url
+            arch_entry['hash'] = f"sha256:{{hash_value}}"
+            manifest['architecture'][arch_key] = arch_entry
+        else:
+            # Fallback to top-level if architecture entry is not a dict
+            manifest['url'] = download_url
+            manifest['hash'] = f"sha256:{{hash_value}}"
+    else:
+        manifest['url'] = download_url
+        manifest['hash'] = f"sha256:{{hash_value}}"
     
     # Save updated manifest
     try:
