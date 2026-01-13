@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "wifiscanner"
 HOMEPAGE_URL = "https://lizardsystems.com/wi-fi-scanner/"
-DOWNLOAD_URL_TEMPLATE = ""
+DOWNLOAD_URL_TEMPLATE = "https://lizardsystems.com/download/wifiscanner_setup.exe"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "wifiscanner.json"
 
 def update_manifest():
@@ -26,7 +26,10 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=[
+            r"['\"]version['\"]\s*:\s*['\"]([\d.]+)['\"]",
+            r'Version\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+        ],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="LizardSystems Wi-Fi Scanner",
         license="Freeware"
@@ -34,6 +37,22 @@ def update_manifest():
     
     # Get version information using shared detector
     version_info = get_version_info(config)
+    
+    # Fallback to executable metadata if scraping failed
+    if not version_info:
+        print(f"⚠️ Scraping failed, trying executable metadata from {DOWNLOAD_URL_TEMPLATE}")
+        from version_detector import VersionDetector
+        detector = VersionDetector()
+        version = detector.get_version_from_executable(DOWNLOAD_URL_TEMPLATE)
+        if version:
+            hash_value = detector.calculate_hash(DOWNLOAD_URL_TEMPLATE)
+            if hash_value:
+                version_info = {
+                    'version': version,
+                    'download_url': DOWNLOAD_URL_TEMPLATE,
+                    'hash': hash_value
+                }
+
     if not version_info:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")

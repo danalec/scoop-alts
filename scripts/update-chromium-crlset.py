@@ -12,8 +12,8 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "chromium-crlset"
-HOMEPAGE_URL = "https://www.chromium.org/Home/chromium-security/crlsets/"
-DOWNLOAD_URL_TEMPLATE = "https://www.google.com/dl/release2/chrome_component/$matchUrlone/$matchBasename.crx3"
+HOMEPAGE_URL = "https://clients2.google.com/service/update2/crx?x=id%3Dhfnkpimlhhgieaddgfemjhofmfblmnib%26v%3D0.0.0.0%26uc%26acceptformat%3Dcrx3"
+DOWNLOAD_URL_TEMPLATE = "$matchcodebase"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "chromium-crlset.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['version:"(\\d+)"\\surl:"(?:https?://.+/(?<urlone>.+)/(?<basename>.+)\\.crx3)"'],
+        version_patterns=[r'codebase="(?P<codebase>https?://[^"]+)".*?version="(?P<version>\d+)"'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Chromium's certificate revocation list",
         license="BSD-3-Clause"

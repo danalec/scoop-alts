@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['VeraCrypt_([\\d.]+)'],
+        version_patterns=['VeraCrypt_([\\d.]+\\d)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="VeraCrypt - Disk encryption with strong security based on TrueCrypt",
         license="Apache-2.0"

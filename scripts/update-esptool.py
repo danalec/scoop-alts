@@ -12,8 +12,8 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "esptool"
-HOMEPAGE_URL = "https://github.com/espressif/esptool"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/espressif/esptool/releases/download/v$version/esptool-v$version-win64.zip"
+HOMEPAGE_URL = "https://github.com/espressif/esptool/releases"
+DOWNLOAD_URL_TEMPLATE = "https://github.com/espressif/esptool/releases/download/v$version/esptool-v$version-windows-amd64.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "esptool.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=['/releases/tag/v([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="A Python-based, open-source, platform-independent utility to communicate with the ROM bootloader in Espressif chips",
         license="GPL-2.0-or-later"

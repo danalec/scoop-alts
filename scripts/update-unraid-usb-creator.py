@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "unraid-usb-creator"
 HOMEPAGE_URL = "https://unraid.net/download"
-DOWNLOAD_URL_TEMPLATE = ""
+DOWNLOAD_URL_TEMPLATE = "https://releases.unraid.net/dl/stable/usb-creator.exe"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "unraid-usb-creator.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['USB Creator ([\\d.]+)'],
+        version_patterns=['USB Creator.*?([\\d.]+)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Unraid USB Creator - Create bootable Unraid USB drives",
         license="Proprietary"

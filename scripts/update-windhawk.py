@@ -12,7 +12,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "windhawk"
-HOMEPAGE_URL = "https://windhawk.net/"
+HOMEPAGE_URL = "https://api.github.com/repos/ramensoftware/windhawk/releases/latest"
 DOWNLOAD_URL_TEMPLATE = "https://github.com/ramensoftware/windhawk/releases/download/v$version/windhawk_setup.exe#/setup.exe"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "windhawk.json"
 
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=['"tag_name":\\s*"v?([\\d.]+)"'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="The customization marketplace for Windows programs",
         license="GPL-3.0-or-later"

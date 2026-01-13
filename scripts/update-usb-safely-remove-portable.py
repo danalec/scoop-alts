@@ -12,8 +12,8 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "usb-safely-remove-portable"
-HOMEPAGE_URL = "https://safelyremove.com/"
-DOWNLOAD_URL_TEMPLATE = ""
+HOMEPAGE_URL = "https://safelyremove.com/download.htm"
+DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/usbsafelyremovesetup.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "usb-safely-remove-portable.json"
 
 def update_manifest():

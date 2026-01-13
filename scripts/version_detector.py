@@ -14,7 +14,7 @@ import subprocess
 import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 # Optional semantic version parsing
 try:
     from packaging.version import Version as _PVersion, InvalidVersion as _PInvalid
@@ -119,6 +119,12 @@ def get_session(
 
     return session
 
+@dataclass
+class VersionResult:
+    """Result of version detection including captured groups"""
+    version: str
+    match_groups: Dict[str, str] = field(default_factory=dict)
+
 class VersionDetector:
     """Shared class for version detection and URL construction"""
 
@@ -131,7 +137,7 @@ class VersionDetector:
         # Per-URL conditional request metadata and cached parsed version
         self._version_cache: Dict[str, Dict[str, str]] = {}
 
-    def fetch_latest_version(self, homepage_url: str, version_patterns: List[str]) -> Optional[str]:
+    def fetch_latest_version(self, homepage_url: str, version_patterns: List[str]) -> Optional[VersionResult]:
         """
         Fetch the latest version from a homepage using provided regex patterns
 
@@ -140,7 +146,7 @@ class VersionDetector:
             version_patterns: List of regex patterns to match version numbers
 
         Returns:
-            Latest version string if found, None otherwise
+            Latest VersionResult if found, None otherwise
         """
         try:
             logger.info(f"Scraping version from: {homepage_url}")
@@ -162,53 +168,77 @@ class VersionDetector:
             if response.status_code == 304 and cached and cached.get('version'):
                 logger.info("Using cached version (304 Not Modified)")
                 print("ℹ️  Not modified (304), using cached version")
-                return cached['version']
+                # When using cache, we don't have new match groups unless we cached them.
+                # For now, return empty groups or retrieve from cache if I decide to store them.
+                return VersionResult(version=cached['version'], match_groups=cached.get('match_groups', {}))
 
             content = response.text
 
             # Try each pattern and collect all matches
-            all_versions: List[str] = []
+            all_results: List[VersionResult] = []
             for pattern in version_patterns:
-                matches = re.findall(pattern, content, re.IGNORECASE)
-                if matches:
-                    for m in matches:
-                        # Normalize match to a string if regex returns tuples of groups
-                        v = m[0] if isinstance(m, (tuple, list)) else m
-                        # Basic sanity filter: must start with a digit
-                        if isinstance(v, str) and v and v[0].isdigit():
-                            all_versions.append(v)
+                # Use finditer to capture named groups
+                for match in re.finditer(pattern, content, re.IGNORECASE):
+                    groups = match.groupdict()
+                    
+                    # Determine the version string
+                    # If "version" group exists, use it. Otherwise use the first group.
+                    if "version" in groups:
+                        v = groups["version"]
+                    elif match.groups():
+                        v = match.group(1)
+                    else:
+                        continue # No capturing groups, skip
+                        
+                    # Basic sanity filter: must start with a digit
+                    if v and v[0].isdigit():
+                        all_results.append(VersionResult(version=v, match_groups=groups))
 
-            if all_versions:
+            if all_results:
                 # Prefer semantic version ordering when available
-                best: Optional[str] = None
-                if _PVersion is not None:
-                    try:
-                        best = sorted(all_versions, key=lambda v: _PVersion(v), reverse=True)[0]
-                    except _PInvalid:
-                        best = None
-                if not best:
-                    # Fallback: compare by integer parts
-                    def version_key(v: str) -> List[int]:
-                        parts = re.split(r"[._-]", v)
-                        key: List[int] = []
-                        for p in parts:
-                            try:
-                                key.append(int(p))
-                            except ValueError:
-                                # Non-numeric parts sort after numeric
-                                key.append(-1)
-                        return key
+                best_result: Optional[VersionResult] = None
+                
+                # Sort based on version string
+                def get_version_obj(res: VersionResult):
+                    if _PVersion:
+                        try:
+                            return _PVersion(res.version)
+                        except _PInvalid:
+                            pass
+                    return None
 
-                    best = sorted(all_versions, key=version_key, reverse=True)[0]
-                logger.info(f"Found version: {best}")
-                print(f"✅ Found version: {best}")
+                # Fallback key
+                def version_key(res: VersionResult) -> List[int]:
+                    parts = re.split(r"[._-]", res.version)
+                    key: List[int] = []
+                    for p in parts:
+                        try:
+                            key.append(int(p))
+                        except ValueError:
+                            # Non-numeric parts sort after numeric
+                            key.append(-1)
+                    return key
+
+                if _PVersion:
+                     # Filter out invalid versions if using packaging.version
+                     valid_versions = [r for r in all_results if get_version_obj(r) is not None]
+                     if valid_versions:
+                         best_result = sorted(valid_versions, key=lambda r: _PVersion(r.version), reverse=True)[0]
+                
+                if not best_result:
+                    best_result = sorted(all_results, key=version_key, reverse=True)[0]
+
+                logger.info(f"Found version: {best_result.version}")
+                print(f"✅ Found version: {best_result.version}")
+                
                 # Store conditional metadata and parsed version
                 self._version_cache[homepage_url] = {
                     'etag': response.headers.get('ETag', ''),
                     'last_modified': response.headers.get('Last-Modified', ''),
-                    'version': best,
+                    'version': best_result.version,
+                    'match_groups': best_result.match_groups
                 }
-                return best
+                return best_result
 
             logger.warning("No version found with any pattern")
             print("❌ No version found with any pattern")
@@ -229,13 +259,14 @@ class VersionDetector:
             print(f"❌ Error during version detection: {e}")
             return None
 
-    def construct_download_url(self, url_template: str, version: str) -> str:
+    def construct_download_url(self, url_template: str, version: str, match_groups: Optional[Dict[str, str]] = None) -> str:
         """
         Construct download URL from template and version
 
         Args:
             url_template: URL template with $version placeholder
             version: Version string to substitute
+            match_groups: Optional dictionary of regex match groups for substitution
 
         Returns:
             Constructed download URL
@@ -245,6 +276,12 @@ class VersionDetector:
             raise ValueError("url_template and version cannot be empty")
             
         download_url = url_template.replace("$version", version)
+        
+        if match_groups:
+            for name, value in match_groups.items():
+                if value:
+                    download_url = download_url.replace(f"$match{name}", value)
+        
         logger.info(f"Constructed download URL: {download_url}")
         print(f"📦 Download URL: {download_url}")
         return download_url
@@ -586,12 +623,15 @@ def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
     detector = VersionDetector()
 
     # Get latest version
-    version = detector.fetch_latest_version(config.homepage, config.version_patterns)
-    if not version:
+    result = detector.fetch_latest_version(config.homepage, config.version_patterns)
+    if not result:
         return None
 
+    version = result.version
+    match_groups = result.match_groups
+
     # Construct download URL
-    download_url = detector.construct_download_url(config.download_url_template, version)
+    download_url = detector.construct_download_url(config.download_url_template, version, match_groups)
 
     # Calculate hash
     hash_value = detector.calculate_hash(download_url)

@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "widevinecdm"
 HOMEPAGE_URL = "https://scoopinstaller.github.io/UpdateTracker/googlechrome/chrome.min.xml"
-DOWNLOAD_URL_TEMPLATE = "https://dl.google.com/release2/chrome/$match64_$version/$version_chrome_installer_uncompressed.exe#/chrome.7z"
+DOWNLOAD_URL_TEMPLATE = "https://dl.google.com/release2/chrome/$matcharch64_$version/$version_chrome_installer_uncompressed.exe#/chrome.7z"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "widevinecdm.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['(?sm)<stable32><version>(?<version>[\\d.]+)</version>.+release2/chrome/(?<32>[\\w-]+)_.+<stable64>.+release2/chrome/(?<64>[\\w-]+)_.+</stable64>'],
+        version_patterns=['(?sm)<stable32><version>(?P<version>[\\d.]+)</version>.+release2/chrome/(?P<arch32>[\\w-]+)_.+<stable64>.+release2/chrome/(?P<arch64>[\\w-]+)_.+</stable64>'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="A browser plugin designed for the viewing of premium video content",
         license="{'identifier': 'Proprietary', 'url': 'https://chromium.googlesource.com/chromium/src/third_party/+/master/widevine/LICENSE'}"
