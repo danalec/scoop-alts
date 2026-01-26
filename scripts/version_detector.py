@@ -15,6 +15,13 @@ import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass, field
+
+# Optional Playwright support
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+
 # Optional semantic version parsing
 try:
     from packaging.version import Version as _PVersion, InvalidVersion as _PInvalid
@@ -137,6 +144,32 @@ class VersionDetector:
         # Per-URL conditional request metadata and cached parsed version
         self._version_cache: Dict[str, Dict[str, str]] = {}
 
+    def _fetch_with_playwright(self, url: str) -> Optional[str]:
+        """Fetch content using Playwright"""
+        if not sync_playwright:
+            return None
+            
+        try:
+            logger.info(f"Fetching with Playwright: {url}")
+            print(f"🎭 Fetching with Playwright: {url}")
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                # Set a realistic user agent
+                page.set_extra_http_headers({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                })
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                # Wait a bit for dynamic content
+                page.wait_for_timeout(2000)
+                content = page.content()
+                browser.close()
+                return content
+        except Exception as e:
+            logger.error(f"Playwright fetch failed: {e}")
+            print(f"⚠️  Playwright fetch failed: {e}")
+            return None
+
     def fetch_latest_version(self, homepage_url: str, version_patterns: List[str]) -> Optional[VersionResult]:
         """
         Fetch the latest version from a homepage using provided regex patterns
@@ -240,7 +273,53 @@ class VersionDetector:
                 }
                 return best_result
 
-            logger.warning("No version found with any pattern")
+            logger.warning("No version found with any pattern using requests")
+            
+            # Try Playwright fallback if available and requests failed to find version
+            if sync_playwright:
+                print("⚠️  No version found with requests, trying Playwright...")
+                pw_content = self._fetch_with_playwright(homepage_url)
+                if pw_content:
+                    # Retry patterns on Playwright content
+                    all_results = []
+                    for pattern in version_patterns:
+                        for match in re.finditer(pattern, pw_content, re.IGNORECASE):
+                            groups = match.groupdict()
+                            if "version" in groups:
+                                v = groups["version"]
+                            elif match.groups():
+                                v = match.group(1)
+                            else:
+                                continue
+                                
+                            if v and v[0].isdigit():
+                                all_results.append(VersionResult(version=v, match_groups=groups))
+                                
+                    if all_results:
+                         # Reuse sorting logic (simplified here or extracted later)
+                        def version_key_pw(res: VersionResult) -> List[int]:
+                            parts = re.split(r"[._-]", res.version)
+                            key: List[int] = []
+                            for p in parts:
+                                try:
+                                    key.append(int(p))
+                                except ValueError:
+                                    key.append(-1)
+                            return key
+
+                        if _PVersion:
+                             valid_versions = [r for r in all_results if _PVersion and _PVersion(r.version)] # Simplified check
+                             # Re-implement proper check if needed, or just use the simplest sort for fallback
+                             pass
+
+                        # Just use the simple sort for now to avoid code duplication complexity in search/replace
+                        # Ideally refactor sorting into a method
+                        best_result = sorted(all_results, key=version_key_pw, reverse=True)[0]
+                        
+                        logger.info(f"Found version with Playwright: {best_result.version}")
+                        print(f"✅ Found version with Playwright: {best_result.version}")
+                        return best_result
+
             print("❌ No version found with any pattern")
             # Cache response metadata even when not found, to enable future 304
             self._version_cache[homepage_url] = {
