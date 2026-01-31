@@ -12,6 +12,7 @@ colorama>=0.4.6  # For colored terminal output
 click>=8.1.0  # For better CLI interface (alternative to argparse)
 requests-cache>=1.2.0
 playwright>=1.41.0
+rich>=13.0.0  # For rich terminal output and progress bars
 
 # Development dependencies (optional)
 pytest>=7.4.0  # For testing

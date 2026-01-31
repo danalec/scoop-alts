@@ -13,6 +13,7 @@ import importlib.util
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -248,21 +249,36 @@ def discover_update_scripts() -> List[str]:
 def parse_script_output(output: str, script_name: str) -> Tuple[bool, bool]:
     """Parse script output to determine update status."""
     structured_updated = None
-    lines = [ln.strip() for ln in output.strip().splitlines() if ln.strip()]
     
-    # Prefer structured JSON result: search the last up to 10 non-empty lines
-    for ln in reversed(lines[-10:]):
-        if ln.startswith('{') and ln.endswith('}'):
-            try:
-                parsed = json.loads(ln)
-                if isinstance(parsed, dict) and 'updated' in parsed:
-                    structured_updated = bool(parsed.get('updated'))
-                    pkg = script_name.replace('update-', '').replace('.py', '')
-                    if (v := parsed.get('version')) and isinstance(v, str):
-                        MANIFEST_VERSION_CACHE[pkg] = v
-                    break
-            except json.JSONDecodeError:
-                continue
+    # Fast regex search for JSON result
+    # Look for {"updated": true/false...} pattern
+    if match := re.search(r'\{.*"updated"\s*:\s*(true|false|null).*\}', output, re.DOTALL):
+        try:
+            parsed = json.loads(match.group(0))
+            if isinstance(parsed, dict) and 'updated' in parsed:
+                structured_updated = bool(parsed.get('updated'))
+                pkg = script_name.replace('update-', '').replace('.py', '')
+                if (v := parsed.get('version')) and isinstance(v, str):
+                    MANIFEST_VERSION_CACHE[pkg] = v
+        except json.JSONDecodeError:
+            pass
+
+    if structured_updated is None:
+        lines = [ln.strip() for ln in output.strip().splitlines() if ln.strip()]
+        
+        # Fallback: search the last up to 10 non-empty lines for JSON-like structure
+        for ln in reversed(lines[-10:]):
+            if ln.startswith('{') and ln.endswith('}'):
+                try:
+                    parsed = json.loads(ln)
+                    if isinstance(parsed, dict) and 'updated' in parsed:
+                        structured_updated = bool(parsed.get('updated'))
+                        pkg = script_name.replace('update-', '').replace('.py', '')
+                        if (v := parsed.get('version')) and isinstance(v, str):
+                            MANIFEST_VERSION_CACHE[pkg] = v
+                        break
+                except json.JSONDecodeError:
+                    continue
 
     if structured_updated is not None:
         return structured_updated, not structured_updated
@@ -436,28 +452,65 @@ def run_parallel(scripts: List[Path], timeout: int, max_workers: int, *, github_
         with sems.get(prov, sems['other']):
             return run_update_script_with_retry(script_path, timeout, retries)
 
+    # Check for Rich
+    try:
+        from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
+        rich_available = True
+    except ImportError:
+        rich_available = False
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_script = {
             executor.submit(_task, script_path, timeout): script_path
             for script_path in scripts
         }
 
-        for future in concurrent.futures.as_completed(future_to_script):
-            script_path = future_to_script[future]
-            try:
-                result = future.result()
-                results.append(result)
-                if not result.success:
-                    prov = prov_map.get(script_path, 'other')
-                    with lock:
-                        prov_failures[prov] = prov_failures.get(prov, 0) + 1
-                        if circuit_threshold > 0 and prov_failures[prov] >= circuit_threshold:
-                            prov_paused_until[prov] = time.time() + circuit_sleep
-                            prov_failures[prov] = 0
-                            print(f"⏸️  Pausing {prov} tasks for {circuit_sleep:.1f}s due to failures")
-            except Exception as e:
-                print(f"💥 {script_path.name} - Unexpected error: {e}")
-                results.append(UpdateResult(script_path.name, False, str(e), 0, False))
+        if rich_available:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+            ) as progress:
+                task_id = progress.add_task(f"[cyan]Running {len(scripts)} scripts...", total=len(scripts))
+                
+                for future in concurrent.futures.as_completed(future_to_script):
+                    script_path = future_to_script[future]
+                    try:
+                        result = future.result()
+                        results.append(result)
+                        progress.advance(task_id)
+                        
+                        if not result.success:
+                            prov = prov_map.get(script_path, 'other')
+                            with lock:
+                                prov_failures[prov] = prov_failures.get(prov, 0) + 1
+                                if circuit_threshold > 0 and prov_failures[prov] >= circuit_threshold:
+                                    prov_paused_until[prov] = time.time() + circuit_sleep
+                                    prov_failures[prov] = 0
+                                    progress.console.print(f"[yellow]⏸️  Pausing {prov} tasks for {circuit_sleep:.1f}s due to failures[/yellow]")
+                    except Exception as e:
+                        progress.console.print(f"[red]💥 {script_path.name} - Unexpected error: {e}[/red]")
+                        results.append(UpdateResult(script_path.name, False, str(e), 0, False))
+                        progress.advance(task_id)
+        else:
+            for future in concurrent.futures.as_completed(future_to_script):
+                script_path = future_to_script[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                    if not result.success:
+                        prov = prov_map.get(script_path, 'other')
+                        with lock:
+                            prov_failures[prov] = prov_failures.get(prov, 0) + 1
+                            if circuit_threshold > 0 and prov_failures[prov] >= circuit_threshold:
+                                prov_paused_until[prov] = time.time() + circuit_sleep
+                                prov_failures[prov] = 0
+                                print(f"⏸️  Pausing {prov} tasks for {circuit_sleep:.1f}s due to failures")
+                except Exception as e:
+                    print(f"💥 {script_path.name} - Unexpected error: {e}")
+                    results.append(UpdateResult(script_path.name, False, str(e), 0, False))
 
     results.sort(key=lambda x: x.script_name)
     return results
@@ -656,6 +709,20 @@ def filter_resume_paths(script_paths: List[Path], resume_path: Path) -> List[Pat
         pass
     return script_paths
 
+def install_playwright_browsers() -> bool:
+    """Install Playwright browsers."""
+    print("🎭 Installing Playwright browsers...")
+    try:
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        print("✅ Playwright browsers installed")
+        return True
+    except subprocess.CalledProcessError:
+        print("❌ Failed to install Playwright browsers")
+        return False
+    except Exception as e:
+        print(f"❌ Error installing Playwright browsers: {e}")
+        return False
+
 def check_dependencies() -> bool:
     """Check if required dependencies are installed."""
     missing = []
@@ -678,6 +745,16 @@ def check_dependencies() -> bool:
         print("⚠️  Warning: Optional 'beautifulsoup4' not found. Some features may be limited.")
         print("pip install beautifulsoup4")
 
+    try:
+        import rich
+    except ImportError:
+        print("ℹ️  Tip: Install 'rich' for nicer progress bars: pip install rich")
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("ℹ️  Tip: Install 'playwright' for advanced scraping: pip install playwright")
+        
     return True
 
 def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Optional[Path] = None) -> None:
@@ -720,6 +797,7 @@ Examples:
     exe_grp.add_argument("--parallel", "-p", action="store_true", default=True, help="Run scripts in parallel (default)")
     exe_grp.add_argument("--sequential", action="store_true", help="Force sequential execution")
     exe_grp.add_argument("--fast", "-f", action="store_true", help="Enable fast mode with optimized worker count")
+    exe_grp.add_argument("--install-browsers", action="store_true", help="Install Playwright browsers before running")
 
     # Performance tuning
     perf_grp = parser.add_argument_group('Performance')
@@ -785,6 +863,10 @@ Examples:
 
     if not check_dependencies():
         sys.exit(1)
+
+    if args.install_browsers:
+        if not install_playwright_browsers():
+            print("⚠️  Proceeding without browser installation...")
 
     available_scripts = discover_update_scripts()
     scripts_to_run = available_scripts
