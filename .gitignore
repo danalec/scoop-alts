@@ -12,6 +12,5 @@ checkver-*.html
 # Ignore Python bytecode cache for scripts
 scripts/__pycache__/
 
-# Ignore local VS Code settings and GitHub workflows directory
+# Ignore local VS Code settings
 .vscode/
-.github/

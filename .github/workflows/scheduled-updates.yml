@@ -1,0 +1,54 @@
+name: Scheduled Updates
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-updates:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-automation.txt
+
+      - name: Run orchestrator
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTOMATION_DISABLE_WINMETA: 1
+          AUTOMATION_MD_SUMMARY: docs/update-health.md
+        run: |
+          python scripts/update-all.py --fast --retry 2 --structured-output --http-cache --http-cache-ttl 1800 --skip-git --json-summary .temp/update-summary.json --md-summary docs/update-health.md || true
+
+      - name: Generate dashboard
+        run: |
+          python scripts/generate-dashboard.py .temp/update-summary.json docs/update-health.md || true
+
+      - name: Create Pull Request for updates
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bucket updates from scheduled run"
+          title: "Automated bucket updates"
+          body: |
+            Automated update run summary attached.
+            
+            See `.temp/update-summary.json` for details.
+          branch: "auto/update-bucket"
+          add-paths: |
+            bucket/**
+            .temp/update-summary.json
+            docs/update-health.md

@@ -19,10 +19,37 @@ if os.environ.get('AUTOMATION_LIB_SILENT') == '1':
         return None
     print = _noop_print
 
-REPO_ROOT = Path(__file__).parent.parent
+# Default fallback for REPO_ROOT (used before git detection)
+_DEFAULT_REPO_ROOT = Path(__file__).parent.parent
 
-def run_git_command(args, cwd: Path = REPO_ROOT):
+
+def _detect_repo_root() -> Path:
+    """Detect repository root using git, with fallback to default."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=str(_DEFAULT_REPO_ROOT),
+            encoding="utf-8",
+            errors="replace"
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            p = Path(result.stdout.strip())
+            if p.exists():
+                return p
+    except Exception:
+        pass
+    return _DEFAULT_REPO_ROOT
+
+
+REPO_ROOT = _detect_repo_root()
+
+
+def run_git_command(args, cwd: Path = None):
     """Run a git command and return (returncode, stdout, stderr)."""
+    if cwd is None:
+        cwd = REPO_ROOT
     try:
         result = subprocess.run(
             args,
@@ -36,19 +63,6 @@ def run_git_command(args, cwd: Path = REPO_ROOT):
     except Exception as e:
         logger.error(f"Git command failed: {e}")
         return 1, "", str(e)
-
-def _detect_repo_root() -> Path:
-    try:
-        rc, out, err = run_git_command(["git", "rev-parse", "--show-toplevel"], cwd=Path(__file__).parent.parent)
-        if rc == 0 and out:
-            p = Path(out)
-            if p.exists():
-                return p
-    except Exception:
-        pass
-    return Path(__file__).parent.parent
-
-REPO_ROOT = _detect_repo_root()
 
 def get_manifest_version_from_file(manifest_path: Path) -> str:
     """Read version field from a manifest JSON file."""
