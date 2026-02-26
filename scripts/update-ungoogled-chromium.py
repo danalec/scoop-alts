@@ -7,6 +7,7 @@ Automatically checks for updates and updates the Scoop manifest using shared ver
 import json
 import sys
 import os
+import re
 from pathlib import Path
 from version_detector import SoftwareVersionConfig, get_version_info
 
@@ -34,6 +35,58 @@ def update_manifest():
     
     # Get version information using shared detector
     version_info = get_version_info(config)
+    
+    # Fallback for ungoogled-chromium where asset suffix may differ from tag version
+    if not version_info:
+        if not structured_only:
+            print(f"⚠️  Shared version detection failed, trying GitHub API fallback...")
+        try:
+            from version_detector import VersionDetector
+            import requests
+            
+            # Fetch latest release from GitHub API
+            response = requests.get(HOMEPAGE_URL, timeout=15)
+            response.raise_for_status()
+            release = response.json()
+            version = release['tag_name']
+            
+            # Find matching asset (ungoogled-chromium_*_windows_x64.zip)
+            asset_pattern = f"ungoogled-chromium_.*_windows_x64.zip"
+            matching_assets = [a for a in release.get('assets', []) 
+                               if re.match(asset_pattern, a['name'], re.IGNORECASE)]
+            
+            if not matching_assets:
+                # Fallback to first zip asset
+                zip_assets = [a for a in release.get('assets', []) 
+                              if a['name'].endswith('.zip')]
+                if not zip_assets:
+                    raise ValueError("No zip assets found in release")
+                asset = zip_assets[0]
+            else:
+                asset = matching_assets[0]
+            
+            download_url = asset['browser_download_url']
+            
+            # Calculate hash using VersionDetector
+            detector = VersionDetector()
+            hash_value = detector.calculate_hash(download_url)
+            if not hash_value:
+                raise ValueError(f"URL not accessible: {download_url}")
+            
+            version_info = {
+                'version': version,
+                'download_url': download_url,
+                'hash': hash_value
+            }
+            if not structured_only:
+                print(f"✅ Fallback succeeded: version {version}")
+                
+        except Exception as e:
+            if not structured_only:
+                print(f"❌ Fallback also failed: {e}")
+            print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
+            return False
+    
     if not version_info:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
