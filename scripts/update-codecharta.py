@@ -12,7 +12,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "codecharta"
-HOMEPAGE_URL = "https://api.github.com/repos/MaibornWolff/codecharta/releases/latest"
+HOMEPAGE_URL = "https://api.github.com/repos/MaibornWolff/codecharta/tags"
 DOWNLOAD_URL_TEMPLATE = "https://github.com/MaibornWolff/codecharta/releases/download/vis-$version/codecharta-visualization-win32-x64.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "codecharta.json"
 
