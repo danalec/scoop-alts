@@ -24,6 +24,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set, Any
 
+from git_helpers import (
+    run_git_command,
+    stage_bucket_changes,
+    get_staged_bucket_changes,
+    commit_with_message,
+    push_changes,
+    list_untracked_manifests,
+)
+
 # Set UTF-8 encoding for Windows console
 if sys.platform == "win32":
     try:
@@ -91,78 +100,6 @@ class UpdateResult:
     duration: float
     updated: bool = False
 
-def run_git_command(args: List[str], cwd: Path = REPO_ROOT) -> Tuple[int, str, str]:
-    """Run a git command and return (returncode, stdout, stderr)."""
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            cwd=str(cwd),
-            encoding="utf-8",
-            errors="replace"
-        )
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except Exception as e:
-        logging.error(f"Git command failed: {e}")
-        return 1, "", str(e)
-
-def stage_bucket_changes() -> None:
-    """Stage changes inside the bucket directory."""
-    rc, out, err = run_git_command(["git", "add", "bucket"])
-    if rc != 0:
-        print(f"⚠️  git add failed: {err or out}")
-
-def get_staged_bucket_changes() -> Tuple[List[str], List[str]]:
-    """Return (added_apps, updated_apps) from staged changes under bucket/."""
-    rc, out, err = run_git_command(["git", "diff", "--cached", "--name-status"])
-    if rc != 0:
-        print(f"⚠️  git diff --cached failed: {err or out}")
-        return [], []
-
-    # Parse lines and filter for bucket manifests
-    added, updated = [], []
-    prefix = f"{BUCKET_DIR.name}/"
-    
-    for line in out.splitlines():
-        if (parts := line.strip().split("\t", 1)) and len(parts) == 2:
-            status, path = parts
-            if path.startswith(prefix) and path.endswith(MANIFEST_EXTENSION):
-                stem = Path(path).stem
-                if status.startswith("A"):
-                    added.append(stem)
-                elif status.startswith(("M", "R")):
-                    updated.append(stem)
-
-    return sorted(added), sorted(updated)
-
-def commit_with_message(message: str) -> bool:
-    """Create a commit with the given message. Returns True if commit succeeded."""
-    rc, out, err = run_git_command(["git", "commit", "-m", message])
-    if rc != 0:
-        reason = err or out
-        if "nothing to commit" in reason.lower():
-            print("ℹ️  No changes staged to commit.")
-        else:
-            print(f"⚠️  git commit failed: {reason}")
-        return False
-    print(out or "✅ Commit created")
-    return True
-
-def push_changes() -> None:
-    """Push committed changes to the remote (env overrides supported)."""
-    remote = os.environ.get("SCOOP_GIT_REMOTE", "origin")
-    branch = os.environ.get("SCOOP_GIT_BRANCH")
-    if os.environ.get("SCOOP_GIT_DRY_RUN") == "1":
-        print(f"ℹ️  Dry-run: would push to {remote}{' ' + branch if branch else ''}")
-        return
-    args = ["git", "push", remote] + ([branch] if branch else [])
-    rc, out, err = run_git_command(args)
-    if rc != 0:
-        print(f"⚠️  git push failed: {err or out}")
-    else:
-        print(out or "⬆️  Pushed changes to remote")
-
 def get_manifest_version(app_name: str) -> str:
     """Return version string from bucket/<app_name>.json if available, using cache."""
     if app_name in MANIFEST_VERSION_CACHE:
@@ -188,21 +125,6 @@ def get_manifest_version(app_name: str) -> str:
         logging.debug(f"Failed to read manifest {manifest_path}: {e}")
         MANIFEST_VERSION_CACHE[app_name] = ""
         return ""
-
-def list_untracked_manifests() -> List[Tuple[str, Path]]:
-    """Return a list of (app_name, path) for untracked manifests under bucket/."""
-    rc, out, err = run_git_command(["git", "ls-files", "--others", "--exclude-standard", str(BUCKET_DIR)])
-    if rc != 0:
-        print(f"⚠️  git ls-files failed: {err or out}")
-        return []
-    
-    return [
-        (Path(rel).stem, REPO_ROOT / rel)
-        for rel in out.splitlines()
-        if rel.strip() 
-        and rel.endswith(MANIFEST_EXTENSION) 
-        and rel.startswith(f"{BUCKET_DIR.name}/")
-    ]
 
 def stage_and_commit_per_package(updated_results: List[UpdateResult]) -> None:
     """Stage and commit changes per updated package manifest under bucket/."""
