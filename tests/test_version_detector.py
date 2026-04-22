@@ -1,4 +1,4 @@
-from version_detector import VersionDetector
+from version_detector import SoftwareVersionConfig, VersionDetector, get_version_info
 
 
 def test_guess_version_from_url_basic():
@@ -6,6 +6,7 @@ def test_guess_version_from_url_basic():
     assert vd.guess_version_from_url("https://example.com/app-1.2.3.exe") == "1.2.3"
     assert vd.guess_version_from_url("https://example.com/v2.0.0/app.exe") == "2.0.0"
     assert vd.guess_version_from_url("file-2024.10.zip") == "2024.10"
+    assert vd.guess_version_from_url("tool_7-1-2.zip") == "7.1.2"
 
 
 def test_construct_download_url_template():
@@ -59,3 +60,49 @@ def test_get_msi_version_partial_content_bytes():
     vd = VersionDetector()
     vd.get_range_bytes = lambda url, start=0, end=65535, timeout=15: b"ProductVersion 9.9.9"  # type: ignore
     assert vd.guess_version_from_partial_content("http://example.com/app.msi") == "9.9.9"
+
+
+def test_get_version_from_download_artifact_uses_zip_handler():
+    vd = VersionDetector()
+    vd.get_zip_version = lambda url: "7.1.2"  # type: ignore
+    assert vd.get_version_from_download_artifact("https://example.com/tool.zip") == "7.1.2"
+
+
+def test_get_version_info_falls_back_to_direct_download(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="usb-safely-remove",
+        homepage="https://example.com/download",
+        version_patterns=[r"Version:\s*([\d.]+)"],
+        download_url_template="https://example.com/tool.zip",
+        description="Test app",
+        license="Shareware",
+    )
+
+    monkeypatch.setattr(VersionDetector, "fetch_latest_version", lambda self, homepage, patterns: None)
+    monkeypatch.setattr(
+        VersionDetector,
+        "get_version_from_download_artifact",
+        lambda self, download_url, installer_type=None: "7.1.2",
+    )
+    monkeypatch.setattr(VersionDetector, "calculate_hash", lambda self, download_url: "abc123")
+
+    assert get_version_info(config) == {
+        "version": "7.1.2",
+        "download_url": "https://example.com/tool.zip",
+        "hash": "abc123",
+    }
+
+
+def test_get_version_info_skips_direct_download_fallback_for_templates(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="templated-download",
+        homepage="https://example.com/download",
+        version_patterns=[r"Version:\s*([\d.]+)"],
+        download_url_template="https://example.com/tool-$version.zip",
+        description="Test app",
+        license="Shareware",
+    )
+
+    monkeypatch.setattr(VersionDetector, "fetch_latest_version", lambda self, homepage, patterns: None)
+
+    assert get_version_info(config) is None

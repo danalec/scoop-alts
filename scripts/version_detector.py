@@ -12,6 +12,7 @@ import hashlib
 import tempfile
 import subprocess
 import logging
+import zipfile
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -600,17 +601,70 @@ class VersionDetector:
 
         return None
 
+    def get_zip_version(self, archive_url: str) -> Optional[str]:
+        """Extract version from a ZIP archive by inspecting names before full extraction."""
+        try:
+            if v_guess := self.guess_version_from_url(archive_url):
+                print(f"✅ Version guessed from URL: {v_guess}")
+                return v_guess
+
+            head_resp = self.head(archive_url)
+            if v_head := self.guess_version_from_headers(head_resp) if head_resp else None:
+                print(f"✅ Version guessed from headers: {v_head}")
+                return v_head
+
+            if v_partial := self.guess_version_from_partial_content(archive_url):
+                print(f"✅ Version inferred from partial content: {v_partial}")
+                return v_partial
+
+            print(f"🔍 Downloading ZIP to analyze: {archive_url}")
+            response = self.session.get(archive_url, stream=True, timeout=60)
+            response.raise_for_status()
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    temp_file.write(chunk)
+                temp_path = Path(temp_file.name)
+
+            try:
+                with zipfile.ZipFile(temp_path) as archive:
+                    for name in archive.namelist():
+                        if version := self.infer_version(name):
+                            print(f"✅ Found ZIP member version: {version}")
+                            return version
+            finally:
+                temp_path.unlink(missing_ok=True)
+        except Exception as e:
+            print(f"❌ Error extracting ZIP version: {e}")
+
+        return None
+
     # Lightweight version inference helpers
+    def normalize_version(self, value: Optional[str]) -> Optional[str]:
+        """Normalize version separators to dots and strip wrapper characters."""
+        if not value:
+            return None
+        candidate = value.strip().strip("._-")
+        if not candidate:
+            return None
+        return re.sub(r"[-_]+", ".", candidate)
+
+    def infer_version(self, text: Optional[str]) -> Optional[str]:
+        """Infer a version from text, accepting dot, dash, or underscore separators."""
+        if not text:
+            return None
+        if match := re.search(r'v?(\d+(?:[._-]\d+){1,3})', text):
+            return self.normalize_version(match.group(1))
+        return None
+
     def guess_version_from_url(self, url: str) -> Optional[str]:
         """Try to infer version from URL/filename patterns."""
         try:
             fname = url.split('/')[-1]
             candidates = [fname, url]
             for text in candidates:
-                # Common patterns: v1.2.3, 1.2.3, 1.2.3.4, 2024.10
-                m = re.search(r'v?(\d+\.\d+(?:\.\d+){0,2})', text)
-                if m:
-                    return m.group(1)
+                if version := self.infer_version(text):
+                    return version
         except Exception:
             pass
         return None
@@ -642,16 +696,26 @@ class VersionDetector:
                 idx = blob.find(key)
                 if idx != -1:
                     window = blob[idx: idx + 200]
-                    m = re.search(r'(\d+\.\d+(?:\.\d+){0,2})', window)
-                    if m:
-                        return m.group(1)
+                    if version := self.infer_version(window):
+                        return version
             # Fallback: any standalone version-looking pattern
-            m2 = re.search(r'\b(\d+\.\d+(?:\.\d+){0,2})\b', blob)
-            if m2:
-                return m2.group(1)
+            if version := self.infer_version(blob):
+                return version
         except Exception:
             return None
         return None
+
+    def get_version_from_download_artifact(self, download_url: str, installer_type: Optional[str] = None) -> Optional[str]:
+        """Infer a version directly from a stable download URL when scraping fails."""
+        if installer_type == 'msi' or download_url.lower().endswith('.msi'):
+            return self.get_msi_version(download_url)
+        if download_url.lower().endswith('.zip'):
+            return self.get_zip_version(download_url)
+        return self.get_version_from_executable(download_url)
+
+    def supports_direct_download_fallback(self, url_template: str) -> bool:
+        """Return True when a download URL can be used without version substitution."""
+        return bool(url_template and not re.search(r'\$[A-Za-z_]\w*', url_template))
 
 @dataclass
 class SoftwareConfig:
@@ -703,14 +767,19 @@ def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
 
     # Get latest version
     result = detector.fetch_latest_version(config.homepage, config.version_patterns)
-    if not result:
+    match_groups: Dict[str, str] = {}
+    if result:
+        version = result.version
+        match_groups = result.match_groups
+        download_url = detector.construct_download_url(config.download_url_template, version, match_groups)
+    elif detector.supports_direct_download_fallback(config.download_url_template):
+        download_url = config.download_url_template
+        version = detector.get_version_from_download_artifact(download_url, config.installer_type)
+        if not version:
+            return None
+        print(f"ℹ️  Falling back to direct download version detection: {version}")
+    else:
         return None
-
-    version = result.version
-    match_groups = result.match_groups
-
-    # Construct download URL
-    download_url = detector.construct_download_url(config.download_url_template, version, match_groups)
 
     # Calculate hash
     hash_value = detector.calculate_hash(download_url)
