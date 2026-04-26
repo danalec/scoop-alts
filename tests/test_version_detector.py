@@ -1,3 +1,6 @@
+from io import BytesIO
+import zipfile
+
 from version_detector import SoftwareVersionConfig, VersionDetector, get_version_info
 
 
@@ -66,6 +69,49 @@ def test_get_version_from_download_artifact_uses_zip_handler():
     vd = VersionDetector()
     vd.get_zip_version = lambda url: "7.1.2"  # type: ignore
     assert vd.get_version_from_download_artifact("https://example.com/tool.zip") == "7.1.2"
+
+
+def test_get_zip_version_falls_back_to_embedded_executable_metadata(monkeypatch):
+    vd = VersionDetector()
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("setup.exe", b"fake-exe")
+    zip_bytes = buffer.getvalue()
+
+    class FakeResp:
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size=8192):
+            yield zip_bytes
+
+    monkeypatch.setattr(vd, "guess_version_from_url", lambda url: None)
+    monkeypatch.setattr(vd, "head", lambda url: None)
+    monkeypatch.setattr(vd, "guess_version_from_partial_content", lambda url: None)
+    monkeypatch.setattr(vd.session, "get", lambda url, stream=True, timeout=60: FakeResp())
+    monkeypatch.setattr(vd, "get_local_executable_version", lambda path: "7.1.2")
+
+    assert vd.get_zip_version("https://example.com/tool.zip") == "7.1.2"
+
+
+def test_get_zip_version_handles_executable_payload_at_zip_url(monkeypatch):
+    vd = VersionDetector()
+    exe_bytes = b"MZ" + b"\x00" * 32
+
+    class FakeResp:
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size=8192):
+            yield exe_bytes
+
+    monkeypatch.setattr(vd, "guess_version_from_url", lambda url: None)
+    monkeypatch.setattr(vd, "head", lambda url: None)
+    monkeypatch.setattr(vd, "guess_version_from_partial_content", lambda url: None)
+    monkeypatch.setattr(vd.session, "get", lambda url, stream=True, timeout=60: FakeResp())
+    monkeypatch.setattr(vd, "get_local_executable_version", lambda path: "4.7")
+
+    assert vd.get_zip_version("https://example.com/tool.zip") == "4.7"
 
 
 def test_get_version_info_falls_back_to_direct_download(monkeypatch):

@@ -12,6 +12,7 @@ import hashlib
 import tempfile
 import subprocess
 import logging
+import shutil
 import zipfile
 from typing import Optional, List, Dict, Any
 from pathlib import Path
@@ -544,6 +545,32 @@ class VersionDetector:
 
         return None
 
+    def get_local_executable_version(self, exe_path: Path) -> Optional[str]:
+        """Extract a version from a local executable via Windows file metadata."""
+        if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1' or sys.platform != 'win32':
+            return None
+        try:
+            if version := self._extract_version_powershell(exe_path):
+                print(f"✅ Found version in executable metadata: {version}")
+                return version
+            if version := self._extract_version_alternative(exe_path):
+                print(f"✅ Found version using alternative method: {version}")
+                return version
+        except Exception as e:
+            print(f"❌ Error extracting local executable version: {e}")
+        return None
+
+    def guess_version_from_local_file(self, file_path: Path, *, first_bytes: int = 262144) -> Optional[str]:
+        """Infer a version from a local file by scanning a small decoded byte window."""
+        try:
+            blob = file_path.read_bytes()[:first_bytes].decode('latin-1', errors='ignore')
+            for key in ("FileVersion", "ProductVersion", "Product Version", "Version"):
+                if (idx := blob.find(key)) != -1 and (version := self.infer_version(blob[idx: idx + 200])):
+                    return version
+            return self.infer_version(blob)
+        except Exception:
+            return None
+
     def get_msi_version(self, msi_url: str) -> Optional[str]:
         """Extract version from MSI installer"""
         try:
@@ -602,7 +629,7 @@ class VersionDetector:
         return None
 
     def get_zip_version(self, archive_url: str) -> Optional[str]:
-        """Extract version from a ZIP archive by inspecting names before full extraction."""
+        """Extract version from a ZIP archive using names and embedded executables."""
         try:
             if v_guess := self.guess_version_from_url(archive_url):
                 print(f"✅ Version guessed from URL: {v_guess}")
@@ -627,11 +654,52 @@ class VersionDetector:
                 temp_path = Path(temp_file.name)
 
             try:
+                if not zipfile.is_zipfile(temp_path):
+                    print("ℹ️  Downloaded file is not a ZIP archive; trying direct file inspection")
+                    with temp_path.open('rb') as handle:
+                        signature = handle.read(2)
+
+                    if signature == b'MZ':
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.exe') as temp_exe:
+                            with temp_path.open('rb') as source:
+                                shutil.copyfileobj(source, temp_exe)
+                            exe_path = Path(temp_exe.name)
+                        try:
+                            if version := self.get_local_executable_version(exe_path):
+                                print(f"✅ Found version from executable payload: {version}")
+                                return version
+                        finally:
+                            exe_path.unlink(missing_ok=True)
+
+                    if version := self.guess_version_from_local_file(temp_path):
+                        print(f"✅ Found version from non-ZIP payload content: {version}")
+                        return version
+                    return None
+
                 with zipfile.ZipFile(temp_path) as archive:
+                    executable_members = []
                     for name in archive.namelist():
                         if version := self.infer_version(name):
                             print(f"✅ Found ZIP member version: {version}")
                             return version
+                        suffix = Path(name).suffix.lower()
+                        if suffix in {'.exe', '.dll'}:
+                            executable_members.append(name)
+
+                    for member in executable_members[:5]:
+                        suffix = Path(member).suffix.lower() or '.bin'
+                        try:
+                            with archive.open(member) as source, tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_member:
+                                temp_member.write(source.read())
+                                member_path = Path(temp_member.name)
+                            try:
+                                if version := self.get_local_executable_version(member_path):
+                                    print(f"✅ Found ZIP executable version from {member}: {version}")
+                                    return version
+                            finally:
+                                member_path.unlink(missing_ok=True)
+                        except Exception as member_error:
+                            print(f"⚠️  Failed to inspect ZIP member {member}: {member_error}")
             finally:
                 temp_path.unlink(missing_ok=True)
         except Exception as e:

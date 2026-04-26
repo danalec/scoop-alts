@@ -13,7 +13,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "usb-safely-remove-portable"
 HOMEPAGE_URL = "https://safelyremove.com/download.htm"
-DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/usbsafelyremovesetup.zip"
+DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/usbsafelyremovesetup.zip#/usbsafelyremovesetup.exe"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "usb-safely-remove-portable.json"
 
 def update_manifest():
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['Version ([\\d.]+)'],
+        version_patterns=['Version:\\s*([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="USB Safely Remove (Portable) - Safe removal of USB devices",
         license="Proprietary"
