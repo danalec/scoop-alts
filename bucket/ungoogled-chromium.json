@@ -1,10 +1,10 @@
 {
-  "version": "148.0.7778.167-1.1",
+  "version": "148.0.7778.215-1.1",
   "description": "Ungoogled Chromium - Google Chromium without Google's integration",
   "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
   "license": "BSD-3-Clause",
-  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/148.0.7778.167-1.1/ungoogled-chromium_148.0.7778.167-1.1_windows_x64.zip",
-  "hash": "sha256:f84b1c162b348c57e10b124f3396203a0e69862e7ccb873576d90f8d0b2d0d97",
+  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/148.0.7778.215-1.1/ungoogled-chromium_148.0.7778.215-1.1_windows_x64.zip",
+  "hash": "sha256:2962deb9f54ddab48391d5ccf5e7ea9d99380e0abfd73740abaccfb78612e2c8",
   "bin": "chrome.exe",
   "shortcuts": [
     [
