@@ -5,44 +5,65 @@ Automatically checks for updates and updates the Scoop manifest using shared ver
 """
 
 import json
-import sys
 import os
+import re
+import sys
 from pathlib import Path
-from version_detector import SoftwareVersionConfig, get_version_info
+from version_detector import VersionDetector, get_session
 
 # Configuration
 SOFTWARE_NAME = "usb-safely-remove-portable"
 HOMEPAGE_URL = "https://safelyremove.com/download.htm"
-DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/usbsafelyremovesetup.zip#/usbsafelyremovesetup.exe"
+DOWNLOAD_URL = "https://safelyremove.com/startdownload.htm?imm&v=&t=zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "usb-safely-remove-portable.json"
 
+
+def get_redirected_download_info():
+    """Resolve the current versioned ZIP asset from the redirecting download endpoint."""
+    session = get_session()
+    response = None
+
+    try:
+        response = session.get(DOWNLOAD_URL, timeout=30, allow_redirects=False)
+        response.raise_for_status()
+    except Exception:
+        if response is None or response.status_code not in (301, 302, 303, 307, 308):
+            return None
+
+    download_url = response.headers.get("Location", "").strip()
+    if not download_url:
+        return None
+
+    match = re.search(r"usbsafelyremovesetup_(\d+(?:-\d+)+)\.zip", download_url, re.IGNORECASE)
+    if not match:
+        return None
+
+    return {
+        "version": match.group(1).replace("-", "."),
+        "download_url": download_url,
+    }
+
 def update_manifest():
-    """Update the Scoop manifest using shared version detection"""
+    """Update the Scoop manifest using the live redirect target."""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
-    
-    # Configure software version detection
-    config = SoftwareVersionConfig(
-        name=SOFTWARE_NAME,
-        homepage=HOMEPAGE_URL,
-        version_patterns=['Version:\\s*([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
-        download_url_template=DOWNLOAD_URL_TEMPLATE,
-        description="USB Safely Remove (Portable) - Safe removal of USB devices",
-        license="Proprietary"
-    )
-    
-    # Get version information using shared detector
-    version_info = get_version_info(config)
-    if not version_info:
+
+    resolved = get_redirected_download_info()
+    if not resolved:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
         return False
-    
-    version = version_info['version']
-    download_url = version_info['download_url']
-    hash_value = version_info['hash']
+
+    version = resolved['version']
+    download_url = resolved['download_url']
+    hash_value = VersionDetector().calculate_hash(download_url)
+    if not hash_value:
+        if not structured_only:
+            print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "hash_unavailable"}))
+        return False
     
     # Load existing manifest
     try:
