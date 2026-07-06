@@ -59,6 +59,7 @@ def update_manifest():
     version = resolved['version']
     download_url = resolved['download_url']
     hash_value = VersionDetector().calculate_hash(download_url)
+    exe_name = f"usbsafelyremovesetup_{version.replace('.', '-')}.exe"
     if not hash_value:
         if not structured_only:
             print(f"❌ Failed to calculate hash for {SOFTWARE_NAME}")
@@ -103,6 +104,14 @@ def update_manifest():
     else:
         manifest['url'] = download_url
         manifest['hash'] = f"sha256:{hash_value}"
+
+    manifest['bin'] = exe_name
+    shortcuts = manifest.get('shortcuts')
+    if isinstance(shortcuts, list) and shortcuts:
+        first_shortcut = shortcuts[0]
+        if isinstance(first_shortcut, list) and first_shortcut:
+            first_shortcut[0] = exe_name
+            manifest['shortcuts'][0] = first_shortcut
     
     # Save updated manifest
     try:
