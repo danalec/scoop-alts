@@ -5,44 +5,62 @@ Automatically checks for updates and updates the Scoop manifest using shared ver
 """
 
 import json
-import sys
 import os
+import sys
 from pathlib import Path
-from version_detector import SoftwareVersionConfig, get_version_info
+from version_detector import get_session
 
 # Configuration
 SOFTWARE_NAME = "thorium-avx2"
-HOMEPAGE_URL = "https://github.com/Alex313031/Thorium-Win/releases"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/Alex313031/Thorium-Win/releases/download/M$version/Thorium_AVX2_$version.zip"
+RELEASES_API_URL = "https://api.github.com/repos/gz83/thorium/releases"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "thorium-avx2.json"
 
+
+def get_release_info():
+    """Return the newest release that actually ships a Windows AVX2 ZIP asset."""
+    session = get_session()
+    response = session.get(RELEASES_API_URL, timeout=30)
+    response.raise_for_status()
+
+    releases = response.json()
+    asset_names = [
+        "Thorium_AVX2_{version}.zip",
+        "thorium-browser_{version}_AVX2.zip",
+    ]
+
+    for release in releases:
+        tag_name = release.get("tag_name", "")
+        version = tag_name[1:] if tag_name.startswith("M") else tag_name
+        assets = release.get("assets", [])
+
+        for asset_name in asset_names:
+            expected = asset_name.format(version=version)
+            for asset in assets:
+                if asset.get("name") == expected:
+                    return {
+                        "version": version,
+                        "download_url": asset.get("browser_download_url", ""),
+                        "hash": (asset.get("digest") or "").removeprefix("sha256:"),
+                    }
+
+    return None
+
 def update_manifest():
-    """Update the Scoop manifest using shared version detection"""
+    """Update the Scoop manifest from the latest asset-bearing gz83/thorium release."""
     structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
-    
-    # Configure software version detection
-    config = SoftwareVersionConfig(
-        name=SOFTWARE_NAME,
-        homepage=HOMEPAGE_URL,
-        version_patterns=['releases/tag/M([\\d.]+)'],
-        download_url_template=DOWNLOAD_URL_TEMPLATE,
-        description="Thorium AVX2 - Chromium fork named after radioactive element No. 90. Optimized for AVX2.",
-        license="BSD-3-Clause"
-    )
-    
-    # Get version information using shared detector
-    version_info = get_version_info(config)
-    if not version_info:
+
+    release_info = get_release_info()
+    if not release_info:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
         return False
-    
-    version = version_info['version']
-    download_url = version_info['download_url']
-    hash_value = version_info['hash']
+
+    version = release_info['version']
+    download_url = release_info['download_url']
+    hash_value = release_info['hash']
     
     # Load existing manifest
     try:

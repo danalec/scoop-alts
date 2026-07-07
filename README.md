@@ -1,25 +1,32 @@
-# 🚀 Dan's Alternative Scoop Bucket
+# Dan's Alternative Scoop Bucket
 
-> **Enhanced applications with automation-powered quality assurance**
+> Enhanced applications with automation-powered quality assurance
 
-Alternative Scoop bucket featuring **carefully curated applications** with enhanced functionality, customized configurations, and automated quality-of-life improvements. Every package is maintained through a sophisticated **Python automation system** that ensures reliability and freshness.
+Alternative Scoop bucket featuring carefully curated applications with enhanced functionality, customized configurations, and automated quality-of-life improvements. Every package is maintained through a Python automation system that helps keep manifests reliable and up to date.
 
-## 📦 Featured Applications
+## Featured Applications
 
 | Package | Description | Special Features |
 |---------|-------------|------------------|
 | **ungoogled-chromium** | Privacy-focused browser | ✅ Widevine DRM support for Netflix/Spotify · 💾 Persisted profile across updates · ⚙️ Opt-in default-browser post_install
+| **thorium-avx2** | Chromium-based browser optimized for AVX2 CPUs | ⚡ Tracks published `gz83/thorium` AVX2 Windows builds · 📦 Portable ZIP layout
+| **taskexplorer** | Advanced Windows task manager and process inspector | 🔎 Deep process, thread, handle, and memory inspection · 🤫 Silent installer support
+| **usb-safely-remove-portable** | Portable USB device removal utility | 🔄 Redirect-aware update logic · 📦 Direct versioned ZIP asset handling
 
-## 🚀 Quick Start
+This bucket currently ships 20 package manifests in `bucket/`.
+
+## Quick Start
 
 ### Install the Bucket
 ```powershell
 scoop bucket add danalec_scoop-alts https://github.com/danalec/scoop-alts
 ```
 
-### Install Ungoogled Chromium with Widevine
+### Install Popular Packages
 ```powershell
 scoop install danalec_scoop-alts/ungoogled-chromium
+scoop install danalec_scoop-alts/thorium-avx2
+scoop install danalec_scoop-alts/taskexplorer
 ```
 
 ### Ungoogled Chromium
@@ -33,7 +40,7 @@ For the full guide (persist, default‑browser setup, migration, clean uninstall
 
 [docs/ungoogled-chromium.md](docs/ungoogled-chromium.md)
 
-## 📚 Documentation
+## Documentation
 For a centralized documentation index, see:
 [docs/index.md](docs/index.md)
 
