@@ -1,5 +1,5 @@
 {
-  "version": "150.0.7871.182",
+  "version": "151.0.7922.138",
   "description": "A browser plugin designed for the viewing of premium video content",
   "homepage": "https://www.widevine.com/",
   "license": {
@@ -8,8 +8,8 @@
   },
   "architecture": {
     "64bit": {
-      "url": "https://dl.google.com/release2/chrome/acz7bi4upto224cpgfqo2nklbxfa_150.0.7871.182/150.0.7871.182_chrome_installer_uncompressed.exe#/chrome.7z",
-      "hash": "sha256:150c67da8c0a5e408c2109d14e889170aa1bc83d70d2de3fd1096669c4b1b18f"
+      "url": "https://dl.google.com/release2/chrome/acsbjnlokc2yt537wrgkmaitb55a_151.0.7922.138/151.0.7922.138_chrome_installer_uncompressed.exe#/chrome.7z",
+      "hash": "sha256:c4295c444e111b732963a08f26e4c5411389bff632891dd9784f4579127ea47b"
     },
     "32bit": {
       "url": "https://dl.google.com/release2/chrome/ac4odgd56567adajfb43z6weimbq_143.0.7499.170/143.0.7499.170_chrome_installer_uncompressed.exe#/chrome.7z",
