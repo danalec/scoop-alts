@@ -1,118 +1,149 @@
 #!/usr/bin/env python3
-"""
-Manifest Manager Module
-Encapsulates logic for updating Scoop manifests.
-"""
+"""Shared helpers for updating Scoop manifests from version metadata."""
+
+from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, Optional
+
 from version_detector import SoftwareVersionConfig, get_version_info
 
+
 class ManifestUpdater:
-    """
-    Handles the update process for a Scoop manifest.
-    """
-    def __init__(self, 
-                 config: SoftwareVersionConfig, 
-                 bucket_dir: Path, 
-                 manifest_filename: Optional[str] = None):
+    """Update a Scoop manifest using ``version_detector`` results."""
+
+    def __init__(
+        self,
+        config: SoftwareVersionConfig,
+        bucket_dir: Path,
+        manifest_filename: Optional[str] = None,
+    ) -> None:
         self.config = config
         self.bucket_dir = bucket_dir
         self.manifest_filename = manifest_filename or f"{config.name}.json"
-        self.manifest_path = self.bucket_dir / self.manifest_filename
-        self.structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
+        self.manifest_path = bucket_dir / self.manifest_filename
+        self.structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
 
-    def log(self, message: str):
+    def log(self, message: str) -> None:
+        """Print human-readable status messages when structured output is disabled."""
         if not self.structured_only:
             print(message)
 
+    def emit_result(
+        self,
+        *,
+        updated: bool,
+        version: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        """Emit the single-line JSON object consumed by the orchestrator."""
+        payload: Dict[str, Any] = {"updated": updated, "name": self.config.name}
+        if version:
+            payload["version"] = version
+        if error:
+            payload["error"] = error
+        print(json.dumps(payload, ensure_ascii=False))
+
+    def load_manifest(self) -> Optional[Dict[str, Any]]:
+        """Load the manifest file or report a structured error."""
+        if not self.manifest_path.exists():
+            self.log(f"❌ Manifest file not found: {self.manifest_path}")
+            self.emit_result(updated=False, error="manifest_not_found")
+            return None
+
+        try:
+            with self.manifest_path.open("r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except json.JSONDecodeError as error:
+            self.log(f"❌ Invalid JSON in manifest: {error}")
+            self.emit_result(updated=False, error="invalid_manifest_json")
+            return None
+        except Exception as error:
+            self.log(f"❌ Failed to load manifest: {error}")
+            self.emit_result(updated=False, error="manifest_read_failed")
+            return None
+
+    def save_manifest(self, manifest: Dict[str, Any], version: str, previous_version: str) -> bool:
+        """Write the updated manifest back to disk."""
+        try:
+            with self.manifest_path.open("w", encoding="utf-8") as handle:
+                json.dump(manifest, handle, indent=2, ensure_ascii=False)
+                handle.write("\n")
+        except Exception as error:
+            self.log(f"❌ Failed to save manifest: {error}")
+            self.emit_result(updated=False, version=version, error="save_failed")
+            return False
+
+        self.log(f"✅ Updated {self.config.name}: {previous_version} → {version}")
+        self.emit_result(updated=True, version=version)
+        return True
+
+    def select_architecture_key(self, manifest: Dict[str, Any]) -> Optional[str]:
+        """Choose the most appropriate architecture block to update."""
+        architecture = manifest.get("architecture")
+        if not isinstance(architecture, dict) or not architecture:
+            return None
+
+        for candidate in ("64bit", "arm64", "32bit"):
+            if candidate in architecture:
+                return candidate
+        return next(iter(architecture), None)
+
+    def apply_download_metadata(
+        self,
+        manifest: Dict[str, Any],
+        *,
+        version: str,
+        download_url: str,
+        hash_value: str,
+    ) -> None:
+        """Update version, url, and hash fields in-place."""
+        manifest["version"] = version
+        architecture_key = self.select_architecture_key(manifest)
+
+        if architecture_key:
+            architecture_entry = manifest["architecture"].get(architecture_key)
+            if isinstance(architecture_entry, dict):
+                architecture_entry["url"] = download_url
+                architecture_entry["hash"] = f"sha256:{hash_value}"
+                return
+
+        manifest["url"] = download_url
+        manifest["hash"] = f"sha256:{hash_value}"
+
     def update(self) -> bool:
-        """
-        Execute the update process.
-        Returns True if successful (updated or already up-to-date), False on error.
-        """
+        """Fetch version metadata and update the manifest when required."""
         self.log(f"🔄 Updating {self.config.name}...")
 
-        # Get version information
         version_info = get_version_info(self.config)
         if not version_info:
-            if not self.structured_only:
-                print(f"❌ Failed to get version info for {self.config.name}")
-            print(json.dumps({"updated": False, "name": self.config.name, "error": "version_info_unavailable"}))
+            self.log(f"❌ Failed to get version info for {self.config.name}")
+            self.emit_result(updated=False, error="version_info_unavailable")
             return False
 
-        version = version_info['version']
-        download_url = version_info['download_url']
-        hash_value = version_info['hash']
-
-        # Load existing manifest
-        if not self.manifest_path.exists():
-            print(f"❌ Manifest file not found: {self.manifest_path}")
+        manifest = self.load_manifest()
+        if manifest is None:
             return False
 
-        try:
-            with open(self.manifest_path, 'r', encoding='utf-8') as f:
-                manifest = json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"❌ Invalid JSON in manifest: {e}")
-            return False
-
-        # Check if update is needed
-        current_version = manifest.get('version', '')
+        version = version_info["version"]
+        current_version = str(manifest.get("version", ""))
         if current_version == version:
             self.log(f"✅ {self.config.name} is already up to date (v{version})")
-            print(json.dumps({"updated": False, "name": self.config.name, "version": version}))
+            self.emit_result(updated=False, version=version)
             return True
 
-        # Update manifest
-        if not self._update_manifest_content(manifest, version, download_url, hash_value):
-            return False
-
-        # Save updated manifest
         try:
-            with open(self.manifest_path, 'w', encoding='utf-8') as f:
-                json.dump(manifest, f, indent=2, ensure_ascii=False) # Scoop uses 4 spaces usually, but existing scripts used 2? Let's check.
-                # Checking existing files... 
-                # scripts/update-ripgrep-all.py uses indent=2.
-            
-            self.log(f"✅ Updated {self.config.name}: {current_version} → {version}")
-            print(json.dumps({"updated": True, "name": self.config.name, "version": version}))
-            return True
-
-        except Exception as e:
-            self.log(f"❌ Failed to save manifest: {e}")
-            print(json.dumps({"updated": False, "name": self.config.name, "version": version, "error": "save_failed"}))
+            self.apply_download_metadata(
+                manifest,
+                version=version,
+                download_url=version_info["download_url"],
+                hash_value=version_info["hash"],
+            )
+        except Exception as error:
+            self.log(f"❌ Error updating manifest content: {error}")
+            self.emit_result(updated=False, version=version, error="manifest_update_failed")
             return False
 
-    def _update_manifest_content(self, manifest: Dict[str, Any], version: str, url: str, hash_val: str) -> bool:
-        """Updates the manifest dictionary in-place."""
-        try:
-            manifest['version'] = version
-            
-            # Prefer architecture-specific update when manifest uses architecture blocks
-            arch = manifest.get('architecture')
-            if isinstance(arch, dict) and arch:
-                # Choose preferred architecture key
-                # Logic copied from existing scripts
-                arch_key = '64bit' if '64bit' in arch else ('arm64' if 'arm64' in arch else ('32bit' if '32bit' in arch else next(iter(arch.keys()))))
-                
-                if isinstance(arch.get(arch_key), dict):
-                    arch_entry = arch[arch_key]
-                    arch_entry['url'] = url
-                    arch_entry['hash'] = f"sha256:{hash_val}"
-                    manifest['architecture'][arch_key] = arch_entry
-                else:
-                    # Fallback to top-level if architecture entry is not a dict (unlikely but safe)
-                    manifest['url'] = url
-                    manifest['hash'] = f"sha256:{hash_val}"
-            else:
-                manifest['url'] = url
-                manifest['hash'] = f"sha256:{hash_val}"
-            
-            return True
-        except Exception as e:
-            self.log(f"❌ Error updating manifest content: {e}")
-            return False
+        return self.save_manifest(manifest, version, current_version)

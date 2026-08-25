@@ -188,6 +188,16 @@ class TestPushChanges:
             # Should handle gracefully (error message about no remote)
             assert "failed" in captured.out.lower() or "error" in captured.out.lower() or True  # May vary
 
+    def test_push_skips_when_dry_run_enabled(self, git_helpers, monkeypatch, capsys):
+        """Test push_changes honors the dry-run environment override."""
+        monkeypatch.setenv("SCOOP_GIT_DRY_RUN", "1")
+
+        result = git_helpers.push_changes()
+
+        captured = capsys.readouterr()
+        assert result is True
+        assert "dry run" in captured.out.lower()
+
 
 class TestRepoRootConstant:
     """Tests for REPO_ROOT constant."""

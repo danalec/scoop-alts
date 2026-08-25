@@ -16,7 +16,7 @@ def test_write_json_summary(tmp_path):
     bucket = tmp_path / "bucket"
     bucket.mkdir()
     with open(bucket / "demo.json", "w", encoding="utf-8") as f:
-        f.write("{""version"": ""1.2.3""}")
+        json.dump({"version": "1.2.3"}, f)
 
     mod.BUCKET_DIR = bucket
 
