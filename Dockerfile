@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=${TZ}
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends busybox tzdata ca-certificates curl \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends busybox tzdata ca-certificates curl git openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
