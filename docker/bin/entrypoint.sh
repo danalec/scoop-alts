@@ -23,7 +23,7 @@ fi
 
 CRONFILE=/var/spool/cron/crontabs/root
 {
-  echo "${SCHEDULE_UPDATE_ALL} /app/bin/run_update_all.sh"
+  echo "${SCHEDULE_UPDATE_ALL} /usr/local/scoop-bin/run_update_all.sh"
   echo "${HEARTBEAT_SCHEDULE} date +%s > /data/heartbeat"
 } > "$CRONFILE"
 

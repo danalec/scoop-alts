@@ -12,7 +12,7 @@ if python -u /app/scripts/automate-scoop.py ${AUTOMATE_FLAGS} >"$OUT" 2>&1; then
 else
   date -Iseconds > /data/last_failure_automate_scoop
   if [ -n "${NOTIFY_WEBHOOK_URL:-}" ]; then
-    /app/bin/notify.sh "automate-scoop failed" "$OUT"
+    /usr/local/scoop-bin/notify.sh "automate-scoop failed" "$OUT"
   fi
   exit 1
 fi
