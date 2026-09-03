@@ -1,10 +1,10 @@
 {
-  "version": "1.143.0",
+  "version": "2.0.0",
   "description": "CodeCharta Visualization: interactive 3D maps of code metrics to analyze hotspots and architecture.",
   "homepage": "https://github.com/MaibornWolff/codecharta",
   "license": "BSD-3-Clause",
-  "url": "https://github.com/MaibornWolff/codecharta/releases/download/vis-1.143.0/codecharta-visualization-win32-x64.zip",
-  "hash": "sha256:324c82c1aec62a5f6aeb2a99d453741e4f7e329a8ab2368653d029b5fc2d5f5e",
+  "url": "https://github.com/MaibornWolff/codecharta/releases/download/vis-2.0.0/codecharta-visualization-win32-x64.zip",
+  "hash": "sha256:c8a087ce7176e5d29fe4821120c0aa4d82f05e6220e6d2da40b491d06686c9ea",
   "extract_dir": "codecharta-visualization-win32-x64",
   "shortcuts": [
     [
