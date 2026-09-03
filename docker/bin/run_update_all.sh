@@ -12,7 +12,7 @@ if python -u /app/scripts/update-all.py ${ORCHESTRATOR_FLAGS} >"$OUT" 2>&1; then
 else
   date -Iseconds > /data/last_failure_update_all
   if [ -n "${NOTIFY_WEBHOOK_URL:-}" ]; then
-    /app/bin/notify.sh "update-all failed" "$OUT"
+    /usr/local/scoop-bin/notify.sh "update-all failed" "$OUT"
   fi
   exit 1
 fi
