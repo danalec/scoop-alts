@@ -12,7 +12,7 @@ from version_detector import SoftwareVersionConfig, get_version_info
 
 # Configuration
 SOFTWARE_NAME = "corecycler"
-HOMEPAGE_URL = "https://github.com/sp00n/corecycler"
+HOMEPAGE_URL = "https://api.github.com/repos/sp00n/corecycler/tags"
 DOWNLOAD_URL_TEMPLATE = "https://github.com/sp00n/CoreCycler/releases/download/v$version/CoreCycler-v$version.7z"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "corecycler.json"
 
@@ -26,7 +26,7 @@ def update_manifest():
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['tag/v([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-zA-Z0-9]+)?)'],
+        version_patterns=[r'v([\d.]+)'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="CoreCycler - CPU stress testing tool for stability testing",
         license="MIT"

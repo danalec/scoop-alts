@@ -1241,12 +1241,13 @@ def main() -> None:
     write_md_summary(results, total_duration, args, mode_label)
     send_webhook_if_configured(args)
 
+    handle_git_integration(args, results)
+
     failed_count = len([result for result in results if not result.success])
     if failed_count > 0 and not args.no_error_exit:
         print(f"\n⚠️  {failed_count} script(s) failed")
         sys.exit(1)
 
-    handle_git_integration(args, results)
     print("\n🎉 All scripts completed successfully!")
     sys.exit(0)
 
