@@ -1,20 +1,20 @@
 {
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Antigravity CLI (agy) - An agentic coding assistant in your terminal by Google DeepMind",
   "homepage": "https://antigravity.google",
   "license": "Freeware",
   "architecture": {
     "64bit": {
-      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.5-4931130160447488/windows-x64/cli_windows_x64.exe#/agy.exe",
-      "hash": "sha256:fbb352d7a1c76d4681b2e0aac02618152b873ceaccf1dd5c6ef1afb5ca6a24d6"
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.6-5912685477494784/windows-x64/cli_windows_x64.exe#/agy.exe",
+      "hash": "sha256:f61a443428f15d545a69e57767f5b45fb35f2e96fcc2654cc6b692dae1cbd4e5"
     },
     "arm64": {
-      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.5-4931130160447488/windows-arm/cli_windows_arm64.exe#/agy.exe",
-      "hash": "sha256:7c0cf291cde2e633f380445f3efb07841546be1d35fab92e16b9f06df856be2e"
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.6-5912685477494784/windows-arm/cli_windows_arm64.exe#/agy.exe",
+      "hash": "sha256:786329511d49cf6f564d59544a4c1be2ee7d976744694cb59a45817b904f9c71"
     }
   },
-  "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.5-4931130160447488/windows-x64/cli_windows_x64.exe#/agy.exe",
-  "hash": "sha256:fbb352d7a1c76d4681b2e0aac02618152b873ceaccf1dd5c6ef1afb5ca6a24d6",
+  "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.6-5912685477494784/windows-x64/cli_windows_x64.exe#/agy.exe",
+  "hash": "sha256:f61a443428f15d545a69e57767f5b45fb35f2e96fcc2654cc6b692dae1cbd4e5",
   "bin": [
     "agy.exe",
     [
