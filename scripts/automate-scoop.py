@@ -768,6 +768,7 @@ def main():
             "suggest-patterns",
             "test-version",
             "audit-providers",
+            "doctor",
         ],
         help="Command to execute",
     )
@@ -792,6 +793,11 @@ def main():
         "--write-map",
         action="store_true",
         help="Write inferred provider map to scripts/providers.json (audit-providers)",
+    )
+    parser.add_argument(
+        "--warnings-as-errors",
+        action="store_true",
+        help="Treat warnings as failures (doctor command)",
     )
 
     args = parser.parse_args()
@@ -961,6 +967,16 @@ def main():
                 print(f"✅ Wrote providers map: {providers_path}")
             except Exception as e:
                 print(f"⚠️  Failed to write providers map: {e}")
+
+    elif args.command == "doctor":
+        from manifest_doctor import doctor_bucket
+
+        exit_code = doctor_bucket(
+            automation.bucket_dir,
+            names=args.software,
+            warnings_as_errors=args.warnings_as_errors,
+        )
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

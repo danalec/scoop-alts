@@ -7,6 +7,8 @@ Provides reusable functions for version detection and URL construction.
 import re
 import os
 import sys
+import json
+import time
 import requests
 import hashlib
 import tempfile
@@ -14,7 +16,7 @@ import subprocess
 import logging
 import shutil
 import zipfile
-from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urlencode, urlsplit, urlunsplit
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -54,6 +56,69 @@ except Exception:  # pragma: no cover
     requests_cache = None
 
 DEFAULT_TIMEOUT = 15  # seconds
+
+# Release-metadata cache (Feature: avoid re-fetching GitHub API responses every run)
+RELEASE_CACHE_TTL_DEFAULT = 1800  # seconds
+
+
+def _release_cache_path() -> Path:
+    """On-disk location of the release-metadata cache (repo-local, gitignored)."""
+    return Path(__file__).resolve().parent.parent / ".temp" / "release-cache.json"
+
+
+def _running_under_test() -> bool:
+    """True when imported under a test runner (pytest).
+
+    The on-disk release cache defaults to disabled in that case so mocked
+    sessions are always consulted; production runs (pytest not imported) get
+    the real default TTL.
+    """
+    return "pytest" in sys.modules
+
+
+def _release_cache_ttl() -> float:
+    """Freshness window for cached release metadata, in seconds (env-tunable).
+
+    ``RELEASE_CACHE_TTL`` overrides the default of 1800 seconds; a TTL of 0
+    disables caching. Under test runners the cache defaults to disabled unless
+    the env var is set explicitly.
+    """
+    raw = os.environ.get("RELEASE_CACHE_TTL")
+    if raw is None:
+        if _running_under_test():
+            return 0.0
+        return float(RELEASE_CACHE_TTL_DEFAULT)
+    try:
+        return float(raw)
+    except ValueError:
+        return float(RELEASE_CACHE_TTL_DEFAULT)
+
+
+def _read_release_cache(path: Path) -> Dict[str, Dict[str, Any]]:
+    """Load the release cache; a missing or corrupt file yields an empty cache."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    entries: Dict[str, Dict[str, Any]] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, dict):
+            entries[key] = value
+    return entries
+
+
+def _write_release_cache_entry(path: Path, key: str, body: Any) -> None:
+    """Persist one cache entry; write failures are silent by design."""
+    try:
+        entries = _read_release_cache(path)
+        entries[key] = {"fetched_at": time.time(), "body": body}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -406,6 +471,42 @@ class VersionDetector:
             except Exception:
                 return False
 
+    def _cached_api_get(self, url: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
+        """Fetch a GitHub API/asset URL through the small on-disk release cache.
+
+        The cache lives at ``<repo>/.temp/release-cache.json``, is keyed by
+        request URL (query params included), and stores
+        ``{"fetched_at": epoch, "body": ...}`` entries reused while younger
+        than ``RELEASE_CACHE_TTL`` seconds (default 1800; 0 disables caching,
+        which test runners default to). Returns the decoded JSON body, the raw
+        text for non-JSON responses, or None on any network/parse failure
+        (callers fall back to their default behavior).
+        """
+        key = url
+        if params:
+            key = f"{url}?{urlencode(sorted(params.items()))}"
+        cache_path = _release_cache_path()
+        ttl = _release_cache_ttl()
+        if ttl > 0:
+            try:
+                entry = _read_release_cache(cache_path).get(key)
+                if entry is not None and time.time() - float(entry.get("fetched_at", 0)) < ttl:
+                    return entry.get("body")
+            except Exception:
+                pass
+        try:
+            response = self.session.get(url, params=params, timeout=DEFAULT_TIMEOUT)
+            response.raise_for_status()
+            try:
+                body: Any = response.json()
+            except Exception:
+                body = response.text
+        except Exception:
+            return None
+        if ttl > 0:
+            _write_release_cache_entry(cache_path, key, body)
+        return body
+
     def _try_github_release_digest(self, url: str) -> Optional[str]:
         """Return the sha256 hex digest GitHub publishes for a release asset.
 
@@ -426,12 +527,12 @@ class VersionDetector:
             f"https://api.github.com/repos/{match.group('owner')}/{match.group('repo')}"
             f"/releases/tags/{match.group('tag')}"
         )
+        release = self._cached_api_get(api_url)
+        if not isinstance(release, dict):
+            return None
         try:
-            response = self.session.get(api_url, timeout=DEFAULT_TIMEOUT)
-            response.raise_for_status()
-            release = response.json()
             for asset in release.get("assets", []):
-                if asset.get("name") == asset_name:
+                if isinstance(asset, dict) and asset.get("name") == asset_name:
                     digest = str(asset.get("digest") or "")
                     if digest.startswith("sha256:"):
                         hex_digest = digest.split(":", 1)[1].strip().lower()
@@ -909,6 +1010,9 @@ class SoftwareConfig:
     force_https: bool = False
     # Gate detection on the GitHub release API actually shipping the template asset
     require_release_asset: bool = False
+    # Optional release-asset suffix (e.g. ".sha256") published upstream so the
+    # computed download hash can be verified against the vendor's checksum
+    checksum_asset_suffix: str = ""
 
     def __post_init__(self):
         """Handle backward compatibility and defaults"""
@@ -962,12 +1066,7 @@ def _select_release_with_matching_asset(
     if not match:
         return None
     api_url = f"https://api.github.com/repos/{match.group(1)}/{match.group(2)}/releases"
-    try:
-        response = detector.session.get(api_url, params={"per_page": 20}, timeout=DEFAULT_TIMEOUT)
-        response.raise_for_status()
-        releases = response.json()
-    except Exception:
-        return None
+    releases = detector._cached_api_get(api_url, params={"per_page": 20})
     if not isinstance(releases, list):
         return None
     for release in releases:
@@ -987,6 +1086,66 @@ def _select_release_with_matching_asset(
             print(f"🎯 Selected release with matching asset: {tag}")
             return VersionResult(version=version, match_groups={})
     return None
+
+
+_SHA256_HEX_RE = re.compile(r"\b[0-9a-fA-F]{64}\b")
+
+
+def _verify_upstream_checksum(
+    detector: VersionDetector,
+    download_url: str,
+    computed_hash: str,
+    checksum_asset_suffix: str,
+) -> bool:
+    """Compare ``computed_hash`` against an upstream-published checksum asset.
+
+    Looks up the GitHub release backing ``download_url`` and, when it ships an
+    asset named ``<basename><checksum_asset_suffix>``, fetches that (small,
+    cacheable) file and compares the first 64-hex sha256 it contains against
+    the computed hash. Returns False only on a parsed, genuine mismatch; a
+    non-GitHub URL, a missing checksum asset, or unparseable content skips
+    verification silently and returns True.
+    """
+    match = re.match(
+        r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/releases/download/"
+        r"(?P<tag>[^/]+)/(?P<asset>[^/?#]+)$",
+        download_url.split("#", 1)[0].split("?", 1)[0],
+    )
+    if not match:
+        return True
+    checksum_name = unquote(match.group("asset")) + checksum_asset_suffix
+    api_url = (
+        f"https://api.github.com/repos/{match.group('owner')}/{match.group('repo')}"
+        f"/releases/tags/{match.group('tag')}"
+    )
+    release = detector._cached_api_get(api_url)
+    if not isinstance(release, dict):
+        return True
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        return True
+    checksum_url: Optional[str] = None
+    for asset in assets:
+        if isinstance(asset, dict) and asset.get("name") == checksum_name:
+            candidate = asset.get("browser_download_url")
+            if isinstance(candidate, str) and candidate:
+                checksum_url = candidate
+                break
+    if not checksum_url:
+        return True
+    content = detector._cached_api_get(checksum_url)
+    if not isinstance(content, str):
+        return True
+    parsed = _SHA256_HEX_RE.search(content)
+    if not parsed:
+        return True
+    expected = parsed.group(0).lower()
+    actual = re.sub(r"^sha256:", "", computed_hash.strip(), flags=re.IGNORECASE).lower()
+    if expected == actual:
+        print("✅ Upstream checksum verified")
+        return True
+    print("❌ Upstream checksum mismatch")
+    return False
 
 
 def get_version_info(
@@ -1045,6 +1204,13 @@ def get_version_info(
     if not hash_value:
         return None
 
+    # Optionally verify the computed hash against an upstream checksum asset
+    if config.checksum_asset_suffix:
+        if not _verify_upstream_checksum(
+            detector, download_url, hash_value, config.checksum_asset_suffix
+        ):
+            return None
+
     return {"version": version, "download_url": download_url, "hash": hash_value}
 
 
@@ -1077,8 +1243,6 @@ def create_software_config_from_manifest(manifest_path: Path) -> Optional[Softwa
         SoftwareVersionConfig object if successful
     """
     try:
-        import json
-
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
 

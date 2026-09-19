@@ -46,3 +46,7 @@ jobs:
       - name: Validate manifests
         run: |
           python scripts/automate-scoop.py validate
+
+      - name: Deep manifest lint (doctor)
+        run: |
+          python scripts/automate-scoop.py doctor

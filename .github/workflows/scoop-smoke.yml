@@ -1,0 +1,57 @@
+name: Scoop Smoke Test
+
+# Observability only: per-package install results are collected but never
+# fail the job. The job fails only if Scoop itself cannot be installed.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Install all manifests with Scoop
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Scoop
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          irm get.scoop.sh -outfile 'install.ps1'
+          .\install.ps1 -RunAsAdmin
+          scoop --version
+
+      - name: Add local bucket
+        shell: powershell
+        run: |
+          scoop bucket add local "${{ github.workspace }}"
+          scoop bucket list
+
+      - name: Install every manifest
+        shell: powershell
+        run: |
+          $manifests = Get-ChildItem -Path "${{ github.workspace }}\bucket" -Filter '*.json' | Sort-Object Name
+          $results = foreach ($manifest in $manifests) {
+              $name = $manifest.BaseName
+              & scoop install --no-update-scoop $name *>&1 | Out-Null
+              [PSCustomObject]@{
+                  Package = $name
+                  Status  = if ($LASTEXITCODE -eq 0) { 'PASS' } else { 'FAIL' }
+              }
+          }
+          $results | Format-Table -AutoSize
+          $summary = $results | ForEach-Object { "$($_.Status)`t$($_.Package)" }
+          $summary | Out-File -FilePath smoke-results.txt -Encoding utf8
+          $failed = ($results | Where-Object { $_.Status -eq 'FAIL' }).Count
+          $passed = ($results | Where-Object { $_.Status -eq 'PASS' }).Count
+          Write-Output "Scoop smoke summary: $passed passed, $failed failed"
+          # Never fail the job on package install failures (observability, not a gate).
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoop-smoke-results
+          path: smoke-results.txt

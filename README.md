@@ -6,9 +6,11 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-brightgreen.svg)](https://www.python.org/)
 
+Scoop smoke test: daily install observability ([workflow](.github/workflows/scoop-smoke.yml)).
+
 > Curated Windows software manifests with enhanced packaging, automated quality assurance, and intelligent lifecycle management for [Scoop](https://scoop.sh).
 
-`scoop-alts` is an alternative bucket providing software with enhanced configurations, customized persistence rules, Widevine DRM integrations, and bleeding-edge builds. Every manifest is tracked and validated continuously through a Python-based automation pipeline and a dedicated containerized scheduler.
+`scoop-alts` is an alternative bucket providing software with enhanced configurations, customized persistence rules, Widevine DRM integrations, and bleeding-edge builds. Every manifest is tracked and validated continuously through a Python-based automation pipeline and a dedicated containerized scheduler. A generated package index is published to <https://danalec.github.io/scoop-alts/> via GitHub Pages.
 
 ---
 
@@ -116,7 +118,8 @@ scoop update danalec_scoop-alts/agy
 
 ## 🤖 Automation Architecture
 
-The repository maintains zero-toil manifest freshness through a modular Python automation engine:
+The repository maintains zero-toil manifest freshness through a modular Python automation engine.
+The Docker container cron (hourly, direct push to `master`) is the single automatic writer to `master`. The GitHub `scheduled-updates` workflow opens PRs daily and may need a rebase when the container cron touched the same manifests in the meantime; the `excavator` workflow is manual-only.
 
 ```mermaid
 flowchart TD
@@ -125,7 +128,9 @@ flowchart TD
     C --> D["scripts/manifest_manager.py\n(Manifest Updating & Schema Validation)"]
     D --> E["bucket/*.json\n(Updated Scoop Manifests)"]
     E --> F["scripts/git_helpers.py\n(Auto-Commit & Remote Sync)"]
-    G["Docker Container\n(scoop-alts-scheduler)"] -->|Runs on cron schedule| C
+    G["Docker Container\n(scoop-alts-scheduler, hourly cron)\nPRIMARY WRITER → master"] -->|Runs on cron schedule| C
+    H["GitHub: scheduled-updates\n(daily, PR-based)"] -.->|PRs may need rebase| E
+    I["GitHub: excavator\n(manual fallback only)"] -.->|workflow_dispatch| C
 ```
 
 ### Running the Orchestrator Manually

@@ -31,7 +31,7 @@ jobs:
         run: ruff check scripts/ tests/
 
       - name: Run Flake8
-        run: flake8 scripts/ tests/ --max-line-length=100 --ignore=E501,W503
+        run: flake8 scripts tests
 
   test:
     name: Test

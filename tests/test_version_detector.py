@@ -571,3 +571,185 @@ def test_require_release_asset_falls_back_silently_on_api_failure(monkeypatch):
         ),
         "hash": "abc123",
     }
+
+
+class _ChecksumSession:
+    """Serves the GitHub release API plus a configurable checksum asset."""
+
+    def __init__(self, checksum_text, include_checksum_asset=True):
+        self.checksum_text = checksum_text
+        self.include_checksum_asset = include_checksum_asset
+        self.api_requests = []
+        self.asset_requests = []
+
+    def get(self, url, **kwargs):
+        if "api.github.com" in url:
+            self.api_requests.append(url)
+            assets = [{"name": "app-1.2.3.zip", "digest": "sha256:" + "a" * 64}]
+            if self.include_checksum_asset:
+                assets.append(
+                    {
+                        "name": "app-1.2.3.zip.sha256",
+                        "browser_download_url": (
+                            "https://github.com/owner/repo/releases/download/"
+                            "v1.2.3/app-1.2.3.zip.sha256"
+                        ),
+                    }
+                )
+            return _JsonReleaseResponse({"assets": assets})
+        self.asset_requests.append(url)
+        return _ChecksumTextResponse(self.checksum_text)
+
+
+class _JsonReleaseResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._data
+
+
+class _ChecksumTextResponse:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        raise ValueError("not json")
+
+
+GITHUB_DOWNLOAD_URL = "https://github.com/owner/repo/releases/download/v1.2.3/app-1.2.3.zip"
+
+
+def _checksum_config(**overrides):
+    params = {
+        "name": "checksum-app",
+        "homepage": "https://github.com/owner/repo/releases",
+        "version_patterns": [r"releases/tag/v([\d.]+)"],
+        "download_url_template": (
+            "https://github.com/owner/repo/releases/download/v$version/app-$version.zip"
+        ),
+        "description": "Test app",
+        "license": "MIT",
+        "checksum_asset_suffix": ".sha256",
+    }
+    params.update(overrides)
+    return SoftwareVersionConfig(**params)
+
+
+def _stub_detection(monkeypatch, computed_hash):
+    monkeypatch.setattr(
+        VersionDetector,
+        "fetch_latest_version",
+        lambda self, homepage, patterns: VersionResult(version="1.2.3", match_groups={}),
+    )
+    monkeypatch.setattr(VersionDetector, "calculate_hash", lambda self, download_url: computed_hash)
+
+
+def test_get_version_info_verifies_matching_checksum_asset(monkeypatch, capsys):
+    digest = "a" * 64
+    config = _checksum_config()
+    _stub_detection(monkeypatch, digest)
+    session = _ChecksumSession(f"{digest}  app-1.2.3.zip\n")
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    assert get_version_info(config, current_version="0.0.1") == {
+        "version": "1.2.3",
+        "download_url": GITHUB_DOWNLOAD_URL,
+        "hash": digest,
+    }
+    assert "✅ Upstream checksum verified" in capsys.readouterr().out
+
+
+def test_get_version_info_checksum_match_is_case_insensitive(monkeypatch, capsys):
+    computed = "a" * 64
+    config = _checksum_config()
+    _stub_detection(monkeypatch, computed)
+    session = _ChecksumSession(f"{computed.upper()}  app-1.2.3.zip\n")
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    info = get_version_info(config, current_version="0.0.1")
+    assert info is not None
+    assert info["hash"] == computed
+    assert "✅ Upstream checksum verified" in capsys.readouterr().out
+
+
+def test_get_version_info_fails_on_checksum_mismatch(monkeypatch, capsys):
+    computed = "a" * 64
+    upstream = "b" * 64
+    config = _checksum_config()
+    _stub_detection(monkeypatch, computed)
+    session = _ChecksumSession(f"{upstream}  app-1.2.3.zip\n")
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    assert get_version_info(config, current_version="0.0.1") is None
+    assert "❌ Upstream checksum mismatch" in capsys.readouterr().out
+
+
+def test_get_version_info_skips_verification_when_checksum_asset_missing(monkeypatch, capsys):
+    computed = "a" * 64
+    config = _checksum_config()
+    _stub_detection(monkeypatch, computed)
+    session = _ChecksumSession("unused", include_checksum_asset=False)
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    info = get_version_info(config, current_version="0.0.1")
+    assert info == {
+        "version": "1.2.3",
+        "download_url": GITHUB_DOWNLOAD_URL,
+        "hash": computed,
+    }
+    assert session.asset_requests == []
+    out = capsys.readouterr().out
+    assert "Upstream checksum" not in out
+
+
+def test_get_version_info_skips_verification_for_unparseable_checksum(monkeypatch, capsys):
+    computed = "a" * 64
+    config = _checksum_config()
+    _stub_detection(monkeypatch, computed)
+    session = _ChecksumSession("no checksum in this file\n")
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    info = get_version_info(config, current_version="0.0.1")
+    assert info is not None
+    assert info["hash"] == computed
+    assert "Upstream checksum" not in capsys.readouterr().out
+
+
+def test_get_version_info_skips_verification_for_non_github_url(monkeypatch, capsys):
+    computed = "a" * 64
+    config = _checksum_config(
+        homepage="https://example.com/download",
+        download_url_template="https://example.com/app-$version.zip",
+    )
+    _stub_detection(monkeypatch, computed)
+    session = _ChecksumSession("unused")
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    info = get_version_info(config, current_version="0.0.1")
+    assert info == {
+        "version": "1.2.3",
+        "download_url": "https://example.com/app-1.2.3.zip",
+        "hash": computed,
+    }
+    assert session.api_requests == []
+    assert "Upstream checksum" not in capsys.readouterr().out
+
+
+def test_get_version_info_without_checksum_suffix_makes_no_api_calls(monkeypatch):
+    computed = "a" * 64
+    config = _checksum_config(checksum_asset_suffix="")
+    _stub_detection(monkeypatch, computed)
+    session = _ChecksumSession("unused")
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+
+    info = get_version_info(config, current_version="0.0.1")
+    assert info is not None
+    assert info["hash"] == computed
+    assert session.api_requests == []

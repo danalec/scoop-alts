@@ -43,6 +43,7 @@ cover/
 
 # Temporary / Scratch files
 .temp/
+docs/_site/
 *.tmp
 *~
 ._*

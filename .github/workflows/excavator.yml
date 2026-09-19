@@ -1,8 +1,6 @@
 on:
+  # Manual fallback only - the Docker scheduler is the primary writer; an automatic excavator would race it
   workflow_dispatch:
-  schedule:
-    # run every 4 hours
-    - cron: '20 */4 * * *'
 name: Excavator
 jobs:
   excavate:

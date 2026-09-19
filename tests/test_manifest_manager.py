@@ -1,5 +1,6 @@
 import unittest
 import json
+import os
 import tempfile
 import sys
 from pathlib import Path
@@ -334,6 +335,167 @@ class TestManifestUpdater(unittest.TestCase):
         self.assertTrue(updated_payloads)
         for payload in updated_payloads:
             self.assertEqual(payload.get("forced"), True)
+
+    @patch("manifest_manager.get_version_info")
+    def test_update_refreshes_when_upstream_hash_drifts(self, mock_get_version):
+        github_url = "https://github.com/owner/repo/releases/download/v1.0.0/app-1.0.0.zip"
+        mock_get_version.return_value = {
+            "version": "1.0.0",
+            "download_url": github_url,
+            "hash": None,
+        }
+        with open(self.manifest_path, "w", encoding="utf-8") as f:
+            json.dump({"version": "1.0.0", "url": github_url, "hash": "sha256:" + "a" * 64}, f)
+
+        updater = ManifestUpdater(self.config, self.bucket_dir)
+        updater.detector._try_github_release_digest = lambda url: "b" * 64  # type: ignore
+        with patch("builtins.print") as mock_print:
+            result = updater.update()
+
+        self.assertTrue(result)
+        with open(self.manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["url"], github_url)
+        self.assertEqual(data["hash"], "sha256:" + "b" * 64)
+
+        human_logs = [
+            call[0][0]
+            for call in mock_print.call_args_list
+            if call[0] and not str(call[0][0]).startswith("{")
+        ]
+        self.assertTrue(
+            any(
+                "🔄 Upstream re-released test-app v1.0.0 with a new build" in m for m in human_logs
+            ),
+            human_logs,
+        )
+        payloads = [
+            json.loads(call[0][0])
+            for call in mock_print.call_args_list
+            if call[0] and str(call[0][0]).startswith("{")
+        ]
+        self.assertEqual(
+            payloads[-1],
+            {"updated": True, "name": "test-app", "version": "1.0.0", "revision": True},
+        )
+
+    @patch("manifest_manager.get_version_info")
+    def test_update_hash_drift_checks_architecture_block_hash(self, mock_get_version):
+        github_url = "https://github.com/owner/repo/releases/download/v1.0.0/app-1.0.0.zip"
+        mock_get_version.return_value = {
+            "version": "1.0.0",
+            "download_url": github_url,
+            "hash": None,
+        }
+        with open(self.manifest_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "version": "1.0.0",
+                    "url": "https://example.com/legacy.zip",
+                    "hash": "sha256:legacy",
+                    "architecture": {"64bit": {"url": github_url, "hash": "sha256:" + "c" * 64}},
+                },
+                f,
+            )
+
+        updater = ManifestUpdater(self.config, self.bucket_dir)
+        updater.detector._try_github_release_digest = lambda url: "d" * 64  # type: ignore
+        with patch("builtins.print") as mock_print:
+            result = updater.update()
+
+        self.assertTrue(result)
+        with open(self.manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["architecture"]["64bit"]["url"], github_url)
+        self.assertEqual(data["architecture"]["64bit"]["hash"], "sha256:" + "d" * 64)
+        self.assertNotIn("hash", data)  # stale top-level fields dropped
+        payloads = [
+            json.loads(call[0][0])
+            for call in mock_print.call_args_list
+            if call[0] and str(call[0][0]).startswith("{")
+        ]
+        self.assertEqual(payloads[-1].get("revision"), True)
+
+    @patch("manifest_manager.get_version_info")
+    def test_update_no_refresh_when_upstream_hash_matches(self, mock_get_version):
+        github_url = "https://github.com/owner/repo/releases/download/v1.0.0/app-1.0.0.zip"
+        stored = "sha256:" + "A" * 64  # uppercase exercises case-insensitive compare
+        mock_get_version.return_value = {
+            "version": "1.0.0",
+            "download_url": github_url,
+            "hash": None,
+        }
+        with open(self.manifest_path, "w", encoding="utf-8") as f:
+            json.dump({"version": "1.0.0", "url": github_url, "hash": stored}, f)
+
+        updater = ManifestUpdater(self.config, self.bucket_dir)
+        updater.detector._try_github_release_digest = lambda url: "a" * 64  # type: ignore
+        with patch("builtins.print") as mock_print:
+            result = updater.update()
+
+        self.assertTrue(result)
+        with open(self.manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["hash"], stored)
+        payloads = [
+            json.loads(call[0][0])
+            for call in mock_print.call_args_list
+            if call[0] and str(call[0][0]).startswith("{")
+        ]
+        self.assertEqual(payloads[-1], {"updated": False, "name": "test-app", "version": "1.0.0"})
+
+    @patch("manifest_manager.get_version_info")
+    def test_update_hash_drift_opt_out_via_env(self, mock_get_version):
+        github_url = "https://github.com/owner/repo/releases/download/v1.0.0/app-1.0.0.zip"
+        mock_get_version.return_value = {
+            "version": "1.0.0",
+            "download_url": github_url,
+            "hash": None,
+        }
+        with open(self.manifest_path, "w", encoding="utf-8") as f:
+            json.dump({"version": "1.0.0", "url": github_url, "hash": "sha256:" + "a" * 64}, f)
+
+        drift_calls = []
+
+        updater = ManifestUpdater(self.config, self.bucket_dir)
+        updater.detector._try_github_release_digest = (  # type: ignore
+            lambda url: drift_calls.append(url) or "b" * 64
+        )
+        with patch.dict(os.environ, {"SKIP_HASH_DRIFT": "1"}, clear=True):
+            with patch("builtins.print") as mock_print:
+                result = updater.update()
+
+        self.assertTrue(result)
+        self.assertEqual(drift_calls, [])
+        with open(self.manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["hash"], "sha256:" + "a" * 64)
+        payloads = [
+            json.loads(call[0][0])
+            for call in mock_print.call_args_list
+            if call[0] and str(call[0][0]).startswith("{")
+        ]
+        self.assertEqual(payloads[-1], {"updated": False, "name": "test-app", "version": "1.0.0"})
+
+    @patch("manifest_manager.get_version_info")
+    def test_update_success_payload_has_no_revision_flag(self, mock_get_version):
+        mock_get_version.return_value = {
+            "version": "2.0.0",
+            "download_url": "http://example.com/2.0.0.zip",
+            "hash": "newhash",
+        }
+
+        updater = ManifestUpdater(self.config, self.bucket_dir)
+        with patch("builtins.print") as mock_print:
+            result = updater.update()
+
+        self.assertTrue(result)
+        payloads = [
+            json.loads(call[0][0])
+            for call in mock_print.call_args_list
+            if call[0] and str(call[0][0]).startswith("{")
+        ]
+        self.assertNotIn("revision", payloads[-1])
 
 
 if __name__ == "__main__":

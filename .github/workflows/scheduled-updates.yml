@@ -1,6 +1,8 @@
 name: Scheduled Updates
 
 on:
+  # PR-based (no direct master writes). PRs may need a rebase when the container
+  # cron touched the same manifests before the PR is merged.
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:

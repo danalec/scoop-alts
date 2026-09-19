@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -60,6 +61,7 @@ class ManifestUpdater:
         version: Optional[str] = None,
         error: Optional[str] = None,
         forced: bool = False,
+        revision: bool = False,
     ) -> None:
         """Emit the single-line JSON object consumed by the orchestrator."""
         payload: Dict[str, Any] = {"updated": updated, "name": self.config.name}
@@ -67,6 +69,8 @@ class ManifestUpdater:
             payload["version"] = version
         if error:
             payload["error"] = error
+        if revision:
+            payload["revision"] = True
         if forced:
             payload["forced"] = True
         print(json.dumps(payload, ensure_ascii=False))
@@ -90,7 +94,13 @@ class ManifestUpdater:
             self.emit_result(updated=False, error="manifest_read_failed")
             return None
 
-    def save_manifest(self, manifest: Dict[str, Any], version: str, previous_version: str) -> bool:
+    def save_manifest(
+        self,
+        manifest: Dict[str, Any],
+        version: str,
+        previous_version: str,
+        revision: bool = False,
+    ) -> bool:
         """Write the updated manifest back to disk."""
         try:
             with self.manifest_path.open("w", encoding="utf-8") as handle:
@@ -101,11 +111,13 @@ class ManifestUpdater:
             self.emit_result(updated=False, version=version, error="save_failed")
             return False
 
-        if previous_version == version:
+        if revision:
+            self.log(f"✅ Refreshed {self.config.name} build: {version}")
+        elif previous_version == version:
             self.log(f"✅ Force-updated {self.config.name}: {version}")
         else:
             self.log(f"✅ Updated {self.config.name}: {previous_version} → {version}")
-        self.emit_result(updated=True, version=version, forced=self.force)
+        self.emit_result(updated=True, version=version, forced=self.force, revision=revision)
         return True
 
     def select_architecture_key(self, manifest: Dict[str, Any]) -> Optional[str]:
@@ -174,6 +186,44 @@ class ManifestUpdater:
         manifest["version"] = version
         return True
 
+    def _stored_manifest_hash(self, manifest: Dict[str, Any]) -> Optional[str]:
+        """Return the hash recorded in the manifest (arch block or top level)."""
+        architecture_key = self.select_architecture_key(manifest)
+        if architecture_key:
+            entry = manifest["architecture"].get(architecture_key)
+            if isinstance(entry, dict) and entry.get("hash"):
+                return str(entry["hash"])
+        top_level = manifest.get("hash")
+        if top_level:
+            return str(top_level)
+        return None
+
+    def _upstream_hash_drift(
+        self, manifest: Dict[str, Any], version_info: Dict[str, Any]
+    ) -> Optional[str]:
+        """Detect an upstream re-release: same version, different sha256.
+
+        Cheap by design: only the GitHub release-digest shortcut is consulted
+        (no download happens). Returns the current upstream hex digest when it
+        differs from the manifest's stored hash, None otherwise — including
+        for non-GitHub URLs, API failures, or a missing stored hash. Opt out
+        via SKIP_HASH_DRIFT=1.
+        """
+        if os.environ.get("SKIP_HASH_DRIFT") == "1":
+            return None
+        download_url = str(version_info.get("download_url") or "")
+        clean_url = download_url.split("#", 1)[0].split("?", 1)[0]
+        upstream = self.detector._try_github_release_digest(clean_url)
+        if not upstream:
+            return None
+        stored = self._stored_manifest_hash(manifest)
+        if not stored:
+            return None
+        stored_hex = re.sub(r"^sha256:", "", stored.strip(), flags=re.IGNORECASE).lower()
+        if upstream.lower() == stored_hex:
+            return None
+        return upstream
+
     def update(self, version_info: Optional[Dict[str, Any]] = None) -> bool:
         """Fetch version metadata and update the manifest when required."""
         self.log(f"🔄 Updating {self.config.name}...")
@@ -215,10 +265,19 @@ class ManifestUpdater:
             return False
 
         version = version_info["version"]
+        revision = False
+        upstream_hash: Optional[str] = None
         if current_version == version and not self.force:
-            self.log(f"✅ {self.config.name} is already up to date (v{version})")
-            self.emit_result(updated=False, version=version)
-            return True
+            upstream_hash = self._upstream_hash_drift(manifest, version_info)
+            if upstream_hash is None:
+                self.log(f"✅ {self.config.name} is already up to date (v{version})")
+                self.emit_result(updated=False, version=version)
+                return True
+            revision = True
+            self.log(
+                f"🔄 Upstream re-released {self.config.name} v{version} "
+                "with a new build - refreshing"
+            )
 
         if current_version == version and self.force:
             self.log(f"🔄 Forcing update of {self.config.name} (v{version})...")
@@ -230,15 +289,21 @@ class ManifestUpdater:
                 ):
                     return False
             else:
+                hash_value = version_info["hash"]
+                if hash_value is None:
+                    # Same-version build refresh: the upstream digest shortcut
+                    # already told us the current hash, so reuse it instead of
+                    # downloading the artifact again.
+                    hash_value = upstream_hash
                 self.apply_download_metadata(
                     manifest,
                     version=version,
                     download_url=version_info["download_url"],
-                    hash_value=version_info["hash"],
+                    hash_value=hash_value,
                 )
         except Exception as error:
             self.log(f"❌ Error updating manifest content: {error}")
             self.emit_result(updated=False, version=version, error="manifest_update_failed")
             return False
 
-        return self.save_manifest(manifest, version, current_version)
+        return self.save_manifest(manifest, version, current_version, revision=revision)
