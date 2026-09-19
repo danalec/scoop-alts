@@ -630,6 +630,8 @@ def run_doctor_cli(args, env=None):
         [sys.executable, str(AUTOMATE_SCOOP), "doctor", *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
         cwd=str(REPO_ROOT),
         env=env,
