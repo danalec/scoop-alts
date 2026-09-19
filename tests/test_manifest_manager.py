@@ -104,6 +104,24 @@ class TestManifestUpdater(unittest.TestCase):
         self.assertEqual(data["architecture"]["64bit"]["url"], "http://example.com/2.0.0.zip")
         self.assertEqual(data["architecture"]["64bit"]["hash"], "sha256:newhash")
 
+    @patch("manifest_manager.get_version_info")
+    def test_update_forced_same_version(self, mock_get_version):
+        mock_get_version.return_value = {
+            "version": "1.0.0",
+            "download_url": "http://example.com/1.0.0-new.zip",
+            "hash": "forcedhash",
+        }
+
+        updater = ManifestUpdater(self.config, self.bucket_dir, force=True)
+        result = updater.update()
+
+        self.assertTrue(result)
+        with open(self.manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["version"], "1.0.0")
+        self.assertEqual(data["url"], "http://example.com/1.0.0-new.zip")
+        self.assertEqual(data["hash"], "sha256:forcedhash")
+
 
 if __name__ == "__main__":
     unittest.main()

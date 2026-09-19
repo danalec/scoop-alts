@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -19,12 +20,22 @@ class ManifestUpdater:
         config: SoftwareVersionConfig,
         bucket_dir: Path,
         manifest_filename: Optional[str] = None,
+        force: bool = False,
     ) -> None:
         self.config = config
         self.bucket_dir = bucket_dir
         self.manifest_filename = manifest_filename or f"{config.name}.json"
         self.manifest_path = bucket_dir / self.manifest_filename
         self.structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
+        self.force = (
+            force
+            or os.environ.get("FORCE") == "1"
+            or os.environ.get("SCOOP_FORCE") == "1"
+            or "--force" in sys.argv
+            or "-f" in sys.argv
+            or "--forcedly" in sys.argv
+            or "forcedly" in sys.argv
+        )
 
     def log(self, message: str) -> None:
         """Print human-readable status messages when structured output is disabled."""
@@ -76,7 +87,10 @@ class ManifestUpdater:
             self.emit_result(updated=False, version=version, error="save_failed")
             return False
 
-        self.log(f"✅ Updated {self.config.name}: {previous_version} → {version}")
+        if previous_version == version:
+            self.log(f"✅ Force-updated {self.config.name}: {version}")
+        else:
+            self.log(f"✅ Updated {self.config.name}: {previous_version} → {version}")
         self.emit_result(updated=True, version=version)
         return True
 
@@ -113,11 +127,13 @@ class ManifestUpdater:
         manifest["url"] = download_url
         manifest["hash"] = f"sha256:{hash_value}"
 
-    def update(self) -> bool:
+    def update(self, version_info: Optional[Dict[str, Any]] = None) -> bool:
         """Fetch version metadata and update the manifest when required."""
         self.log(f"🔄 Updating {self.config.name}...")
 
-        version_info = get_version_info(self.config)
+        if version_info is None:
+            version_info = get_version_info(self.config)
+
         if not version_info:
             self.log(f"❌ Failed to get version info for {self.config.name}")
             self.emit_result(updated=False, error="version_info_unavailable")
@@ -142,10 +158,13 @@ class ManifestUpdater:
 
         version = version_info["version"]
         current_version = str(manifest.get("version", ""))
-        if current_version == version:
+        if current_version == version and not self.force:
             self.log(f"✅ {self.config.name} is already up to date (v{version})")
             self.emit_result(updated=False, version=version)
             return True
+
+        if current_version == version and self.force:
+            self.log(f"🔄 Forcing update of {self.config.name} (v{version})...")
 
         try:
             self.apply_download_metadata(
