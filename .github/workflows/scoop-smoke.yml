@@ -34,8 +34,14 @@ jobs:
           New-Item -ItemType Directory -Force smoke-logs | Out-Null
           $results = foreach ($manifest in $manifests) {
               $name = $manifest.BaseName
-              $output = & scoop install --no-update-scoop $manifest.FullName *>&1
-              $ok = $?
+              $ok = $true
+              try {
+                  $output = & scoop install --no-update-scoop $manifest.FullName *>&1
+                  if (-not $?) { $ok = $false }
+              } catch {
+                  $output = @($output) + $_.Exception.Message
+                  $ok = $false
+              }
               $output | Out-File -FilePath "smoke-logs\$name.log" -Encoding utf8
               [PSCustomObject]@{
                   Package = $name
