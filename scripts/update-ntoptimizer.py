@@ -14,9 +14,15 @@ from manifest_manager import ManifestUpdater
 from version_detector import SoftwareVersionConfig
 
 # Configuration
+# NTOptimizer is a NinjaTrader optimizer tool distributed by bestorderflow.com.
+# Do NOT substitute netoptimizer.com here - that is an unrelated network-tuning
+# product whose executable happened to pattern-match the name (see commit f33e861
+# which introduced the mix-up; the original manifest at 80c1b2d used the zip below).
 SOFTWARE_NAME = "ntoptimizer"
-HOMEPAGE_URL = "https://www.netoptimizer.com/version-history/"
-DOWNLOAD_URL_TEMPLATE = "https://www.netoptimizer.com/files/NetOptimizer.exe"
+HOMEPAGE_URL = "https://bestorderflow.com/"
+# Static vendor zip; contains NTOptimizer.exe + .ico at the archive root. No
+# $version placeholder, so version detection falls back to executable metadata.
+DOWNLOAD_URL_TEMPLATE = "https://bestorderflow.com/images/free/NTOptimizer.zip"
 BUCKET_DIR = Path(__file__).parent.parent / "bucket"
 
 

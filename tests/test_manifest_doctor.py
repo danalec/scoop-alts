@@ -773,3 +773,33 @@ def test_7z_without_binary_cannot_check(monkeypatch):
     monkeypatch.setattr(md, "_find_7z_binary", lambda: None)
     with pytest.raises(md.ZipListingError):
         md.list_7z_entries("https://example.com/app.7z")
+
+
+# ============================================================================
+# Plain-exe bin name checks (the ntoptimizer class)
+# ============================================================================
+
+
+def test_exe_bin_name_mismatch_errors():
+    manifest = exe_manifest(url="https://example.com/files/NetOptimizer.exe", bin="Other.exe")
+    report = md.doctor_manifest("exe.json", manifest, transport=FakeRangeTransport(GOOD_ZIP))
+    findings = findings_by_check(report, "exe-bin-name")
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert "NetOptimizer.exe" in findings[0].message
+
+
+def test_exe_bin_name_matching_passes():
+    manifest = exe_manifest(
+        url="https://example.com/files/NetOptimizer.exe", bin="NetOptimizer.exe"
+    )
+    report = md.doctor_manifest("exe.json", manifest, transport=FakeRangeTransport(GOOD_ZIP))
+    assert findings_by_check(report, "exe-bin-name") == []
+
+
+def test_exe_rename_fragment_satisfies_bin():
+    manifest = exe_manifest(
+        url="https://example.com/files/setup.exe#/NetOptimizer.exe", bin="NetOptimizer.exe"
+    )
+    report = md.doctor_manifest("exe.json", manifest, transport=FakeRangeTransport(GOOD_ZIP))
+    assert findings_by_check(report, "exe-bin-name") == []

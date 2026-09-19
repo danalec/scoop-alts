@@ -138,9 +138,11 @@ class ManifestUpdater:
         version: str,
         download_url: str,
         hash_value: str,
+        previous_version: Optional[str] = None,
     ) -> None:
         """Update version, url, and hash fields in-place."""
         manifest["version"] = version
+        self._refresh_extract_dir(manifest, version=version, previous_version=previous_version)
         architecture_key = self.select_architecture_key(manifest)
 
         if architecture_key:
@@ -156,6 +158,24 @@ class ManifestUpdater:
 
         manifest["url"] = download_url
         manifest["hash"] = f"sha256:{hash_value}"
+
+    @staticmethod
+    def _refresh_extract_dir(
+        manifest: Dict[str, Any], *, version: str, previous_version: Optional[str]
+    ) -> None:
+        """Keep a versioned extract_dir in sync across updates (ripgrep-all class).
+
+        Upstream archives often unpack into a folder named after the release;
+        when the version changes, rewrite the embedded version so installs do
+        not break (the corecycler/ungoogled-chromium incident class).
+        """
+        if not previous_version or previous_version == version:
+            return
+        extract_dir = manifest.get("extract_dir")
+        if not isinstance(extract_dir, str) or not extract_dir:
+            return
+        if previous_version in extract_dir:
+            manifest["extract_dir"] = extract_dir.replace(previous_version, version)
 
     def apply_architecture_templates(
         self, manifest: Dict[str, Any], *, version: str, version_info: Dict[str, Any]
@@ -300,6 +320,7 @@ class ManifestUpdater:
                     version=version,
                     download_url=version_info["download_url"],
                     hash_value=hash_value,
+                    previous_version=current_version,
                 )
         except Exception as error:
             self.log(f"❌ Error updating manifest content: {error}")

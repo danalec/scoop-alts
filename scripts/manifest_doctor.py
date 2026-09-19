@@ -194,9 +194,14 @@ def list_7z_entries(url: str, max_bytes: Optional[int] = None) -> List[str]:
 
 
 class HttpRangeTransport:
-    """Fetch byte ranges over HTTP, tolerating servers that ignore Range."""
+    """Fetch byte ranges over HTTP, tolerating servers that ignore or reject
+    Range requests (falls back to a capped whole-body download per URL)."""
 
     timeout = 30
+    full_body_cap = 400 * 1024 * 1024
+
+    def __init__(self) -> None:
+        self._bodies: Dict[str, bytes] = {}
 
     def fetch_tail(self, url: str, size: int = TAIL_FETCH_SIZE) -> bytes:
         response = self._get(url, headers={"Range": f"bytes=-{size}"})
@@ -220,12 +225,72 @@ class HttpRangeTransport:
         return content[start : end + 1]
 
     def _get(self, url: str, headers: Dict[str, str]) -> Any:
+        range_header = headers.get("Range")
+        if range_header and url in self._bodies:
+            return _BodyResponse(self._slice(url, range_header))
         try:
-            return _requests_get(url, headers=headers, timeout=self.timeout)
+            response = _requests_get(url, headers=headers, timeout=self.timeout)
         except ZipListingError:
             raise
         except Exception as exc:
-            raise ZipListingError(f"range request failed: {exc}") from exc
+            # Some hosts (e.g. GitHub release-assets) reject range requests
+            # outright; retry once as a full download and serve from memory.
+            if not range_header:
+                raise ZipListingError(f"range request failed: {exc}") from exc
+            return self._full_body_response(url, exc, range_header)
+        if (
+            range_header
+            and response.status_code in (400, 403, 406, 416, 501)
+            and url not in self._bodies
+        ):
+            # Server rejects range semantics (e.g. signed asset URLs): a full
+            # download still lets us list the archive locally.
+            return self._full_body_response(url, None, range_header)
+        return response
+
+    def _full_body_response(
+        self, url: str, original_exc: Optional[Exception], range_header: str
+    ) -> Any:
+        try:
+            body = self._download_full(url)
+        except ZipListingError:
+            raise
+        except Exception as full_exc:
+            if original_exc is not None:
+                raise ZipListingError(f"range request failed: {original_exc}") from full_exc
+            raise ZipListingError(f"download failed: {full_exc}") from full_exc
+        self._bodies[url] = body
+        return _BodyResponse(self._slice(url, range_header))
+
+    def _slice(self, url: str, range_header: str) -> bytes:
+        body = self._bodies[url]
+        spec = range_header.removeprefix("bytes=").strip()
+        if spec.startswith("-"):
+            return body[-int(spec[1:]) :]
+        start_s, _, end_s = spec.partition("-")
+        start = int(start_s)
+        end = int(end_s) if end_s else len(body) - 1
+        return body[start : end + 1]
+
+    def _download_full(self, url: str) -> bytes:
+        response = _requests_get(url, stream=True, timeout=max(60, self.timeout))
+        try:
+            if response.status_code in (404, 410):
+                raise ZipUrlNotFoundError(url, response.status_code)
+            response.raise_for_status()
+            chunks: List[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                total += len(chunk)
+                if total > self.full_body_cap:
+                    raise ZipListingError(
+                        f"server rejects range requests and the archive exceeds "
+                        f"the {self.full_body_cap}-byte full-download cap"
+                    )
+                chunks.append(chunk)
+            return b"".join(chunks)
+        finally:
+            response.close()
 
     @staticmethod
     def _check_status(response: Any) -> None:
@@ -233,6 +298,21 @@ class HttpRangeTransport:
             response.raise_for_status()
         except Exception as exc:
             raise ZipListingError(f"HTTP {response.status_code}: {exc}") from exc
+
+
+class _BodyResponse:
+    """Minimal requests-like response over an in-memory body (status 206)."""
+
+    def __init__(self, body: bytes) -> None:
+        self.status_code = 206
+        self._body = body
+
+    @property
+    def content(self) -> bytes:
+        return self._body
+
+    def raise_for_status(self) -> None:
+        return None
 
 
 def parse_eocd(tail: bytes) -> Tuple[int, int, int]:
@@ -531,6 +611,34 @@ def doctor_manifest(
     # (1) zip layout
     refs = referenced_paths(manifest)
     extract_dir = manifest.get("extract_dir")
+
+    # (0) plain-exe downloads: a bin entry can only be shimmed if it matches
+    # the downloaded file (or an explicit '#/Rename.exe' rename fragment).
+    # Stands down when installer/pre_install scripts may create the shim
+    # target themselves (bucket/wifiscanner.json writes its launcher .bat).
+    installer = manifest.get("installer")
+    installer_scripted = isinstance(installer, dict) and bool(installer.get("script"))
+    if not installer_scripted and not manifest.get("pre_install"):
+        for location, url in urls:
+            base_url, _, fragment = url.partition("#/")
+            if not base_url.rsplit("/", 1)[-1].lower().endswith(".exe"):
+                continue
+            expected = fragment or base_url.rsplit("/", 1)[-1]
+            for kind, path in refs:
+                if kind != "bin":
+                    continue
+                name = path.replace("\\", "/").rsplit("/", 1)[-1]
+                if name.lower() != expected.lower():
+                    findings.append(
+                        Finding(
+                            SEVERITY_ERROR,
+                            "exe-bin-name",
+                            f"{location}: bin '{path}' does not match the downloaded "
+                            f"file '{expected}' - scoop cannot shim a file that does "
+                            f"not exist (the ntoptimizer class)",
+                        )
+                    )
+            break  # one plain-exe check per manifest is enough
     extract_root = _normalize(extract_dir) if isinstance(extract_dir, str) else ""
     installer = manifest.get("installer")
     installer_relocates = isinstance(installer, dict) and bool(installer.get("script"))
