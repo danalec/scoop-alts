@@ -22,6 +22,8 @@ jobs:
           irm get.scoop.sh -outfile 'install.ps1'
           .\install.ps1 -RunAsAdmin
           scoop --version
+          # Persist the shims directory for all later steps (each runs in a new process).
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\scoop\shims"
 
       - name: Add local bucket
         shell: powershell
@@ -36,9 +38,10 @@ jobs:
           $results = foreach ($manifest in $manifests) {
               $name = $manifest.BaseName
               & scoop install --no-update-scoop $name *>&1 | Out-Null
+              $ok = $? -and ($LASTEXITCODE -eq 0)
               [PSCustomObject]@{
                   Package = $name
-                  Status  = if ($LASTEXITCODE -eq 0) { 'PASS' } else { 'FAIL' }
+                  Status  = if ($ok) { 'PASS' } else { 'FAIL' }
               }
           }
           $results | Format-Table -AutoSize
