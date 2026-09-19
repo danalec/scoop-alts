@@ -27,6 +27,8 @@ def build_config():
         version_patterns=[
             r"Victoria\s+([0-9]+\.[0-9]+)\s+HDD/SSD",
             r"Что нового в версии\s+([0-9]+\.[0-9]+)",
+            # Fallback if the vendor rewords the page (title/meta/changelog phrasing).
+            r"Victoria[:\s]+([0-9]+\.[0-9]+)",
         ],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Victoria HDD/SSD is the best free program for diagnosing, researching, testing, and minor repairs of hard drives, SSDs, memory cards, and any other storage devices in the Windows operating system.",

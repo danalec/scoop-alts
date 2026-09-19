@@ -340,3 +340,234 @@ def test_get_version_info_hashes_when_version_changed(monkeypatch):
         "hash": "abc123",
     }
     assert hash_calls == ["https://example.com/tool-7.1.3.zip"]
+
+
+class _FakeReleasesSession:
+    """Minimal stand-in for requests.Session serving the GitHub releases API."""
+
+    def __init__(self, releases=None, exc=None):
+        self.releases = releases
+        self.exc = exc
+        self.requests = []
+
+    def get(self, url, **kwargs):
+        self.requests.append((url, kwargs))
+        if self.exc is not None:
+            raise self.exc
+
+        class _Resp:
+            def __init__(self, data):
+                self._data = data
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._data
+
+        return _Resp(self.releases)
+
+
+def _forbidden_fetch(self, homepage, patterns):
+    raise AssertionError("fetch_latest_version must not run when the release gate fires")
+
+
+def test_force_https_upgrades_scheme_before_hash(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="crlset-test",
+        homepage="https://clients2.google.com/service/update2/crx",
+        version_patterns=[r'codebase="(?P<codebase>https?://[^"]+)"'],
+        download_url_template="$matchcodebase",
+        description="Test app",
+        license="BSD-3-Clause",
+        force_https=True,
+    )
+
+    monkeypatch.setattr(
+        VersionDetector,
+        "fetch_latest_version",
+        lambda self, homepage, patterns: VersionResult(
+            version="10786",
+            match_groups={"codebase": "http://www.google.com/dl/release2/f.crx3"},
+        ),
+    )
+    hash_calls = []
+    monkeypatch.setattr(
+        VersionDetector,
+        "calculate_hash",
+        lambda self, download_url: hash_calls.append(download_url) or "abc123",
+    )
+
+    assert get_version_info(config, current_version="1") == {
+        "version": "10786",
+        "download_url": "https://www.google.com/dl/release2/f.crx3",
+        "hash": "abc123",
+    }
+    assert hash_calls == ["https://www.google.com/dl/release2/f.crx3"]
+
+    # The unchanged-version early return must already carry the https URL
+    assert get_version_info(config, current_version="10786") == {
+        "version": "10786",
+        "download_url": "https://www.google.com/dl/release2/f.crx3",
+        "hash": None,
+    }
+
+
+def test_force_https_disabled_keeps_http_scheme(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="crlset-test",
+        homepage="https://clients2.google.com/service/update2/crx",
+        version_patterns=[r'codebase="(?P<codebase>https?://[^"]+)"'],
+        download_url_template="$matchcodebase",
+        description="Test app",
+        license="BSD-3-Clause",
+    )
+
+    monkeypatch.setattr(
+        VersionDetector,
+        "fetch_latest_version",
+        lambda self, homepage, patterns: VersionResult(
+            version="10786",
+            match_groups={"codebase": "http://www.google.com/dl/release2/f.crx3"},
+        ),
+    )
+    hash_calls = []
+    monkeypatch.setattr(
+        VersionDetector,
+        "calculate_hash",
+        lambda self, download_url: hash_calls.append(download_url) or "abc123",
+    )
+
+    assert get_version_info(config, current_version="1") == {
+        "version": "10786",
+        "download_url": "http://www.google.com/dl/release2/f.crx3",
+        "hash": "abc123",
+    }
+    assert hash_calls == ["http://www.google.com/dl/release2/f.crx3"]
+
+
+def test_require_release_asset_selects_first_release_with_matching_asset(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="ripgrep-all-test",
+        homepage="https://github.com/phiresky/ripgrep-all/releases",
+        version_patterns=[r"releases/tag/v([\d.]+)"],
+        download_url_template=(
+            "https://github.com/phiresky/ripgrep-all/releases/download/"
+            "v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip"
+        ),
+        description="Test app",
+        license="MIT",
+        require_release_asset=True,
+    )
+    releases = [
+        {
+            "tag_name": "v9.9.9",
+            "draft": False,
+            "prerelease": False,
+            "assets": [{"name": "ripgrep_all-v9.9.9-x86_64-unknown-linux-gnu.tar.gz"}],
+        },
+        {
+            "tag_name": "v0.10.10",
+            "draft": False,
+            "prerelease": True,
+            "assets": [{"name": "ripgrep_all-v0.10.10-x86_64-pc-windows-msvc.zip"}],
+        },
+        {
+            "tag_name": "v0.10.9",
+            "draft": False,
+            "prerelease": False,
+            "assets": [{"name": "ripgrep_all-v0.10.9-x86_64-pc-windows-msvc.zip"}],
+        },
+    ]
+    session = _FakeReleasesSession(releases=releases)
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+    monkeypatch.setattr(VersionDetector, "fetch_latest_version", _forbidden_fetch)
+    hash_calls = []
+    monkeypatch.setattr(
+        VersionDetector,
+        "calculate_hash",
+        lambda self, download_url: hash_calls.append(download_url) or "abc123",
+    )
+
+    assert get_version_info(config, current_version="0.10.8") == {
+        "version": "0.10.9",
+        "download_url": (
+            "https://github.com/phiresky/ripgrep-all/releases/download/"
+            "v0.10.9/ripgrep_all-v0.10.9-x86_64-pc-windows-msvc.zip"
+        ),
+        "hash": "abc123",
+    }
+    assert hash_calls == [
+        "https://github.com/phiresky/ripgrep-all/releases/download/"
+        "v0.10.9/ripgrep_all-v0.10.9-x86_64-pc-windows-msvc.zip"
+    ]
+    assert session.requests[0][0] == "https://api.github.com/repos/phiresky/ripgrep-all/releases"
+    assert session.requests[0][1]["params"] == {"per_page": 20}
+
+
+def test_require_release_asset_strips_prefix_literalized_in_template(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="thorium-test",
+        homepage="https://github.com/gz83/thorium/releases",
+        version_patterns=[r"releases/tag/M([\d.]+)"],
+        download_url_template=(
+            "https://github.com/gz83/thorium/releases/download/"
+            "M$version/Thorium_AVX2_$version.zip"
+        ),
+        description="Test app",
+        license="BSD-3-Clause",
+        require_release_asset=True,
+    )
+    releases = [
+        {
+            "tag_name": "M152.0.7977.55",
+            "draft": False,
+            "prerelease": False,
+            "assets": [{"name": "Thorium_AVX2_152.0.7977.55.zip"}],
+        }
+    ]
+    session = _FakeReleasesSession(releases=releases)
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+    monkeypatch.setattr(VersionDetector, "fetch_latest_version", _forbidden_fetch)
+    monkeypatch.setattr(VersionDetector, "calculate_hash", lambda self, download_url: "abc123")
+
+    assert get_version_info(config, current_version="152.0.7977.0") == {
+        "version": "152.0.7977.55",
+        "download_url": (
+            "https://github.com/gz83/thorium/releases/download/"
+            "M152.0.7977.55/Thorium_AVX2_152.0.7977.55.zip"
+        ),
+        "hash": "abc123",
+    }
+
+
+def test_require_release_asset_falls_back_silently_on_api_failure(monkeypatch):
+    config = SoftwareVersionConfig(
+        name="ripgrep-all-test",
+        homepage="https://github.com/phiresky/ripgrep-all/releases",
+        version_patterns=[r"releases/tag/v([\d.]+)"],
+        download_url_template=(
+            "https://github.com/phiresky/ripgrep-all/releases/download/"
+            "v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip"
+        ),
+        description="Test app",
+        license="MIT",
+        require_release_asset=True,
+    )
+    session = _FakeReleasesSession(exc=ConnectionError("rate limited"))
+    monkeypatch.setattr("version_detector.get_session", lambda **kwargs: session)
+    monkeypatch.setattr(
+        VersionDetector,
+        "fetch_latest_version",
+        lambda self, homepage, patterns: VersionResult(version="0.10.9", match_groups={}),
+    )
+    monkeypatch.setattr(VersionDetector, "calculate_hash", lambda self, download_url: "abc123")
+
+    assert get_version_info(config, current_version="0.10.8") == {
+        "version": "0.10.9",
+        "download_url": (
+            "https://github.com/phiresky/ripgrep-all/releases/download/"
+            "v0.10.9/ripgrep_all-v0.10.9-x86_64-pc-windows-msvc.zip"
+        ),
+        "hash": "abc123",
+    }

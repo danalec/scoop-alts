@@ -1,105 +1,44 @@
 #!/usr/bin/env python3
 """
 Ripgrep All Update Script
-Automatically checks for updates and updates the Scoop manifest using shared version detector.
-Ensures only releases that ship Windows binaries are targeted, and supports forced execution.
+Automatically checks for updates and updates the Scoop manifest using the
+shared version detector. Windows-binary availability is asset-gated via the
+framework (require_release_asset): only releases that ship the expected
+Windows ZIP asset are selected. Supports forced execution.
 """
 
 import os
-import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
-
-import requests
 
 from manifest_manager import ManifestUpdater, is_forced
-from version_detector import SoftwareVersionConfig, VersionDetector, get_session
-
-# Optional semantic version parsing
-try:
-    from packaging.version import parse as parse_version
-except ImportError:
-    parse_version = None
+from version_detector import SoftwareVersionConfig
 
 # Configuration
 SOFTWARE_NAME = "ripgrep-all"
 HOMEPAGE_URL = "https://github.com/phiresky/ripgrep-all/releases"
-RELEASES_API_URL = "https://api.github.com/repos/phiresky/ripgrep-all/releases"
 DOWNLOAD_URL_TEMPLATE = "https://github.com/phiresky/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip"
 BUCKET_DIR = Path(__file__).parent.parent / "bucket"
 
 
-def get_latest_windows_release() -> Optional[str]:
-    """Find the newest non-prerelease release that actually ships a Windows binary."""
-    # 1. Try GitHub API
-    try:
-        session = get_session()
-        resp = session.get(RELEASES_API_URL, timeout=15)
-        if resp.status_code == 200:
-            releases = resp.json()
-            for rel in releases:
-                if rel.get("draft") or rel.get("prerelease"):
-                    continue
-                tag = rel.get("tag_name", "").lstrip("v")
-                expected = f"ripgrep_all-v{tag}-x86_64-pc-windows-msvc.zip"
-                if any(a.get("name") == expected for a in rel.get("assets", [])):
-                    return tag
-    except Exception:
-        pass
-
-    # 2. Fallback to HTML releases page with URL validation
-    try:
-        resp = requests.get(HOMEPAGE_URL, timeout=15)
-        if resp.status_code == 200:
-            tags = set(re.findall(r"releases/tag/v([0-9.]+)(?:/|\"|\'|\s|>)", resp.text))
-            if parse_version:
-                sorted_tags = sorted(tags, key=parse_version, reverse=True)
-            else:
-                sorted_tags = sorted(
-                    tags, key=lambda v: [int(p) for p in v.split(".") if p.isdigit()], reverse=True
-                )
-            for tag in sorted_tags:
-                url = f"https://github.com/phiresky/ripgrep-all/releases/download/v{tag}/ripgrep_all-v{tag}-x86_64-pc-windows-msvc.zip"
-                head_resp = requests.head(url, allow_redirects=True, timeout=5)
-                if head_resp.status_code == 200:
-                    return tag
-    except Exception:
-        pass
-
-    return None
-
-
 def update_manifest(force: bool = False) -> bool:
-    """Update the Scoop manifest using shared version detection and Windows binary verification."""
+    """Update the Scoop manifest via the standard framework flow (asset-gated)."""
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        # Fallback-only pattern: get_latest_windows_release() above is the real
-        # gate for Windows-binary availability; this pattern only matters when
-        # both the API and the HTML fallback are unreachable, where a hash
-        # fetch failure surfaces loudly instead of pinning a version series.
+        # Fallback-only pattern: require_release_asset is the real gate for
+        # Windows-binary availability; this pattern only matters when the
+        # releases API is unreachable, where a hash fetch failure surfaces
+        # loudly instead of pinning a version series.
         version_patterns=[r"releases/tag/v([\d.]+)"],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
         license="AGPL-3.0-or-later",
+        require_release_asset=True,
     )
 
-    version = get_latest_windows_release()
-    version_info: Optional[Dict[str, Any]] = None
-    if version:
-        download_url = DOWNLOAD_URL_TEMPLATE.replace("$version", version)
-        detector = VersionDetector()
-        hash_value = detector.calculate_hash(download_url)
-        if hash_value:
-            version_info = {
-                "version": version,
-                "download_url": download_url,
-                "hash": hash_value,
-            }
-
     updater = ManifestUpdater(config, BUCKET_DIR, force=force)
-    return updater.update(version_info)
+    return updater.update()
 
 
 def main() -> None:

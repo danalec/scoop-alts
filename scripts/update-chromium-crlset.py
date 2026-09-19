@@ -33,6 +33,7 @@ def update_manifest() -> bool:
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Chromium's certificate revocation list",
         license="BSD-3-Clause",
+        force_https=True,
     )
     return ManifestUpdater(config, BUCKET_DIR).update()
 

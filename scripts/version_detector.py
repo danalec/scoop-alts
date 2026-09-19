@@ -14,7 +14,7 @@ import subprocess
 import logging
 import shutil
 import zipfile
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit, urlunsplit
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -905,6 +905,10 @@ class SoftwareConfig:
     architecture: Optional[Dict[str, Any]] = None
     # Per-architecture download URL templates keyed by Scoop arch ("64bit", ...)
     architecture_templates: Optional[Dict[str, str]] = None
+    # Upgrade an http:// download URL to https:// before accessibility check/hash
+    force_https: bool = False
+    # Gate detection on the GitHub release API actually shipping the template asset
+    require_release_asset: bool = False
 
     def __post_init__(self):
         """Handle backward compatibility and defaults"""
@@ -919,6 +923,70 @@ class SoftwareConfig:
 
 # Keep old class name for backward compatibility
 SoftwareVersionConfig = SoftwareConfig
+
+
+def _https_url(url: str) -> str:
+    """Return ``url`` with an http:// scheme upgraded to https:// (identity otherwise)."""
+    parts = urlsplit(url)
+    if parts.scheme.lower() == "http":
+        return urlunsplit(("https", parts.netloc, parts.path, parts.query, parts.fragment))
+    return url
+
+
+def _tag_version_for_template(tag: str, url_template: str) -> str:
+    """Derive the version to substitute into ``url_template`` from a release ``tag``.
+
+    Leading letters are stripped from the tag only when the template already
+    literalizes them right before a ``$version`` token (e.g. ``v$version``
+    expects tags like ``v1.2.3`` to substitute as ``1.2.3``); otherwise the
+    tag is substituted as-is.
+    """
+    template_prefixes = set(re.findall(r"([A-Za-z]+)(?=\$version)", url_template))
+    leading = re.match(r"^([A-Za-z]+)", tag)
+    if leading and leading.group(1) in template_prefixes:
+        return tag[len(leading.group(1)) :]
+    return tag
+
+
+def _select_release_with_matching_asset(
+    config: SoftwareVersionConfig, detector: VersionDetector
+) -> Optional[VersionResult]:
+    """Pick the newest non-draft, non-prerelease GitHub release whose assets
+    contain the exact basename the download URL template expands to.
+
+    Only applies when ``config.homepage`` is a GitHub releases page. Returns
+    None on any API/network/parse failure or when no release matches, so the
+    caller silently falls back to the standard detection path.
+    """
+    match = re.match(r"^https://github\.com/([^/]+)/([^/]+)/releases/?$", config.homepage)
+    if not match:
+        return None
+    api_url = f"https://api.github.com/repos/{match.group(1)}/{match.group(2)}/releases"
+    try:
+        response = detector.session.get(api_url, params={"per_page": 20}, timeout=DEFAULT_TIMEOUT)
+        response.raise_for_status()
+        releases = response.json()
+    except Exception:
+        return None
+    if not isinstance(releases, list):
+        return None
+    for release in releases:
+        if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+            continue
+        tag = str(release.get("tag_name") or "")
+        if not tag:
+            continue
+        version = _tag_version_for_template(tag, config.download_url_template)
+        candidate_url = config.download_url_template.replace("$version", version)
+        basename = urlsplit(candidate_url).path.rsplit("/", 1)[-1]
+        assets = release.get("assets")
+        if not isinstance(assets, list):
+            continue
+        if any(isinstance(asset, dict) and asset.get("name") == basename for asset in assets):
+            logger.info("Selected release with matching asset: %s", tag)
+            print(f"🎯 Selected release with matching asset: {tag}")
+            return VersionResult(version=version, match_groups={})
+    return None
 
 
 def get_version_info(
@@ -938,8 +1006,14 @@ def get_version_info(
     """
     detector = VersionDetector()
 
+    # Optionally gate on a GitHub release that actually ships the template asset
+    result: Optional[VersionResult] = None
+    if config.require_release_asset:
+        result = _select_release_with_matching_asset(config, detector)
+
     # Get latest version
-    result = detector.fetch_latest_version(config.homepage, config.version_patterns)
+    if result is None:
+        result = detector.fetch_latest_version(config.homepage, config.version_patterns)
     match_groups: Dict[str, str] = {}
     if result:
         version = result.version
@@ -955,6 +1029,10 @@ def get_version_info(
         print(f"ℹ️  Falling back to direct download version detection: {version}")
     else:
         return None
+
+    # Upgrade http:// download URLs before the accessibility check/hash
+    if config.force_https:
+        download_url = _https_url(download_url)
 
     # Skip the download and hash calculation entirely when the version is
     # unchanged — the caller will not consume a hash in that case anyway.
