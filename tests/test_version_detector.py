@@ -2,6 +2,9 @@ import hashlib
 from io import BytesIO
 import zipfile
 
+import pytest
+import requests
+
 from version_detector import (
     SoftwareVersionConfig,
     VersionDetector,
@@ -753,3 +756,158 @@ def test_get_version_info_without_checksum_suffix_makes_no_api_calls(monkeypatch
     assert info is not None
     assert info["hash"] == computed
     assert session.api_requests == []
+
+
+class _ScrapeResponse:
+    """Fake requests.Response with status-aware raise_for_status."""
+
+    def __init__(self, status_code=200, text="", json_data=None):
+        self.status_code = status_code
+        self.text = text
+        self._json = json_data
+        self.headers = {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} Client Error", response=self)
+
+    def json(self):
+        return self._json
+
+
+class _FallbackSession:
+    """Routes URLs to responses or raised exceptions; records every request."""
+
+    def __init__(self, router):
+        self.router = router
+        self.requests = []
+
+    def get(self, url, **kwargs):
+        self.requests.append((url, kwargs))
+        outcome = self.router(url)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+ESPTOOL_RELEASES_PAGE = "https://github.com/espressif/esptool/releases"
+ESPTOOL_LATEST_API = "https://api.github.com/repos/espressif/esptool/releases/latest"
+ESPTOOL_LATEST_BODY = {
+    "tag_name": "v5.1.0",
+    "html_url": "https://github.com/espressif/esptool/releases/tag/v5.1.0",
+}
+
+
+def test_fetch_latest_version_falls_back_to_github_api_on_406(monkeypatch, capsys):
+    def router(url):
+        if "api.github.com" in url:
+            return _ScrapeResponse(json_data=ESPTOOL_LATEST_BODY)
+        return _ScrapeResponse(status_code=406, text="Not Acceptable")
+
+    session = _FallbackSession(router)
+    vd = VersionDetector()
+    vd.session = session
+
+    result = vd.fetch_latest_version(ESPTOOL_RELEASES_PAGE, [r"releases/tag/v?(?P<version>[\d.]+)"])
+
+    assert result is not None
+    assert result.version == "5.1.0"
+    assert result.match_groups == {"version": "5.1.0"}
+    assert [url for url, _ in session.requests] == [ESPTOOL_RELEASES_PAGE, ESPTOOL_LATEST_API]
+    assert "ℹ️ HTML scrape failed (406), fell back to GitHub API: 5.1.0" in capsys.readouterr().out
+
+
+def test_fetch_latest_version_falls_back_on_connection_error(monkeypatch, capsys):
+    def router(url):
+        if "api.github.com" in url:
+            return _ScrapeResponse(json_data=ESPTOOL_LATEST_BODY)
+        raise requests.ConnectionError("runner network hiccup")
+
+    session = _FallbackSession(router)
+    vd = VersionDetector()
+    vd.session = session
+
+    result = vd.fetch_latest_version(ESPTOOL_RELEASES_PAGE, [r"releases/tag/v?([\d.]+)"])
+
+    assert result is not None
+    assert result.version == "5.1.0"
+    assert "ℹ️ HTML scrape failed (?), fell back to GitHub API: 5.1.0" in capsys.readouterr().out
+
+
+def test_fetch_latest_version_api_fallback_sends_github_token(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+
+    def router(url):
+        if "api.github.com" in url:
+            return _ScrapeResponse(json_data=ESPTOOL_LATEST_BODY)
+        return _ScrapeResponse(status_code=406)
+
+    session = _FallbackSession(router)
+    vd = VersionDetector()
+    vd.session = session
+
+    result = vd.fetch_latest_version(ESPTOOL_RELEASES_PAGE, [r'"tag_name":\s*"v?([\d.]+)"'])
+
+    assert result is not None
+    assert result.version == "5.1.0"
+    assert session.requests[-1][1]["headers"] == {"Authorization": "Bearer secret-token"}
+
+
+def test_fetch_latest_version_api_fallback_failure_propagates_original_error():
+    def router(url):
+        if "api.github.com" in url:
+            raise ConnectionError("api down")
+        return _ScrapeResponse(status_code=406)
+
+    vd = VersionDetector()
+    vd.session = _FallbackSession(router)
+
+    with pytest.raises(requests.HTTPError) as excinfo:
+        vd.fetch_latest_version(ESPTOOL_RELEASES_PAGE, [r"releases/tag/v?([\d.]+)"])
+
+    assert "406" in str(excinfo.value)
+    assert excinfo.value.response is not None
+    assert excinfo.value.response.status_code == 406
+
+
+def test_fetch_latest_version_api_fallback_no_pattern_match_propagates():
+    def router(url):
+        if "api.github.com" in url:
+            return _ScrapeResponse(json_data={"tag_name": "not-a-version"})
+        return _ScrapeResponse(status_code=406)
+
+    vd = VersionDetector()
+    vd.session = _FallbackSession(router)
+
+    with pytest.raises(requests.HTTPError):
+        vd.fetch_latest_version(ESPTOOL_RELEASES_PAGE, [r"releases/tag/v?([\d.]+)"])
+
+
+def test_fetch_latest_version_no_api_fallback_for_non_github_homepage(capsys):
+    def router(url):
+        return _ScrapeResponse(status_code=406)
+
+    session = _FallbackSession(router)
+    vd = VersionDetector()
+    vd.session = session
+
+    assert vd.fetch_latest_version("https://example.com/releases", [r"v?([\d.]+)"]) is None
+    assert [url for url, _ in session.requests] == ["https://example.com/releases"]
+    assert "fell back to GitHub API" not in capsys.readouterr().out
+
+
+def test_fetch_latest_version_successful_scrape_skips_api_fallback():
+    html = '<a href="/espressif/esptool/releases/tag/v5.0.1">v5.0.1</a>'
+
+    def router(url):
+        return _ScrapeResponse(status_code=200, text=html)
+
+    session = _FallbackSession(router)
+    vd = VersionDetector()
+    vd.session = session
+
+    result = vd.fetch_latest_version(ESPTOOL_RELEASES_PAGE, [r"releases/tag/v?([\d.]+)"])
+
+    assert result is not None
+    assert result.version == "5.0.1"
+    assert [url for url, _ in session.requests] == [ESPTOOL_RELEASES_PAGE]

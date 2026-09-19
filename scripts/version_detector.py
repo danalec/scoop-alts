@@ -420,6 +420,15 @@ class VersionDetector:
             return None
 
         except requests.RequestException as e:
+            page = _GITHUB_RELEASES_PAGE_RE.match(homepage_url)
+            if page is not None:
+                # GitHub sometimes 406s HTML scrapes from runner IPs; the API
+                # path works there, so fall back to /releases/latest. If the
+                # fallback yields nothing, surface the original scrape error.
+                api_result = self._github_latest_release_fallback(page, version_patterns, e)
+                if api_result is not None:
+                    return api_result
+                raise
             logger.error(f"Failed to fetch version info from {homepage_url}: {e}")
             print(f"❌ Failed to fetch version info: {e}")
             return None
@@ -427,6 +436,49 @@ class VersionDetector:
             logger.error(f"Error during version detection for {homepage_url}: {e}")
             print(f"❌ Error during version detection: {e}")
             return None
+
+    def _github_latest_release_fallback(
+        self,
+        page: "re.Match[str]",
+        version_patterns: List[str],
+        original_error: Exception,
+    ) -> Optional[VersionResult]:
+        """Recover a version via the GitHub API when the HTML scrape failed.
+
+        Fetches ``/repos/<owner>/<repo>/releases/latest`` through the release
+        cache and runs the same ``version_patterns`` over the JSON body (the
+        ``tag_name``/``html_url`` fields match the usual patterns). Sends an
+        explicit bearer token when GITHUB_TOKEN is set. Returns the first
+        pattern match, or None when the API call fails or nothing matches (the
+        caller then propagates the original scrape error).
+        """
+        api_url = (
+            f"https://api.github.com/repos/{page.group('owner')}/{page.group('repo')}"
+            "/releases/latest"
+        )
+        headers: Optional[Dict[str, str]] = None
+        token = os.environ.get("GITHUB_TOKEN")
+        if token:
+            headers = {"Authorization": f"Bearer {token}"}
+        body = self._cached_api_get(api_url, headers=headers)
+        if body is None:
+            return None
+        content = json.dumps(body, ensure_ascii=False)
+        for pattern in version_patterns:
+            for match in re.finditer(pattern, content, re.IGNORECASE):
+                groups = match.groupdict()
+                if "version" in groups:
+                    version = groups["version"]
+                elif match.groups():
+                    version = match.group(1)
+                else:
+                    continue
+                if version and version[0].isdigit():
+                    response = getattr(original_error, "response", None)
+                    status = response.status_code if response is not None else "?"
+                    print(f"ℹ️ HTML scrape failed ({status}), fell back to GitHub API: {version}")
+                    return VersionResult(version=version, match_groups=groups)
+        return None
 
     def construct_download_url(
         self, url_template: str, version: str, match_groups: Optional[Dict[str, str]] = None
@@ -471,7 +523,12 @@ class VersionDetector:
             except Exception:
                 return False
 
-    def _cached_api_get(self, url: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
+    def _cached_api_get(
+        self,
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Optional[Any]:
         """Fetch a GitHub API/asset URL through the small on-disk release cache.
 
         The cache lives at ``<repo>/.temp/release-cache.json``, is keyed by
@@ -495,7 +552,9 @@ class VersionDetector:
             except Exception:
                 pass
         try:
-            response = self.session.get(url, params=params, timeout=DEFAULT_TIMEOUT)
+            response = self.session.get(
+                url, params=params, headers=headers, timeout=DEFAULT_TIMEOUT
+            )
             response.raise_for_status()
             try:
                 body: Any = response.json()
@@ -1089,6 +1148,11 @@ def _select_release_with_matching_asset(
 
 
 _SHA256_HEX_RE = re.compile(r"\b[0-9a-fA-F]{64}\b")
+
+# GitHub releases pages whose HTML scrape can fall back to the releases API
+_GITHUB_RELEASES_PAGE_RE = re.compile(
+    r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/releases/?(?:[?#].*)?$"
+)
 
 
 def _verify_upstream_checksum(

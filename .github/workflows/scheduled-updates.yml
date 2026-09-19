@@ -39,7 +39,21 @@ jobs:
         run: |
           python scripts/generate-dashboard.py .temp/update-summary.json docs/update-health.md || true
 
+      - name: Upload run summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-run-summary
+          path: |
+            .temp/update-summary.json
+            docs/update-health.md
+
+      # NOTE: this step needs the repo setting "Allow GitHub Actions to create
+      # and approve pull requests" (Settings -> Actions -> General). Without
+      # it the action cannot open the PR; continue-on-error keeps the daily
+      # schedule green and the summary artifact above still carries the results.
       - name: Create Pull Request for updates
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
