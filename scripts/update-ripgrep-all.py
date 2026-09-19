@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 import requests
 
-from manifest_manager import ManifestUpdater
+from manifest_manager import ManifestUpdater, is_forced
 from version_detector import SoftwareVersionConfig, VersionDetector, get_session
 
 # Optional semantic version parsing
@@ -75,7 +75,11 @@ def update_manifest(force: bool = False) -> bool:
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=[r"releases/tag/v(0\.10\.[0-9]+)"],
+        # Fallback-only pattern: get_latest_windows_release() above is the real
+        # gate for Windows-binary availability; this pattern only matters when
+        # both the API and the HTML fallback are unreachable, where a hash
+        # fetch failure surfaces loudly instead of pinning a version series.
+        version_patterns=[r"releases/tag/v([\d.]+)"],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
         license="AGPL-3.0-or-later",
@@ -100,16 +104,7 @@ def update_manifest(force: bool = False) -> bool:
 
 def main() -> None:
     """Main update function."""
-    force = (
-        "--force" in sys.argv
-        or "-f" in sys.argv
-        or "--forcedly" in sys.argv
-        or "forcedly" in sys.argv
-        or os.environ.get("FORCE") == "1"
-        or os.environ.get("SCOOP_FORCE") == "1"
-    )
-
-    success = update_manifest(force=force)
+    success = update_manifest(force=is_forced())
     if not success:
         sys.exit(1)
 

@@ -66,8 +66,9 @@ Purpose:
 - Keep manifest rewriting logic in one place.
 
 Main API:
-- `ManifestUpdater(config, bucket_dir, manifest_filename=None)`
+- `ManifestUpdater(config, bucket_dir, manifest_filename=None, force=False)`
 - `ManifestUpdater.update() -> bool`
+- `is_forced() -> bool`
 
 What it does:
 1. Calls `get_version_info(config)`.
@@ -94,6 +95,11 @@ Possible error codes:
 Architecture handling:
 - If the manifest contains an `architecture` block, `ManifestUpdater` prefers `64bit`, then `arm64`, then `32bit`, then the first available entry.
 - If no usable architecture block exists, it updates top-level `url` and `hash`.
+
+Forced updates:
+- When the detected version equals the current manifest version, the manifest is left untouched unless force mode is active.
+- `is_forced()` returns True when `FORCE=1` or `SCOOP_FORCE=1` is in the environment, or `--force` / `-f` / `--forcedly` / `forcedly` appears on the command line.
+- `ManifestUpdater` accepts `force=True` directly and also auto-detects via `is_forced()`, so updater scripts typically just pass `force=is_forced()`.
 
 ### `scripts/update-all.py`
 
@@ -181,6 +187,7 @@ Expected behavior:
 - The final status line is always JSON.
 - Exit code `0` means success, including "already up to date".
 - Exit code non-zero means the update failed.
+- Scripts that support force mode should accept a `force` argument and pass `force=is_forced()` to the updater (see `update-ripgrep-all.py`); `update-all.py --force` then propagates force to every child via `FORCE=1`.
 
 ## Orchestrator Workflow
 
@@ -196,6 +203,7 @@ Expected behavior:
    - `SCOOP_GIT_DRY_RUN`
    - `SCOOP_GIT_REMOTE`
    - `SCOOP_GIT_BRANCH`
+   - `FORCE` (when `--force` is passed, so child updaters rewrite manifests even when versions are unchanged)
 5. Run scripts sequentially or in parallel.
 6. Summarize the results.
 7. Optionally write summary files and send a webhook.

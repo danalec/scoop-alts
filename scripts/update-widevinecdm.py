@@ -8,6 +8,7 @@ import json
 import sys
 import os
 from pathlib import Path
+from manifest_manager import is_forced
 from version_detector import VersionDetector
 
 # Configuration
@@ -20,7 +21,7 @@ VERSION_PATTERNS = [
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "widevinecdm.json"
 
 
-def update_manifest():
+def update_manifest(force=False):
     """Update the Scoop manifest using the shared version detector."""
     structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
     if not structured_only:
@@ -66,11 +67,14 @@ def update_manifest():
         arch_urls_current = all(
             isinstance(entry, dict) and version in entry.get("url", "") for entry in arch.values()
         )
-    if current_version == version and arch_urls_current:
+    if current_version == version and arch_urls_current and not force:
         if not structured_only:
             print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
+    if current_version == version and arch_urls_current and force:
+        if not structured_only:
+            print(f"🔄 Forcing update of {SOFTWARE_NAME} (v{version})...")
 
     # Update every architecture entry; drop entries upstream no longer ships
     manifest["version"] = version
@@ -169,7 +173,7 @@ def update_manifest():
 
 def main():
     """Main update function"""
-    success = update_manifest()
+    success = update_manifest(force=is_forced())
     if not success:
         sys.exit(1)
 

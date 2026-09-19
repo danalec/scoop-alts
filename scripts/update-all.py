@@ -874,6 +874,8 @@ def apply_environment_overrides(args: argparse.Namespace) -> None:
 
 def configure_runtime_environment(args: argparse.Namespace) -> None:
     """Propagate runtime settings to child processes via environment variables."""
+    if args.force:
+        os.environ["FORCE"] = "1"
     if args.git_dry_run:
         os.environ["SCOOP_GIT_DRY_RUN"] = "1"
     if args.git_remote:
@@ -1026,6 +1028,11 @@ Examples:
         "-f",
         action="store_true",
         help="Enable fast mode with optimized worker count",
+    )
+    execution_group.add_argument(
+        "--force",
+        action="store_true",
+        help="Force updates even when versions are unchanged (propagated to updater scripts via FORCE=1)",
     )
     execution_group.add_argument(
         "--install-browsers",

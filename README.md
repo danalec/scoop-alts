@@ -143,6 +143,17 @@ Common runtime options:
 * `--only-providers github`: Update only packages hosted on GitHub.
 * `--retry 2`: Retry transient network failures.
 * `--json-summary .temp/summary.json`: Export machine-readable execution report.
+* `--force`: Re-run updaters even when versions are unchanged (propagated to child scripts via `FORCE=1`). Individual updaters also honor `SCOOP_FORCE=1`, `--force` / `-f`, or the legacy `forcedly` spelling.
+
+### Forced Updates
+
+Normally an updater skips a manifest whose version already matches upstream. A **forced update** rewrites the manifest anyway — useful to refresh hashes or URLs for an unchanged version. Force mode is triggered by:
+
+* `python scripts/update-all.py --force` — exports `FORCE=1` so every child updater runs forced.
+* `FORCE=1` or `SCOOP_FORCE=1` in the environment of a single updater script.
+* `--force` / `-f` / `--forcedly` / `forcedly` on an updater script's command line.
+
+Under the hood, `scripts/manifest_manager.py` exposes `is_forced()` for detection and `ManifestUpdater` accepts a `force=` argument, so updater scripts only need `force=is_forced()` (see `scripts/update-ripgrep-all.py` for the reference implementation).
 
 ---
 

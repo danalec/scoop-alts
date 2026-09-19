@@ -12,6 +12,24 @@ from typing import Any, Dict, Optional
 from version_detector import SoftwareVersionConfig, get_version_info
 
 
+def is_forced() -> bool:
+    """Return True when a forced update was requested.
+
+    Honored triggers: ``--force`` / ``-f`` on the command line, ``FORCE=1`` or
+    ``SCOOP_FORCE=1`` in the environment (``update-all.py --force`` exports the
+    latter so child updater scripts honor it), and the legacy ``forcedly``
+    spellings kept for backward compatibility.
+    """
+    return (
+        os.environ.get("FORCE") == "1"
+        or os.environ.get("SCOOP_FORCE") == "1"
+        or "--force" in sys.argv
+        or "-f" in sys.argv
+        or "--forcedly" in sys.argv
+        or "forcedly" in sys.argv
+    )
+
+
 class ManifestUpdater:
     """Update a Scoop manifest using ``version_detector`` results."""
 
@@ -27,15 +45,7 @@ class ManifestUpdater:
         self.manifest_filename = manifest_filename or f"{config.name}.json"
         self.manifest_path = bucket_dir / self.manifest_filename
         self.structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
-        self.force = (
-            force
-            or os.environ.get("FORCE") == "1"
-            or os.environ.get("SCOOP_FORCE") == "1"
-            or "--force" in sys.argv
-            or "-f" in sys.argv
-            or "--forcedly" in sys.argv
-            or "forcedly" in sys.argv
-        )
+        self.force = force or is_forced()
 
     def log(self, message: str) -> None:
         """Print human-readable status messages when structured output is disabled."""

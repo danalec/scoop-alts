@@ -2,12 +2,14 @@
 """
 Thorium Avx2 Update Script
 Automatically checks for updates and updates the Scoop manifest using shared version detector.
+Supports forced execution.
 """
 
 import json
 import os
 import sys
 from pathlib import Path
+from manifest_manager import is_forced
 from version_detector import VersionDetector, get_session
 
 # Configuration
@@ -49,7 +51,7 @@ def get_release_info():
     return None
 
 
-def update_manifest():
+def update_manifest(force: bool = False):
     """Update the Scoop manifest from the latest asset-bearing gz83/thorium release."""
     structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
     if not structured_only:
@@ -109,11 +111,15 @@ def update_manifest():
 
     # Check if update is needed
     current_version = manifest.get("version", "")
-    if current_version == version:
+    if current_version == version and not force:
         if not structured_only:
             print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
+
+    if current_version == version:
+        if not structured_only:
+            print(f"🔄 Forcing update of {SOFTWARE_NAME} (v{version})...")
 
     # Update manifest
     manifest["version"] = version
@@ -171,7 +177,7 @@ def update_manifest():
 
 def main():
     """Main update function"""
-    success = update_manifest()
+    success = update_manifest(force=is_forced())
     if not success:
         sys.exit(1)
 

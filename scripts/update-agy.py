@@ -2,6 +2,7 @@
 """
 Antigravity CLI (agy) Update Script
 Automatically checks for updates and updates the Scoop manifest.
+Supports forced execution.
 """
 
 import hashlib
@@ -31,7 +32,7 @@ def calculate_sha256(url: str) -> str:
     return hasher.hexdigest()
 
 
-def update_manifest() -> bool:
+def update_manifest(force: bool = False) -> bool:
     structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
@@ -85,14 +86,19 @@ def update_manifest() -> bool:
         return False
 
     current_version = manifest.get("version", "")
-    if current_version == version:
+    if current_version == version and not force:
         if not structured_only:
             print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
 
     if not structured_only:
-        print(f"📥 New version found: {current_version} -> {version}. Calculating SHA256 hashes...")
+        if current_version == version:
+            print(f"🔄 Force-updating {SOFTWARE_NAME} (v{version}). Calculating SHA256 hashes...")
+        else:
+            print(
+                f"📥 New version found: {current_version} -> {version}. Calculating SHA256 hashes..."
+            )
 
     try:
         hash_64 = calculate_sha256(url_64)
@@ -140,7 +146,14 @@ def update_manifest() -> bool:
 
 
 def main() -> None:
-    success = update_manifest()
+    try:
+        from manifest_manager import is_forced
+
+        force = is_forced()
+    except ImportError:
+        force = False
+
+    success = update_manifest(force=force)
     if not success:
         sys.exit(1)
 

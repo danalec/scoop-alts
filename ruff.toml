@@ -9,6 +9,7 @@ line-length = 100
 select = ["E4", "E7", "E9", "F"]
 
 [lint.per-file-ignores]
-# E402: module-level import not at top — update-all.py intentionally extends
-# sys.path before importing sibling modules.
+# E402: module-level import not at top — update-all.py and the test suite
+# intentionally extend sys.path before importing sibling modules.
 "scripts/update-all.py" = ["E402"]
+"tests/*.py" = ["E402"]
