@@ -26,5 +26,5 @@ def test_filter_by_providers_only_and_skip(tmp_path):
     only_res = mod.filter_by_providers(scripts, provider_map, only=["github"], skip=None)
     assert [p.name for p in only_res] == ["update-foo.py"]
 
-    skip_res = mod.filter_by_providers(scripts, provider_map, only=None, skip=["google"]) 
+    skip_res = mod.filter_by_providers(scripts, provider_map, only=None, skip=["google"])
     assert set([p.name for p in skip_res]) == {"update-foo.py", "update-baz.py"}

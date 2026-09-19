@@ -129,7 +129,11 @@ def commit_manifest_change(app_name: str, manifest_path: str, push: bool = False
     if new_file:
         message = f"{app_name}: Add version {version}" if version else f"{app_name}: Add manifest"
     else:
-        message = f"{app_name}: Update to version {version}" if version else f"{app_name}: Update manifest"
+        message = (
+            f"{app_name}: Update to version {version}"
+            if version
+            else f"{app_name}: Update manifest"
+        )
 
     if not commit_with_message(message):
         return False
@@ -190,7 +194,9 @@ def get_staged_bucket_changes() -> Tuple[List[str], List[str]]:
 
         status, path_text = parts
         normalized_path = path_text.replace("\\", "/")
-        if not normalized_path.startswith(prefix) or not normalized_path.endswith(MANIFEST_EXTENSION):
+        if not normalized_path.startswith(prefix) or not normalized_path.endswith(
+            MANIFEST_EXTENSION
+        ):
             continue
 
         app_name = Path(normalized_path).stem

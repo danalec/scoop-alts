@@ -127,6 +127,19 @@ class ManifestUpdater:
         if manifest is None:
             return False
 
+        # Multi-architecture manifests need per-arch URLs/hashes, which a single
+        # download template cannot produce — updating only the preferred arch key
+        # would leave the other entries stale (see bucket/widevinecdm.json history).
+        # Refuse rather than silently corrupt the manifest.
+        architecture = manifest.get("architecture")
+        if isinstance(architecture, dict) and len(architecture) > 1:
+            self.log(
+                f"❌ {self.config.name} has multiple architecture entries; "
+                "ManifestUpdater supports a single entry — use a package-specific updater"
+            )
+            self.emit_result(updated=False, error="multi_arch_requires_custom_updater")
+            return False
+
         version = version_info["version"]
         current_version = str(manifest.get("version", ""))
         if current_version == version:

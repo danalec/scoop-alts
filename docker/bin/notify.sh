@@ -5,7 +5,7 @@ MSG=${1:-"Job failed"}
 LOG=${2:-}
 
 if [ -n "${LOG}" ] && [ -f "$LOG" ]; then
-  TAIL=$(tail -n 50 "$LOG" | sed 's/"/\\"/g')
+  TAIL=$(tail -n 50 "$LOG" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
   BODY="{\"text\":\"${MSG}\n\n${TAIL}\"}"
 else
   BODY="{\"text\":\"${MSG}\"}"

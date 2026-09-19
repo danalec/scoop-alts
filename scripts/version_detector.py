@@ -25,19 +25,21 @@ except ImportError:
     sync_playwright = None
 
 # Optional semantic version parsing
+_PVersion: Optional[Any] = None
+_PInvalid: Any = Exception
 try:
     from packaging.version import Version as _PVersion, InvalidVersion as _PInvalid
 except Exception:  # pragma: no cover
-    _PVersion = None
-    _PInvalid = Exception
+    pass
 
 # Optional adapters/retries for robust and efficient HTTP requests
+HTTPAdapter: Any = None
+Retry: Any = None
 try:
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
 except Exception:  # pragma: no cover - environment may not have urllib3
-    HTTPAdapter = None
-    Retry = None
+    pass
 
 # Optional caching support; used only if available and enabled by caller
 try:
@@ -51,10 +53,13 @@ DEFAULT_TIMEOUT = 15  # seconds
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-if os.environ.get('AUTOMATION_LIB_SILENT') == '1':
+if os.environ.get("AUTOMATION_LIB_SILENT") == "1":
+
     def _noop_print(*args, **kwargs):
         return None
+
     print = _noop_print
+
 
 def get_session(
     *,
@@ -80,34 +85,38 @@ def get_session(
     """
     if use_cache and requests_cache is not None:
         session: requests.Session = requests_cache.CachedSession(
-            cache_name='version-detector-cache',
-            backend='sqlite',
+            cache_name="version-detector-cache",
+            backend="sqlite",
             expire_after=cache_expire_seconds,
         )
     else:
         session = requests.Session()
 
     # Default headers (prefer compressed responses)
-    session.headers.update({
-        'User-Agent': (
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/120.0.0.0 Safari/537.36'
-        ),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    })
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        }
+    )
 
-    token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:
-        session.headers.update({
-            'Authorization': f'Bearer {token}',
-            'Accept': 'application/vnd.github+json',
-        })
+        session.headers.update(
+            {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+            }
+        )
 
     # Configure connection pooling and retries if available
     if HTTPAdapter is not None and Retry is not None:
@@ -115,7 +124,7 @@ def get_session(
             total=retries,
             backoff_factor=backoff_factor,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=frozenset(['HEAD', 'GET']),
+            allowed_methods=frozenset(["HEAD", "GET"]),
             raise_on_status=False,
         )
         adapter = HTTPAdapter(
@@ -123,16 +132,19 @@ def get_session(
             pool_maxsize=pool_maxsize,
             max_retries=retry,
         )
-        session.mount('http://', adapter)
-        session.mount('https://', adapter)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
 
     return session
+
 
 @dataclass
 class VersionResult:
     """Result of version detection including captured groups"""
+
     version: str
     match_groups: Dict[str, str] = field(default_factory=dict)
+
 
 class VersionDetector:
     """Shared class for version detection and URL construction"""
@@ -140,17 +152,19 @@ class VersionDetector:
     def __init__(self):
         # Use shared session with pooling, retries, and compressed responses
         # Enable cache if env variables request it
-        use_cache = bool(os.environ.get('AUTOMATION_HTTP_CACHE') or os.environ.get('REQUESTS_CACHE'))
-        ttl = int(os.environ.get('AUTOMATION_HTTP_CACHE_TTL', '1800'))
+        use_cache = bool(
+            os.environ.get("AUTOMATION_HTTP_CACHE") or os.environ.get("REQUESTS_CACHE")
+        )
+        ttl = int(os.environ.get("AUTOMATION_HTTP_CACHE_TTL", "1800"))
         self.session = get_session(use_cache=use_cache, cache_expire_seconds=ttl)
         # Per-URL conditional request metadata and cached parsed version
-        self._version_cache: Dict[str, Dict[str, str]] = {}
+        self._version_cache: Dict[str, Dict[str, Any]] = {}
 
     def _fetch_with_playwright(self, url: str) -> Optional[str]:
         """Fetch content using Playwright"""
         if not sync_playwright:
             return None
-            
+
         try:
             logger.info(f"Fetching with Playwright: {url}")
             print(f"🎭 Fetching with Playwright: {url}")
@@ -158,9 +172,11 @@ class VersionDetector:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
                 # Set a realistic user agent
-                page.set_extra_http_headers({
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                })
+                page.set_extra_http_headers(
+                    {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    }
+                )
                 page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 # Wait a bit for dynamic content
                 page.wait_for_timeout(2000)
@@ -172,7 +188,9 @@ class VersionDetector:
             print(f"⚠️  Playwright fetch failed: {e}")
             return None
 
-    def fetch_latest_version(self, homepage_url: str, version_patterns: List[str]) -> Optional[VersionResult]:
+    def fetch_latest_version(
+        self, homepage_url: str, version_patterns: List[str]
+    ) -> Optional[VersionResult]:
         """
         Fetch the latest version from a homepage using provided regex patterns
 
@@ -186,26 +204,28 @@ class VersionDetector:
         try:
             logger.info(f"Scraping version from: {homepage_url}")
             print(f"🔍 Scraping version from: {homepage_url}")
-            
+
             # Use conditional headers when we have prior metadata
             headers: Dict[str, str] = {}
             cached = self._version_cache.get(homepage_url)
             if cached:
-                if cached.get('etag'):
-                    headers['If-None-Match'] = cached['etag']
-                if cached.get('last_modified'):
-                    headers['If-Modified-Since'] = cached['last_modified']
+                if cached.get("etag"):
+                    headers["If-None-Match"] = cached["etag"]
+                if cached.get("last_modified"):
+                    headers["If-Modified-Since"] = cached["last_modified"]
 
             response = self.session.get(homepage_url, timeout=DEFAULT_TIMEOUT, headers=headers)
             response.raise_for_status()
 
             # If not modified, return cached version immediately
-            if response.status_code == 304 and cached and cached.get('version'):
+            if response.status_code == 304 and cached and cached.get("version"):
                 logger.info("Using cached version (304 Not Modified)")
                 print("ℹ️  Not modified (304), using cached version")
                 # When using cache, we don't have new match groups unless we cached them.
                 # For now, return empty groups or retrieve from cache if I decide to store them.
-                return VersionResult(version=cached['version'], match_groups=cached.get('match_groups', {}))
+                return VersionResult(
+                    version=cached["version"], match_groups=cached.get("match_groups", {})
+                )
 
             content = response.text
 
@@ -215,7 +235,7 @@ class VersionDetector:
                 # Use finditer to capture named groups
                 for match in re.finditer(pattern, content, re.IGNORECASE):
                     groups = match.groupdict()
-                    
+
                     # Determine the version string
                     # If "version" group exists, use it. Otherwise use the first group.
                     if "version" in groups:
@@ -223,8 +243,8 @@ class VersionDetector:
                     elif match.groups():
                         v = match.group(1)
                     else:
-                        continue # No capturing groups, skip
-                        
+                        continue  # No capturing groups, skip
+
                     # Basic sanity filter: must start with a digit
                     if v and v[0].isdigit():
                         all_results.append(VersionResult(version=v, match_groups=groups))
@@ -232,7 +252,7 @@ class VersionDetector:
             if all_results:
                 # Prefer semantic version ordering when available
                 best_result: Optional[VersionResult] = None
-                
+
                 # Sort based on version string
                 def get_version_obj(res: VersionResult):
                     if _PVersion:
@@ -255,28 +275,30 @@ class VersionDetector:
                     return key
 
                 if _PVersion:
-                     # Filter out invalid versions if using packaging.version
-                     valid_versions = [r for r in all_results if get_version_obj(r) is not None]
-                     if valid_versions:
-                         best_result = sorted(valid_versions, key=lambda r: _PVersion(r.version), reverse=True)[0]
-                
+                    # Filter out invalid versions if using packaging.version
+                    valid_versions = [r for r in all_results if get_version_obj(r) is not None]
+                    if valid_versions:
+                        best_result = sorted(
+                            valid_versions, key=lambda r: _PVersion(r.version), reverse=True
+                        )[0]
+
                 if not best_result:
                     best_result = sorted(all_results, key=version_key, reverse=True)[0]
 
                 logger.info(f"Found version: {best_result.version}")
                 print(f"✅ Found version: {best_result.version}")
-                
+
                 # Store conditional metadata and parsed version
                 self._version_cache[homepage_url] = {
-                    'etag': response.headers.get('ETag', ''),
-                    'last_modified': response.headers.get('Last-Modified', ''),
-                    'version': best_result.version,
-                    'match_groups': best_result.match_groups
+                    "etag": response.headers.get("ETag", ""),
+                    "last_modified": response.headers.get("Last-Modified", ""),
+                    "version": best_result.version,
+                    "match_groups": best_result.match_groups,
                 }
                 return best_result
 
             logger.warning("No version found with any pattern using requests")
-            
+
             # Try Playwright fallback if available and requests failed to find version
             if sync_playwright:
                 print("⚠️  No version found with requests, trying Playwright...")
@@ -293,12 +315,12 @@ class VersionDetector:
                                 v = match.group(1)
                             else:
                                 continue
-                                
+
                             if v and v[0].isdigit():
                                 all_results.append(VersionResult(version=v, match_groups=groups))
-                                
+
                     if all_results:
-                         # Reuse sorting logic (simplified here or extracted later)
+                        # Reuse sorting logic (simplified here or extracted later)
                         def version_key_pw(res: VersionResult) -> List[int]:
                             parts = re.split(r"[._-]", res.version)
                             key: List[int] = []
@@ -309,15 +331,10 @@ class VersionDetector:
                                     key.append(-1)
                             return key
 
-                        if _PVersion:
-                             valid_versions = [r for r in all_results if _PVersion and _PVersion(r.version)] # Simplified check
-                             # Re-implement proper check if needed, or just use the simplest sort for fallback
-                             pass
-
                         # Just use the simple sort for now to avoid code duplication complexity in search/replace
                         # Ideally refactor sorting into a method
                         best_result = sorted(all_results, key=version_key_pw, reverse=True)[0]
-                        
+
                         logger.info(f"Found version with Playwright: {best_result.version}")
                         print(f"✅ Found version with Playwright: {best_result.version}")
                         return best_result
@@ -325,9 +342,9 @@ class VersionDetector:
             print("❌ No version found with any pattern")
             # Cache response metadata even when not found, to enable future 304
             self._version_cache[homepage_url] = {
-                'etag': response.headers.get('ETag', ''),
-                'last_modified': response.headers.get('Last-Modified', ''),
-                'version': '',
+                "etag": response.headers.get("ETag", ""),
+                "last_modified": response.headers.get("Last-Modified", ""),
+                "version": "",
             }
             return None
 
@@ -340,7 +357,9 @@ class VersionDetector:
             print(f"❌ Error during version detection: {e}")
             return None
 
-    def construct_download_url(self, url_template: str, version: str, match_groups: Optional[Dict[str, str]] = None) -> str:
+    def construct_download_url(
+        self, url_template: str, version: str, match_groups: Optional[Dict[str, str]] = None
+    ) -> str:
         """
         Construct download URL from template and version
 
@@ -355,14 +374,14 @@ class VersionDetector:
         if not url_template or not version:
             logger.error("Invalid url_template or version provided")
             raise ValueError("url_template and version cannot be empty")
-            
+
         download_url = url_template.replace("$version", version)
-        
+
         if match_groups:
             for name, value in match_groups.items():
                 if value:
                     download_url = download_url.replace(f"$match{name}", value)
-        
+
         logger.info(f"Constructed download URL: {download_url}")
         print(f"📦 Download URL: {download_url}")
         return download_url
@@ -375,7 +394,7 @@ class VersionDetector:
         except Exception:
             # If HEAD fails, try GET with range to check first byte
             try:
-                headers = {'Range': 'bytes=0-0'}
+                headers = {"Range": "bytes=0-0"}
                 response = self.session.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
                 return response.status_code in [200, 206]  # 206 = Partial Content
             except Exception:
@@ -392,7 +411,7 @@ class VersionDetector:
             SHA256 hash string if successful, None otherwise
         """
         # Strip any fragment (e.g., "#/setup.exe") which is used by Scoop for local renaming
-        clean_url = url.split('#', 1)[0]
+        clean_url = url.split("#", 1)[0]
 
         # First validate the URL is accessible
         if not self.validate_url(clean_url):
@@ -406,7 +425,7 @@ class VersionDetector:
 
             sha256_hash = hashlib.sha256()
             total_bytes = 0
-            content_len = int(response.headers.get('Content-Length', '0') or '0')
+            content_len = int(response.headers.get("Content-Length", "0") or "0")
             if content_len:
                 print(f"⬇️  Content-Length: {content_len} bytes")
             for chunk in response.iter_content(chunk_size=8192):
@@ -451,14 +470,14 @@ class VersionDetector:
                 print(f"✅ Version inferred from partial content: {v_partial}")
                 return v_partial
 
-            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1' or sys.platform != 'win32':
+            if os.environ.get("AUTOMATION_DISABLE_WINMETA") == "1" or sys.platform != "win32":
                 return None
             print(f"🔍 Downloading executable to analyze metadata: {download_url}")
 
             response = self.session.get(download_url, stream=True, timeout=max(30, DEFAULT_TIMEOUT))
             response.raise_for_status()
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.exe') as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".exe") as temp_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     temp_file.write(chunk)
                 temp_path = Path(temp_file.name)
@@ -484,16 +503,20 @@ class VersionDetector:
             return None
 
     # Utility helpers for efficient network access
-    def head(self, url: str, *, timeout: int = DEFAULT_TIMEOUT, allow_redirects: bool = True) -> Optional[requests.Response]:
+    def head(
+        self, url: str, *, timeout: int = DEFAULT_TIMEOUT, allow_redirects: bool = True
+    ) -> Optional[requests.Response]:
         try:
             return self.session.head(url, timeout=timeout, allow_redirects=allow_redirects)
         except Exception:
             return None
 
-    def get_range_bytes(self, url: str, start: int = 0, end: int = 65535, *, timeout: int = DEFAULT_TIMEOUT) -> Optional[bytes]:
+    def get_range_bytes(
+        self, url: str, start: int = 0, end: int = 65535, *, timeout: int = DEFAULT_TIMEOUT
+    ) -> Optional[bytes]:
         """Fetch a byte range to avoid full downloads when only metadata is needed."""
         try:
-            headers = {'Range': f'bytes={start}-{end}'}
+            headers = {"Range": f"bytes={start}-{end}"}
             resp = self.session.get(url, headers=headers, timeout=timeout)
             if resp.status_code in (200, 206):
                 return resp.content
@@ -505,16 +528,17 @@ class VersionDetector:
         """Extract version using PowerShell Get-ItemProperty"""
         try:
             cmd = [
-                'powershell', '-Command',
-                f"(Get-ItemProperty '{exe_path}').VersionInfo.FileVersion"
+                "powershell",
+                "-Command",
+                f"(Get-ItemProperty '{exe_path}').VersionInfo.FileVersion",
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0 and result.stdout.strip():
                 version = result.stdout.strip()
                 # Clean up version string
-                version = re.sub(r'[^\d\.]', '', version)
-                if re.match(r'^\d+\.\d+', version):
+                version = re.sub(r"[^\d\.]", "", version)
+                if re.match(r"^\d+\.\d+", version):
                     return version
 
         except Exception as e:
@@ -528,16 +552,21 @@ class VersionDetector:
             # Try using wmic (Windows Management Instrumentation)
             escaped_path = str(exe_path).replace("\\", "\\\\")
             cmd = [
-                'wmic', 'datafile', 'where', f'name="{escaped_path}"',
-                'get', 'Version', '/value'
+                "wmic",
+                "datafile",
+                "where",
+                f'name="{escaped_path}"',
+                "get",
+                "Version",
+                "/value",
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if line.startswith('Version='):
-                        version = line.split('=', 1)[1].strip()
-                        if version and re.match(r'^\d+\.\d+', version):
+                for line in result.stdout.split("\n"):
+                    if line.startswith("Version="):
+                        version = line.split("=", 1)[1].strip()
+                        if version and re.match(r"^\d+\.\d+", version):
                             return version
 
         except Exception as e:
@@ -547,7 +576,7 @@ class VersionDetector:
 
     def get_local_executable_version(self, exe_path: Path) -> Optional[str]:
         """Extract a version from a local executable via Windows file metadata."""
-        if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1' or sys.platform != 'win32':
+        if os.environ.get("AUTOMATION_DISABLE_WINMETA") == "1" or sys.platform != "win32":
             return None
         try:
             if version := self._extract_version_powershell(exe_path):
@@ -560,12 +589,16 @@ class VersionDetector:
             print(f"❌ Error extracting local executable version: {e}")
         return None
 
-    def guess_version_from_local_file(self, file_path: Path, *, first_bytes: int = 262144) -> Optional[str]:
+    def guess_version_from_local_file(
+        self, file_path: Path, *, first_bytes: int = 262144
+    ) -> Optional[str]:
         """Infer a version from a local file by scanning a small decoded byte window."""
         try:
-            blob = file_path.read_bytes()[:first_bytes].decode('latin-1', errors='ignore')
+            blob = file_path.read_bytes()[:first_bytes].decode("latin-1", errors="ignore")
             for key in ("FileVersion", "ProductVersion", "Product Version", "Version"):
-                if (idx := blob.find(key)) != -1 and (version := self.infer_version(blob[idx: idx + 200])):
+                if (idx := blob.find(key)) != -1 and (
+                    version := self.infer_version(blob[idx : idx + 200])
+                ):
                     return version
             return self.infer_version(blob)
         except Exception:
@@ -594,14 +627,14 @@ class VersionDetector:
                 return v_partial
 
             # 4) Fallback: full download and query MSI properties
-            if os.environ.get('AUTOMATION_DISABLE_WINMETA') == '1' or sys.platform != 'win32':
+            if os.environ.get("AUTOMATION_DISABLE_WINMETA") == "1" or sys.platform != "win32":
                 return None
             print(f"🔍 Downloading MSI to analyze: {msi_url}")
 
             response = self.session.get(msi_url, stream=True, timeout=60)
             response.raise_for_status()
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.msi') as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".msi") as temp_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     temp_file.write(chunk)
                 temp_path = Path(temp_file.name)
@@ -609,14 +642,15 @@ class VersionDetector:
             try:
                 # Use msiexec to query MSI properties
                 cmd = [
-                    'powershell', '-Command',
-                    f"Get-MSIProperty -Path '{temp_path}' -Property ProductVersion"
+                    "powershell",
+                    "-Command",
+                    f"Get-MSIProperty -Path '{temp_path}' -Property ProductVersion",
                 ]
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
                 if result.returncode == 0 and result.stdout.strip():
                     version = result.stdout.strip()
-                    if re.match(r'^\d+\.\d+', version):
+                    if re.match(r"^\d+\.\d+", version):
                         print(f"✅ Found MSI version: {version}")
                         return version
 
@@ -648,7 +682,7 @@ class VersionDetector:
             response = self.session.get(archive_url, stream=True, timeout=60)
             response.raise_for_status()
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     temp_file.write(chunk)
                 temp_path = Path(temp_file.name)
@@ -656,12 +690,12 @@ class VersionDetector:
             try:
                 if not zipfile.is_zipfile(temp_path):
                     print("ℹ️  Downloaded file is not a ZIP archive; trying direct file inspection")
-                    with temp_path.open('rb') as handle:
+                    with temp_path.open("rb") as handle:
                         signature = handle.read(2)
 
-                    if signature == b'MZ':
-                        with tempfile.NamedTemporaryFile(delete=False, suffix='.exe') as temp_exe:
-                            with temp_path.open('rb') as source:
+                    if signature == b"MZ":
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".exe") as temp_exe:
+                            with temp_path.open("rb") as source:
                                 shutil.copyfileobj(source, temp_exe)
                             exe_path = Path(temp_exe.name)
                         try:
@@ -683,18 +717,22 @@ class VersionDetector:
                             print(f"✅ Found ZIP member version: {version}")
                             return version
                         suffix = Path(name).suffix.lower()
-                        if suffix in {'.exe', '.dll'}:
+                        if suffix in {".exe", ".dll"}:
                             executable_members.append(name)
 
                     for member in executable_members[:5]:
-                        suffix = Path(member).suffix.lower() or '.bin'
+                        suffix = Path(member).suffix.lower() or ".bin"
                         try:
-                            with archive.open(member) as source, tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_member:
+                            with archive.open(member) as source, tempfile.NamedTemporaryFile(
+                                delete=False, suffix=suffix
+                            ) as temp_member:
                                 temp_member.write(source.read())
                                 member_path = Path(temp_member.name)
                             try:
                                 if version := self.get_local_executable_version(member_path):
-                                    print(f"✅ Found ZIP executable version from {member}: {version}")
+                                    print(
+                                        f"✅ Found ZIP executable version from {member}: {version}"
+                                    )
                                     return version
                             finally:
                                 member_path.unlink(missing_ok=True)
@@ -721,14 +759,14 @@ class VersionDetector:
         """Infer a version from text, accepting dot, dash, or underscore separators."""
         if not text:
             return None
-        if match := re.search(r'v?(\d+(?:[._-]\d+){1,3})', text):
+        if match := re.search(r"v?(\d+(?:[._-]\d+){1,3})", text):
             return self.normalize_version(match.group(1))
         return None
 
     def guess_version_from_url(self, url: str) -> Optional[str]:
         """Try to infer version from URL/filename patterns."""
         try:
-            fname = url.split('/')[-1]
+            fname = url.split("/")[-1]
             candidates = [fname, url]
             for text in candidates:
                 if version := self.infer_version(text):
@@ -741,7 +779,7 @@ class VersionDetector:
         """Infer version from Content-Disposition filename or other headers."""
         if not resp:
             return None
-        cd = resp.headers.get('Content-Disposition') or resp.headers.get('content-disposition')
+        cd = resp.headers.get("Content-Disposition") or resp.headers.get("content-disposition")
         if cd:
             # filename="app-1.2.3.exe"
             m = re.search(r'filename="?([^";]+)"?', cd)
@@ -749,7 +787,9 @@ class VersionDetector:
                 return self.guess_version_from_url(m.group(1))
         return None
 
-    def guess_version_from_partial_content(self, url: str, *, first_bytes: int = 262144) -> Optional[str]:
+    def guess_version_from_partial_content(
+        self, url: str, *, first_bytes: int = 262144
+    ) -> Optional[str]:
         """Download a small byte range and scan for typical version strings.
         This is best-effort and may not always succeed, but avoids full downloads.
         """
@@ -758,12 +798,12 @@ class VersionDetector:
             if not data:
                 return None
             # Look for strings like FileVersion/ProductVersion and nearby version numbers
-            blob = data.decode('latin-1', errors='ignore')
+            blob = data.decode("latin-1", errors="ignore")
             # Search within 100 chars after the keyword for a version pattern
             for key in ("FileVersion", "ProductVersion", "Product Version", "Version"):
                 idx = blob.find(key)
                 if idx != -1:
-                    window = blob[idx: idx + 200]
+                    window = blob[idx : idx + 200]
                     if version := self.infer_version(window):
                         return version
             # Fallback: any standalone version-looking pattern
@@ -773,21 +813,25 @@ class VersionDetector:
             return None
         return None
 
-    def get_version_from_download_artifact(self, download_url: str, installer_type: Optional[str] = None) -> Optional[str]:
+    def get_version_from_download_artifact(
+        self, download_url: str, installer_type: Optional[str] = None
+    ) -> Optional[str]:
         """Infer a version directly from a stable download URL when scraping fails."""
-        if installer_type == 'msi' or download_url.lower().endswith('.msi'):
+        if installer_type == "msi" or download_url.lower().endswith(".msi"):
             return self.get_msi_version(download_url)
-        if download_url.lower().endswith('.zip'):
+        if download_url.lower().endswith(".zip"):
             return self.get_zip_version(download_url)
         return self.get_version_from_executable(download_url)
 
     def supports_direct_download_fallback(self, url_template: str) -> bool:
         """Return True when a download URL can be used without version substitution."""
-        return bool(url_template and not re.search(r'\$[A-Za-z_]\w*', url_template))
+        return bool(url_template and not re.search(r"\$[A-Za-z_]\w*", url_template))
+
 
 @dataclass
 class SoftwareConfig:
     """Unified configuration for all software packages"""
+
     name: str
     description: str
     homepage: str
@@ -815,11 +859,13 @@ class SoftwareConfig:
             self.version_patterns = []
 
         # Handle backward compatibility for homepage_url
-        if not hasattr(self, 'homepage_url'):
+        if not hasattr(self, "homepage_url"):
             self.homepage_url = self.homepage
+
 
 # Keep old class name for backward compatibility
 SoftwareVersionConfig = SoftwareConfig
+
 
 def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
     """
@@ -839,7 +885,9 @@ def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
     if result:
         version = result.version
         match_groups = result.match_groups
-        download_url = detector.construct_download_url(config.download_url_template, version, match_groups)
+        download_url = detector.construct_download_url(
+            config.download_url_template, version, match_groups
+        )
     elif detector.supports_direct_download_fallback(config.download_url_template):
         download_url = config.download_url_template
         version = detector.get_version_from_download_artifact(download_url, config.installer_type)
@@ -854,28 +902,26 @@ def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
     if not hash_value:
         return None
 
-    return {
-        'version': version,
-        'download_url': download_url,
-        'hash': hash_value
-    }
+    return {"version": version, "download_url": download_url, "hash": hash_value}
+
 
 # Common version patterns that can be reused
 COMMON_VERSION_PATTERNS = {
-    'standard': [
-        r'Version:?\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)',
-        r'v\.?\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)',
-        r'([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)\s*(?:version|release)',
+    "standard": [
+        r"Version:?\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)",
+        r"v\.?\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)",
+        r"([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:\.[0-9]+)?)\s*(?:version|release)",
     ],
-    'github_release': [
+    "github_release": [
         r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
-        r'releases/tag/v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+        r"releases/tag/v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
     ],
-    'download_link': [
-        r'download.*?([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
-        r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*,\s*Size:',
-    ]
+    "download_link": [
+        r"download.*?([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+        r"([0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*,\s*Size:",
+    ],
 }
+
 
 def create_software_config_from_manifest(manifest_path: Path) -> Optional[SoftwareVersionConfig]:
     """
@@ -890,25 +936,25 @@ def create_software_config_from_manifest(manifest_path: Path) -> Optional[Softwa
     try:
         import json
 
-        with open(manifest_path, 'r', encoding='utf-8') as f:
+        with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
 
         # Extract information from manifest
         name = manifest_path.stem
-        homepage = manifest.get('homepage', '')
+        homepage = manifest.get("homepage", "")
 
         # Get checkver configuration
-        checkver = manifest.get('checkver', {})
+        checkver = manifest.get("checkver", {})
         if isinstance(checkver, dict):
-            homepage_url = checkver.get('url', homepage)
-            version_regex = checkver.get('regex', checkver.get('re', ''))
+            homepage_url = checkver.get("url", homepage)
+            version_regex = checkver.get("regex", checkver.get("re", ""))
         else:
             homepage_url = homepage
-            version_regex = str(checkver) if checkver else ''
+            version_regex = str(checkver) if checkver else ""
 
         # Get autoupdate configuration
-        autoupdate = manifest.get('autoupdate', {})
-        download_url_template = autoupdate.get('url', '')
+        autoupdate = manifest.get("autoupdate", {})
+        download_url_template = autoupdate.get("url", "")
 
         # Build version patterns
         version_patterns = []
@@ -916,18 +962,19 @@ def create_software_config_from_manifest(manifest_path: Path) -> Optional[Softwa
             version_patterns.append(version_regex)
 
         # Add common patterns as fallback
-        version_patterns.extend(COMMON_VERSION_PATTERNS['standard'])
+        version_patterns.extend(COMMON_VERSION_PATTERNS["standard"])
 
         return SoftwareVersionConfig(
             name=name,
             homepage=homepage_url,
             version_patterns=version_patterns,
             download_url_template=download_url_template,
-            description=manifest.get('description', ''),
-            license=manifest.get('license', 'Unknown'),
-            bin_name=manifest.get('bin'),
-            shortcuts=manifest.get('shortcuts', [])
+            description=manifest.get("description", ""),
+            license=manifest.get("license", "Unknown"),
+            bin_name=manifest.get("bin"),
+            shortcuts=manifest.get("shortcuts", []),
         )
 
     except Exception as e:
         print(f"❌ Failed to create config from manifest {manifest_path}: {e}")
+        return None

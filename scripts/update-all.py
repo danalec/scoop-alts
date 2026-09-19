@@ -17,12 +17,12 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, TypedDict
 
 SCRIPTS_DIR = Path(__file__).parent
 sys.path.append(str(SCRIPTS_DIR))
 
-from git_helpers import (
+from git_helpers import (  # noqa: E402
     commit_with_message,
     get_staged_bucket_changes,
     list_untracked_manifests,
@@ -30,7 +30,7 @@ from git_helpers import (
     run_git_command,
     stage_bucket_changes,
 )
-from summary_utils import format_webhook_body
+from summary_utils import format_webhook_body  # noqa: E402
 
 try:
     import requests
@@ -502,7 +502,9 @@ def run_parallel(
 
     results: List[UpdateResult] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_script = {executor.submit(task, script_path): script_path for script_path in scripts}
+        future_to_script = {
+            executor.submit(task, script_path): script_path for script_path in scripts
+        }
 
         if rich_available:
             with Progress(
@@ -553,7 +555,15 @@ def run_parallel(
     return results
 
 
-def summarize_results(results: Sequence[UpdateResult]) -> Dict[str, object]:
+class ResultsSummary(TypedDict):
+    successful: List[UpdateResult]
+    failed: List[UpdateResult]
+    updated: List[UpdateResult]
+    no_updates: List[UpdateResult]
+    counts: Dict[str, int]
+
+
+def summarize_results(results: Sequence[UpdateResult]) -> ResultsSummary:
     """Build grouped result lists and counters."""
     successful = [result for result in results if result.success]
     failed = [result for result in results if not result.success]
@@ -760,16 +770,23 @@ def filter_resume_paths(script_paths: Sequence[Path], resume_path: Path) -> List
     """Keep only scripts that failed in a previous JSON summary."""
     try:
         previous = json.loads(resume_path.read_text(encoding="utf-8"))
-    except Exception:
-        return list(script_paths)
+    except Exception as error:
+        print(f"❌ Cannot read resume file {resume_path}: {error}")
+        sys.exit(1)
+
+    results = previous.get("results", [])
+    if not results:
+        print(f"❌ Resume file {resume_path} contains no results")
+        sys.exit(1)
 
     failed_scripts = {
         item.get("script")
-        for item in previous.get("results", [])
+        for item in results
         if not bool(item.get("success", False)) and item.get("script")
     }
     if not failed_scripts:
-        return list(script_paths)
+        print(f"❌ Resume file {resume_path} has no failed scripts to rerun")
+        sys.exit(1)
     return [path for path in script_paths if path.name in failed_scripts]
 
 
@@ -945,7 +962,9 @@ def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateRes
                     continue
 
                 version = get_manifest_version(app_name)
-                message = f"{app_name}: Add version {version}" if version else f"{app_name}: Add manifest"
+                message = (
+                    f"{app_name}: Add version {version}" if version else f"{app_name}: Add manifest"
+                )
                 commit_with_message(message)
 
             push_changes()
@@ -997,13 +1016,6 @@ Examples:
     )
 
     execution_group = parser.add_argument_group("Execution Mode")
-    execution_group.add_argument(
-        "--parallel",
-        "-p",
-        action="store_true",
-        default=True,
-        help="Run scripts in parallel (default)",
-    )
     execution_group.add_argument(
         "--sequential",
         action="store_true",
@@ -1090,7 +1102,9 @@ Examples:
         action="store_true",
         help="Stage and commit all changes in aggregate groups",
     )
-    parser.add_argument("--git-dry-run", action="store_true", help="Stage and commit without pushing")
+    parser.add_argument(
+        "--git-dry-run", action="store_true", help="Stage and commit without pushing"
+    )
     parser.add_argument("--git-remote", type=str, help="Remote name to push to")
     parser.add_argument("--git-branch", type=str, help="Branch name to push to")
     parser.add_argument(
@@ -1103,7 +1117,9 @@ Examples:
         action="store_true",
         help="Enable short-lived HTTP response caching",
     )
-    parser.add_argument("--http-cache-ttl", type=int, default=1800, help="HTTP cache TTL in seconds")
+    parser.add_argument(
+        "--http-cache-ttl", type=int, default=1800, help="HTTP cache TTL in seconds"
+    )
     parser.add_argument(
         "--retry",
         type=int,
@@ -1122,8 +1138,12 @@ Examples:
     )
     parser.add_argument("--webhook-header-name", type=str, help="Optional webhook header name")
     parser.add_argument("--webhook-header-value", type=str, help="Optional webhook header value")
-    parser.add_argument("--fail-fast", action="store_true", help="Stop sequential execution on first failure")
-    parser.add_argument("--max-fail", type=int, default=0, help="Stop sequential execution after N failures")
+    parser.add_argument(
+        "--fail-fast", action="store_true", help="Stop sequential execution on first failure"
+    )
+    parser.add_argument(
+        "--max-fail", type=int, default=0, help="Stop sequential execution after N failures"
+    )
     parser.add_argument(
         "--circuit-threshold",
         type=int,

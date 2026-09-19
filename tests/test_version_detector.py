@@ -32,6 +32,7 @@ def test_get_version_from_executable_headers_guess():
 
     vd.head = lambda url, timeout=15, allow_redirects=True: FakeResp()  # type: ignore
     vd.guess_version_from_url = lambda u: None  # type: ignore
+    vd.guess_version_from_headers = lambda resp: "4.5.6"  # type: ignore
     vd.guess_version_from_partial_content = lambda u: None  # type: ignore
     assert vd.get_version_from_executable("https://host/download") == "4.5.6"
 
@@ -55,6 +56,7 @@ def test_get_msi_version_headers_guess():
 
     vd.head = lambda url, timeout=15, allow_redirects=True: FakeResp()  # type: ignore
     vd.guess_version_from_url = lambda u: None  # type: ignore
+    vd.guess_version_from_headers = lambda resp: "7.8.9"  # type: ignore
     vd.guess_version_from_partial_content = lambda u: None  # type: ignore
     assert vd.get_msi_version("https://host/download") == "7.8.9"
 
@@ -124,7 +126,9 @@ def test_get_version_info_falls_back_to_direct_download(monkeypatch):
         license="Shareware",
     )
 
-    monkeypatch.setattr(VersionDetector, "fetch_latest_version", lambda self, homepage, patterns: None)
+    monkeypatch.setattr(
+        VersionDetector, "fetch_latest_version", lambda self, homepage, patterns: None
+    )
     monkeypatch.setattr(
         VersionDetector,
         "get_version_from_download_artifact",
@@ -149,6 +153,8 @@ def test_get_version_info_skips_direct_download_fallback_for_templates(monkeypat
         license="Shareware",
     )
 
-    monkeypatch.setattr(VersionDetector, "fetch_latest_version", lambda self, homepage, patterns: None)
+    monkeypatch.setattr(
+        VersionDetector, "fetch_latest_version", lambda self, homepage, patterns: None
+    )
 
     assert get_version_info(config) is None

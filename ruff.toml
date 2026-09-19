@@ -1,0 +1,14 @@
+# Ruff configuration for the automation scripts.
+# Rule set pinned to ruff's classic defaults (E4, E7, E9, F) — the standard the
+# codebase is written against. CI installs ruff>=0.6.0 unpinned, whose newer
+# releases enable many more opinionated rules; without this pin, `ruff check`
+# reports hundreds of findings the project never agreed to.
+line-length = 100
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+
+[lint.per-file-ignores]
+# E402: module-level import not at top — update-all.py intentionally extends
+# sys.path before importing sibling modules.
+"scripts/update-all.py" = ["E402"]

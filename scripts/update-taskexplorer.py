@@ -37,7 +37,11 @@ def update_manifest():
     if not version_info:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
+        print(
+            json.dumps(
+                {"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}
+            )
+        )
         return False
 
     version = version_info["version"]
@@ -48,10 +52,16 @@ def update_manifest():
         with open(BUCKET_FILE, "r", encoding="utf-8") as handle:
             manifest = json.load(handle)
     except FileNotFoundError:
-        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        if not structured_only:
+            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "manifest_not_found"}))
         return False
     except json.JSONDecodeError as exc:
-        print(f"❌ Invalid JSON in manifest: {exc}")
+        if not structured_only:
+            print(f"❌ Invalid JSON in manifest: {exc}")
+        print(
+            json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "invalid_manifest_json"})
+        )
         return False
 
     current_version = manifest.get("version", "")
@@ -76,7 +86,16 @@ def update_manifest():
     except Exception as exc:
         if not structured_only:
             print(f"❌ Failed to save manifest: {exc}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
+        print(
+            json.dumps(
+                {
+                    "updated": False,
+                    "name": SOFTWARE_NAME,
+                    "version": version,
+                    "error": "save_failed",
+                }
+            )
+        )
         return False
 
 

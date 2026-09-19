@@ -63,3 +63,10 @@ venv.bak/
 *.sublime-workspace
 .idea/
 .DS_Store
+
+# Docker bind mounts (docker-compose.yml)
+logs/
+cache/
+
+# Ruff cache
+.ruff_cache/

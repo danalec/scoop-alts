@@ -65,7 +65,7 @@ To add a new package to the bucket:
 
 ### Prerequisites
 
-- **Python 3.8+** with pip
+- **Python 3.11+** with pip
 - **Git** for version control
 - **Scoop** (optional, for local testing)
 
@@ -123,12 +123,12 @@ To add a new package to the bucket:
    flake8 scripts/ tests/
    ```
 
-4. **Commit your changes** with clear commit messages:
+4. **Commit your changes** using Conventional Commits format:
    ```
-   <type>: <description>
+   <type>(<scope>): <description>
    
    # Types: feat, fix, docs, style, refactor, test, chore
-   # Example: feat: add support for new-package
+   # Example: feat(bucket): add support for new-package
    ```
 
 5. **Push to your fork** and create a pull request.

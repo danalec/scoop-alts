@@ -24,4 +24,4 @@ if __name__ == "__main__":
             "M138.0.7204.300/Thorium_AVX2_138.0.7204.300.zip"
         )
     print("URL:", target_url)
-
+    list_zip_contents(target_url)

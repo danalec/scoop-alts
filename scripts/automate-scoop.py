@@ -7,15 +7,13 @@ Complete automation for Scoop manifest and update script generation.
 import argparse
 import sys
 from pathlib import Path
-import subprocess
 import json
 import importlib.util
 import re
 import requests
-import tempfile
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
-from version_detector import SoftwareConfig
+from typing import Any, Dict, List, Optional
+from dataclasses import asdict
+from version_detector import SoftwareConfig, VersionDetector
 
 # Add current directory to path for imports
 scripts_dir = Path(__file__).parent
@@ -24,8 +22,7 @@ sys.path.append(str(scripts_dir))
 try:
     # Load manifest_generator module
     manifest_spec = importlib.util.spec_from_file_location(
-        "manifest_generator",
-        scripts_dir / "manifest-generator.py"
+        "manifest_generator", scripts_dir / "manifest-generator.py"
     )
     manifest_module = importlib.util.module_from_spec(manifest_spec)
     manifest_spec.loader.exec_module(manifest_module)
@@ -34,8 +31,7 @@ try:
 
     # Load update_script_generator module
     update_spec = importlib.util.spec_from_file_location(
-        "update_script_generator",
-        scripts_dir / "update-script-generator.py"
+        "update_script_generator", scripts_dir / "update-script-generator.py"
     )
     update_module = importlib.util.module_from_spec(update_spec)
     update_spec.loader.exec_module(update_module)
@@ -74,7 +70,7 @@ class ConfigWizard:
                 self._generate_files(config)
 
                 print(f"\n🎉 Success! Configuration for '{config.name}' has been created!")
-                print(f"📁 Generated files:")
+                print("📁 Generated files:")
                 print(f"   ✅ Manifest: bucket/{config.name}.json")
                 print(f"   ✅ Update script: scripts/update-{config.name}.py")
 
@@ -101,19 +97,21 @@ class ConfigWizard:
         # Package name
         while True:
             name = input("📦 Package name (e.g., 'my-awesome-app'): ").strip().lower()
-            if re.match(r'^[a-z0-9-]+$', name):
+            if re.match(r"^[a-z0-9-]+$", name):
                 break
             print("❌ Name must contain only lowercase letters, numbers, and hyphens")
 
         # Description
-        description = input(f"📄 Description (e.g., '{name.title()} - Brief description'): ").strip()
+        description = input(
+            f"📄 Description (e.g., '{name.title()} - Brief description'): "
+        ).strip()
         if not description:
             description = f"{name.title()} - Software package"
 
         # Homepage
         while True:
             homepage = input("🌐 Homepage URL (where to check for versions): ").strip()
-            if homepage.startswith(('http://', 'https://')):
+            if homepage.startswith(("http://", "https://")):
                 break
             print("❌ Please enter a valid URL starting with http:// or https://")
 
@@ -129,7 +127,7 @@ class ConfigWizard:
             homepage=homepage,
             license=license_type,
             version_regex="",  # Will be filled later
-            download_url_template=""  # Will be filled later
+            download_url_template="",  # Will be filled later
         )
 
     def _collect_advanced_options(self, config: SoftwareConfig) -> SoftwareConfig:
@@ -164,20 +162,20 @@ class ConfigWizard:
             config.version_regex = input("🔍 Version regex pattern: ").strip()
 
         # Download URL template
-        print(f"\n📥 Download Configuration")
+        print("\n📥 Download Configuration")
         print("-" * 25)
         print("💡 Use $version as placeholder (e.g., 'https://example.com/app-$version.exe')")
         config.download_url_template = input("📥 Download URL template: ").strip()
 
         # Binary name
-        print(f"\n⚙️  Installation Options")
+        print("\n⚙️  Installation Options")
         print("-" * 22)
         bin_name = input("🔧 Main executable name (optional, e.g., 'app.exe'): ").strip()
         if bin_name:
             config.bin_name = bin_name
 
         # Shortcuts
-        if input("🖥️  Create desktop shortcut? (y/N): ").strip().lower() == 'y':
+        if input("🖥️  Create desktop shortcut? (y/N): ").strip().lower() == "y":
             exe_name = config.bin_name or f"{config.name}.exe"
             shortcut_name = input(f"📌 Shortcut name (default: '{config.name.title()}'): ").strip()
             if not shortcut_name:
@@ -199,12 +197,12 @@ class ConfigWizard:
 
         # Common version patterns
         test_patterns = [
-            (r'Version\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'Version X.Y.Z'),
-            (r'v([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'vX.Y.Z'),
-            (r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', 'GitHub releases API'),
-            (r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)/', 'Version in URL path'),
-            (r'Release\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'Release X.Y.Z'),
-            (r'Download\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'Download X.Y.Z'),
+            (r"Version\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "Version X.Y.Z"),
+            (r"v([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "vX.Y.Z"),
+            (r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', "GitHub releases API"),
+            (r"([0-9]+\.[0-9]+(?:\.[0-9]+)?)/", "Version in URL path"),
+            (r"Release\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "Release X.Y.Z"),
+            (r"Download\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "Download X.Y.Z"),
         ]
 
         for pattern, description in test_patterns:
@@ -235,13 +233,13 @@ class ConfigWizard:
                 detector = VersionDetector()
 
                 # Try with a sample version (1.0.0) to test the URL pattern
-                sample_url = config.download_url_template.replace('$version', '1.0.0')
+                sample_url = config.download_url_template.replace("$version", "1.0.0")
 
-                if sample_url.endswith('.msi'):
+                if sample_url.endswith(".msi"):
                     version = detector.get_msi_version(sample_url)
-                elif sample_url.endswith(('.exe', '.zip', '.7z')):
+                elif sample_url.endswith((".exe", ".zip", ".7z")):
                     # For archives, we can't extract metadata, but we can test URL accessibility
-                    if sample_url.endswith('.exe'):
+                    if sample_url.endswith(".exe"):
                         version = detector.get_version_from_executable(sample_url)
                     else:
                         print("⚠️  Archive files don't contain version metadata")
@@ -251,11 +249,11 @@ class ConfigWizard:
                     print(f"✅ Executable metadata detection successful: {version}")
                 else:
                     print("❌ Both web and executable metadata detection failed")
-                    return input("Continue anyway? (y/N): ").strip().lower() == 'y'
+                    return input("Continue anyway? (y/N): ").strip().lower() == "y"
 
             if version:
                 # Test download URL with detected version
-                download_url = config.download_url_template.replace('$version', version)
+                download_url = config.download_url_template.replace("$version", version)
                 print(f"🔗 Testing download URL: {download_url}")
 
                 head_response = requests.head(download_url, timeout=10, allow_redirects=True)
@@ -264,25 +262,25 @@ class ConfigWizard:
                     return True
                 else:
                     print(f"⚠️  Download URL returned status {head_response.status_code}")
-                    return input("Continue anyway? (y/N): ").strip().lower() == 'y'
+                    return input("Continue anyway? (y/N): ").strip().lower() == "y"
 
             return False
 
         except Exception as e:
             print(f"❌ Test failed: {e}")
-            return input("Continue anyway? (y/N): ").strip().lower() == 'y'
+            return input("Continue anyway? (y/N): ").strip().lower() == "y"
 
     def _save_configuration(self, config: SoftwareConfig) -> None:
         """Save the configuration to the JSON file."""
         # Load existing configurations
         if self.config_file.exists():
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
         else:
             data = {}
 
-        if 'software' not in data:
-            data['software'] = []
+        if "software" not in data:
+            data["software"] = []
 
         # Convert config to dict and clean up None values
         config_dict = asdict(config)
@@ -290,22 +288,25 @@ class ConfigWizard:
 
         # Check if software already exists
         existing_index = None
-        for i, software in enumerate(data['software']):
-            if software.get('name') == config.name:
+        for i, software in enumerate(data["software"]):
+            if software.get("name") == config.name:
                 existing_index = i
                 break
 
         if existing_index is not None:
-            if input(f"⚠️  '{config.name}' already exists. Overwrite? (y/N): ").strip().lower() == 'y':
-                data['software'][existing_index] = config_dict
+            if (
+                input(f"⚠️  '{config.name}' already exists. Overwrite? (y/N): ").strip().lower()
+                == "y"
+            ):
+                data["software"][existing_index] = config_dict
             else:
                 print("❌ Configuration not saved.")
                 return
         else:
-            data['software'].append(config_dict)
+            data["software"].append(config_dict)
 
         # Save to file
-        with open(self.config_file, 'w', encoding='utf-8') as f:
+        with open(self.config_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         print(f"✅ Configuration saved to {self.config_file}")
@@ -326,7 +327,9 @@ class ConfigWizard:
 
         except Exception as e:
             print(f"⚠️  Could not auto-generate files: {e}")
-            print(f"💡 Run manually: python automate-scoop.py generate-all --software {config.name}")
+            print(
+                f"💡 Run manually: python automate-scoop.py generate-all --software {config.name}"
+            )
 
     def _cleanup_json(self) -> None:
         """Remove the JSON configuration file to keep scripts directory clean."""
@@ -337,6 +340,7 @@ class ConfigWizard:
         except Exception as e:
             print(f"⚠️  Could not remove JSON file: {e}")
             print(f"💡 You can manually delete: {self.config_file}")
+
 
 class ScoopAutomation:
     """Main automation class for Scoop manifest and script generation"""
@@ -370,7 +374,7 @@ class ScoopAutomation:
 
         for config in configs:
             try:
-                print(f"\\n🚀 Generating manifest for {config.name}...")
+                print(f"\n🚀 Generating manifest for {config.name}...")
                 manifest = self.manifest_generator.generate_manifest(config)
                 manifest_path = self.manifest_generator.save_manifest(config, manifest)
                 generated_manifests.append(manifest_path)
@@ -409,7 +413,11 @@ class ScoopAutomation:
         try:
             # Get all update scripts
             update_scripts = list(self.scripts_dir.glob("update-*.py"))
-            script_names = [script.stem for script in update_scripts if script.name not in ["update-all.py", "update-script-generator.py"]]
+            script_names = [
+                script.stem
+                for script in update_scripts
+                if script.name not in ["update-all.py", "update-script-generator.py"]
+            ]
 
             # Check orchestrator exists
             orchestrator_path = self.scripts_dir / "update-all.py"
@@ -418,10 +426,10 @@ class ScoopAutomation:
                 return False
 
             # Since update-all.py now auto-detects scripts, just verify it has the discover function
-            with open(orchestrator_path, 'r', encoding='utf-8') as f:
+            with open(orchestrator_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            if 'discover_update_scripts' in content:
+            if "discover_update_scripts" in content:
                 print(f"✅ Orchestrator ready - will auto-detect {len(script_names)} scripts")
                 print(f"📋 Available scripts: {', '.join(sorted(script_names))}")
                 return True
@@ -443,10 +451,12 @@ class ScoopAutomation:
         schema = None
         try:
             from jsonschema import Draft202012Validator  # type: ignore
+
             schema_path = self.scripts_dir / "manifest_schema.json"
             if schema_path.exists():
                 import json as _json
-                with open(schema_path, 'r', encoding='utf-8') as f:
+
+                with open(schema_path, "r", encoding="utf-8") as f:
                     schema = _json.load(f)
                 validator = Draft202012Validator(schema)
             else:
@@ -456,7 +466,7 @@ class ScoopAutomation:
 
         for manifest_path in manifest_paths:
             try:
-                with open(manifest_path, 'r', encoding='utf-8') as f:
+                with open(manifest_path, "r", encoding="utf-8") as f:
                     manifest = json.load(f)
 
                 if validator:
@@ -471,16 +481,16 @@ class ScoopAutomation:
                 else:
                     # Basic validation without schema: accept either top-level url/hash
                     # or architecture-specific url/hash entries
-                    base_required = ['version', 'description', 'homepage']
+                    base_required = ["version", "description", "homepage"]
                     base_missing = [f for f in base_required if f not in manifest]
 
-                    has_top_level = ('url' in manifest) and ('hash' in manifest)
+                    has_top_level = ("url" in manifest) and ("hash" in manifest)
                     has_arch = False
-                    if not has_top_level and isinstance(manifest.get('architecture'), dict):
-                        arch = manifest['architecture']
+                    if not has_top_level and isinstance(manifest.get("architecture"), dict):
+                        arch = manifest["architecture"]
                         # Consider valid if any architecture entry has both url and hash
                         for k, v in arch.items():
-                            if isinstance(v, dict) and ('url' in v) and ('hash' in v):
+                            if isinstance(v, dict) and ("url" in v) and ("hash" in v):
                                 has_arch = True
                                 break
 
@@ -488,7 +498,9 @@ class ScoopAutomation:
                         print(f"❌ {manifest_path.name}: Missing fields: {', '.join(base_missing)}")
                         all_valid = False
                     elif not (has_top_level or has_arch):
-                        print(f"❌ {manifest_path.name}: Missing fields: url, hash (top-level or per-architecture)")
+                        print(
+                            f"❌ {manifest_path.name}: Missing fields: url, hash (top-level or per-architecture)"
+                        )
                         all_valid = False
                     else:
                         print(f"✅ {manifest_path.name}: Valid")
@@ -526,11 +538,11 @@ class ScoopAutomation:
         try:
             # Search for trending repositories with recent releases
             url = "https://api.github.com/search/repositories"
-            params = {
+            params: Dict[str, Any] = {
                 "q": "stars:>1000 pushed:>2024-01-01 language:C language:C++ language:Go language:Rust",
                 "sort": "stars",
                 "order": "desc",
-                "per_page": 20
+                "per_page": 20,
             }
 
             response = requests.get(url, params=params, timeout=10)
@@ -548,14 +560,17 @@ class ScoopAutomation:
                 if releases_response.status_code == 200:
                     releases = releases_response.json()
                     if releases:  # Has releases
-                        discovered.append({
-                            "name": repo["name"].lower().replace("_", "-"),
-                            "description": repo["description"] or f"{repo['name']} - GitHub project",
-                            "homepage": f"https://api.github.com/repos/{repo['full_name']}/releases",
-                            "license": repo.get("license", {}).get("spdx_id", "Unknown"),
-                            "suggested_regex": r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
-                            "suggested_url_template": f"https://github.com/{repo['full_name']}/releases/download/v$version/{repo['name']}-$version.exe"
-                        })
+                        discovered.append(
+                            {
+                                "name": repo["name"].lower().replace("_", "-"),
+                                "description": repo["description"]
+                                or f"{repo['name']} - GitHub project",
+                                "homepage": f"https://api.github.com/repos/{repo['full_name']}/releases",
+                                "license": repo.get("license", {}).get("spdx_id", "Unknown"),
+                                "suggested_regex": r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
+                                "suggested_url_template": f"https://github.com/{repo['full_name']}/releases/download/v$version/{repo['name']}-$version.exe",
+                            }
+                        )
 
             return discovered
 
@@ -574,16 +589,16 @@ class ScoopAutomation:
                 "homepage": "https://api.github.com/repos/notepad-plus-plus/notepad-plus-plus/releases",
                 "license": "GPL-3.0",
                 "suggested_regex": r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
-                "suggested_url_template": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v$version/npp.$version.Installer.x64.exe"
+                "suggested_url_template": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v$version/npp.$version.Installer.x64.exe",
             },
             {
                 "name": "vlc",
                 "description": "VLC media player",
                 "homepage": "https://www.videolan.org/vlc/download-windows.html",
                 "license": "GPL-2.0",
-                "suggested_regex": r'VLC\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
-                "suggested_url_template": "https://download.videolan.org/pub/videolan/vlc/$version/win64/vlc-$version-win64.exe"
-            }
+                "suggested_regex": r"VLC\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+                "suggested_url_template": "https://download.videolan.org/pub/videolan/vlc/$version/win64/vlc-$version-win64.exe",
+            },
         ]
 
         return popular_software
@@ -599,32 +614,45 @@ class ScoopAutomation:
             # Enhanced pattern detection
             test_patterns = [
                 # GitHub API patterns
-                (r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[a-zA-Z0-9]+)?)"', 'GitHub API with pre-release'),
-                (r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', 'GitHub API stable'),
-
+                (
+                    r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[a-zA-Z0-9]+)?)"',
+                    "GitHub API with pre-release",
+                ),
+                (r'tag_name":\s*"v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', "GitHub API stable"),
                 # Version in text patterns
-                (r'Version\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'Version prefix'),
-                (r'Release\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'Release prefix'),
-                (r'Download\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)', 'Download prefix'),
-
+                (r"Version\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "Version prefix"),
+                (r"Release\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "Release prefix"),
+                (r"Download\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)", "Download prefix"),
                 # URL path patterns
-                (r'/v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/[^/]*\.(?:exe|msi|zip|7z)', 'Version in download URL'),
-                (r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)\.(?:exe|msi|zip|7z)', 'Version in filename'),
-
+                (
+                    r"/v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)/[^/]*\.(?:exe|msi|zip|7z)",
+                    "Version in download URL",
+                ),
+                (r"([0-9]+\.[0-9]+(?:\.[0-9]+)?)\.(?:exe|msi|zip|7z)", "Version in filename"),
                 # HTML patterns
-                (r'<h[1-6][^>]*>.*?v?([0-9]+\.[0-9]+(?:\.[0-9]+)?).*?</h[1-6]>', 'Version in heading'),
-                (r'data-version="v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', 'Version in data attribute'),
-
+                (
+                    r"<h[1-6][^>]*>.*?v?([0-9]+\.[0-9]+(?:\.[0-9]+)?).*?</h[1-6]>",
+                    "Version in heading",
+                ),
+                (r'data-version="v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)"', "Version in data attribute"),
                 # Semantic versioning with build metadata
-                (r'v?([0-9]+\.[0-9]+\.[0-9]+(?:\+[a-zA-Z0-9.-]+)?)', 'Semantic versioning with build'),
-                (r'v?([0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?)', 'Semantic versioning with pre-release'),
+                (
+                    r"v?([0-9]+\.[0-9]+\.[0-9]+(?:\+[a-zA-Z0-9.-]+)?)",
+                    "Semantic versioning with build",
+                ),
+                (
+                    r"v?([0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?)",
+                    "Semantic versioning with pre-release",
+                ),
             ]
 
             for pattern, description in test_patterns:
                 matches = re.findall(pattern, content, re.IGNORECASE)
                 if matches:
                     # Get the most recent/highest version
-                    version = max(matches, key=lambda v: [int(x) for x in v.split('.') if x.isdigit()])
+                    version = max(
+                        matches, key=lambda v: [int(x) for x in v.split(".") if x.isdigit()]
+                    )
                     patterns.append((pattern, f"{description} → {version}"))
 
             return patterns[:8]  # Return top 8 suggestions
@@ -686,22 +714,22 @@ class ScoopAutomation:
 
             print("⚠️  Web regex detection failed, trying executable metadata...")
 
-           # Fallback: Executable metadata detection
+            # Fallback: Executable metadata detection
             detector = VersionDetector()
 
             # Try to construct download URL with a placeholder version
             test_version = "1.0.0"  # Placeholder for URL construction
-            download_url = config.download_url_template.replace("${version}", test_version)
+            download_url = config.download_url_template.replace("$version", test_version)
 
             # Check if it's an MSI file
-            if download_url.lower().endswith('.msi'):
+            if download_url.lower().endswith(".msi"):
                 version = detector.get_msi_version(download_url)
                 if version:
                     print(f"✅ Version detected from MSI metadata: {version}")
                     return version
 
             # Check if it's an executable
-            elif download_url.lower().endswith('.exe'):
+            elif download_url.lower().endswith(".exe"):
                 version = detector.get_version_from_executable(download_url)
                 if version:
                     print(f"✅ Version detected from executable metadata: {version}")
@@ -722,22 +750,49 @@ class ScoopAutomation:
         wizard = ConfigWizard(keep_json)
         wizard.run()
 
+
 def main():
     """Main function with CLI interface"""
     parser = argparse.ArgumentParser(description="Scoop Automation Suite")
-    parser.add_argument("command", choices=[
-        "generate-manifests", "generate-scripts", "generate-all",
-        "validate", "test", "update-orchestrator", "wizard",
-        "auto-discover", "suggest-patterns", "test-version", "audit-providers"
-    ], help="Command to execute")
+    parser.add_argument(
+        "command",
+        choices=[
+            "generate-manifests",
+            "generate-scripts",
+            "generate-all",
+            "validate",
+            "test",
+            "update-orchestrator",
+            "wizard",
+            "auto-discover",
+            "suggest-patterns",
+            "test-version",
+            "audit-providers",
+        ],
+        help="Command to execute",
+    )
     parser.add_argument("--software", nargs="+", help="Specific software names to process")
     parser.add_argument("--bucket-dir", type=Path, help="Bucket directory path")
     parser.add_argument("--scripts-dir", type=Path, help="Scripts directory path")
-    parser.add_argument("--keep-json", action="store_true", help="Keep the JSON configuration file after generation (wizard only)")
-    parser.add_argument("--sources", nargs="+", choices=["github", "chocolatey"],
-                       help="Sources for auto-discovery (auto-discover command)")
-    parser.add_argument("--url", type=str, help="URL to analyze for version patterns (suggest-patterns command)")
-    parser.add_argument("--write-map", action="store_true", help="Write inferred provider map to scripts/providers.json (audit-providers)")
+    parser.add_argument(
+        "--keep-json",
+        action="store_true",
+        help="Keep the JSON configuration file after generation (wizard only)",
+    )
+    parser.add_argument(
+        "--sources",
+        nargs="+",
+        choices=["github", "chocolatey"],
+        help="Sources for auto-discovery (auto-discover command)",
+    )
+    parser.add_argument(
+        "--url", type=str, help="URL to analyze for version patterns (suggest-patterns command)"
+    )
+    parser.add_argument(
+        "--write-map",
+        action="store_true",
+        help="Write inferred provider map to scripts/providers.json (audit-providers)",
+    )
 
     args = parser.parse_args()
 
@@ -747,19 +802,19 @@ def main():
     if args.command == "generate-manifests":
         print("🚀 Generating manifests...")
         manifests = automation.generate_manifests(args.software)
-        print(f"\\n✅ Generated {len(manifests)} manifests")
+        print(f"\n✅ Generated {len(manifests)} manifests")
 
     elif args.command == "generate-scripts":
         print("🚀 Generating update scripts...")
         scripts = automation.generate_update_scripts(args.software)
-        print(f"\\n✅ Generated {len(scripts)} update scripts")
+        print(f"\n✅ Generated {len(scripts)} update scripts")
 
     elif args.command == "generate-all":
         print("🚀 Generating manifests and update scripts...")
         manifests = automation.generate_manifests(args.software)
         scripts = automation.generate_update_scripts(args.software)
         automation.update_orchestrator()
-        print(f"\\n✅ Generated {len(manifests)} manifests and {len(scripts)} scripts")
+        print(f"\n✅ Generated {len(manifests)} manifests and {len(scripts)} scripts")
 
     elif args.command == "validate":
         print("🔍 Validating manifests...")
@@ -791,7 +846,7 @@ def main():
         sources = args.sources or ["github", "chocolatey"]
         discovered = automation.auto_discover_software(sources)
         if discovered:
-            print(f"\\n✅ Discovered {len(discovered)} software packages:")
+            print(f"\n✅ Discovered {len(discovered)} software packages:")
             for software in discovered[:10]:  # Show first 10
                 print(f"  • {software['name']}: {software['description']}")
             if len(discovered) > 10:
@@ -806,9 +861,9 @@ def main():
         print(f"🔍 Analyzing URL for version patterns: {args.url}")
         patterns = automation.suggest_version_patterns(args.url)
         if patterns:
-            print(f"\\n✅ Found {len(patterns)} potential version patterns:")
+            print(f"\n✅ Found {len(patterns)} potential version patterns:")
             for pattern, confidence in patterns:
-                print(f"  • {pattern} (confidence: {confidence:.1%})")
+                print(f"  • {pattern} (confidence: {confidence})")
         else:
             print("❌ No version patterns found")
 
@@ -818,7 +873,7 @@ def main():
         if not config_file.exists():
             print("❌ No software-configs.json found. Run 'wizard' command first.")
             sys.exit(1)
-        
+
         try:
             configs = load_software_configs(config_file)
             if args.software:
@@ -827,15 +882,15 @@ def main():
                 if not configs:
                     print(f"❌ No configurations found for: {', '.join(args.software)}")
                     sys.exit(1)
-            
+
             for config in configs:
-                print(f"\\n🔍 Testing {config.name}...")
+                print(f"\n🔍 Testing {config.name}...")
                 version = automation.detect_version_enhanced(config)
                 if version:
                     print(f"✅ Successfully detected version: {version}")
                 else:
                     print(f"❌ Failed to detect version for {config.name}")
-                    
+
         except Exception as e:
             print(f"❌ Error testing version detection: {e}")
             sys.exit(1)
@@ -847,6 +902,7 @@ def main():
             existing = {}
             if providers_path.exists():
                 import json as _json
+
                 existing = _json.loads(providers_path.read_text("utf-8"))
         except Exception:
             existing = {}
@@ -861,15 +917,27 @@ def main():
                 content = p.read_text("utf-8", errors="ignore")[:4000]
                 if ("github.com" in content) or ("api.github.com" in content):
                     return "github"
-                if ("learn.microsoft.com" in content) or ("go.microsoft.com" in content) or ("download.microsoft.com" in content) or ("visualstudio.microsoft.com" in content):
+                if (
+                    ("learn.microsoft.com" in content)
+                    or ("go.microsoft.com" in content)
+                    or ("download.microsoft.com" in content)
+                    or ("visualstudio.microsoft.com" in content)
+                ):
                     return "microsoft"
-                if ("googleapis.com" in content) or ("storage.googleapis.com" in content) or ("dl.google.com" in content) or ("cloudfront.net" in content):
+                if (
+                    ("googleapis.com" in content)
+                    or ("storage.googleapis.com" in content)
+                    or ("dl.google.com" in content)
+                    or ("cloudfront.net" in content)
+                ):
                     return "google"
                 return "other"
             except Exception:
                 return "other"
 
-        scripts = sorted([p for p in automation.scripts_dir.glob("update-*.py") if p.name != "update-all.py"])
+        scripts = sorted(
+            [p for p in automation.scripts_dir.glob("update-*.py") if p.name != "update-all.py"]
+        )
         inferred = {}
         counts = {"github": 0, "microsoft": 0, "google": 0, "other": 0}
         for p in scripts:
@@ -877,17 +945,23 @@ def main():
             inferred[p.name] = prov
             counts[prov] += 1
             print(f"  • {p.name}: {prov}")
-        print(f"\nTotals → GitHub: {counts['github']} | Microsoft: {counts['microsoft']} | Google: {counts['google']} | Other: {counts['other']}")
+        print(
+            f"\nTotals → GitHub: {counts['github']} | Microsoft: {counts['microsoft']} | Google: {counts['google']} | Other: {counts['other']}"
+        )
 
         if args.write_map:
             try:
                 import json as _json
+
                 merged = dict(existing)
                 merged.update(inferred)
-                providers_path.write_text(_json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
+                providers_path.write_text(
+                    _json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
                 print(f"✅ Wrote providers map: {providers_path}")
             except Exception as e:
                 print(f"⚠️  Failed to write providers map: {e}")
+
 
 if __name__ == "__main__":
     main()

@@ -39,7 +39,9 @@ def update_manifest() -> bool:
     if requests is None:
         if not structured_only:
             print("❌ requests module not installed")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "requests_not_installed"}))
+        print(
+            json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "requests_not_installed"})
+        )
         return False
 
     try:
@@ -70,10 +72,16 @@ def update_manifest() -> bool:
         with open(BUCKET_FILE, "r", encoding="utf-8") as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        if not structured_only:
+            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "manifest_not_found"}))
         return False
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON in manifest: {e}")
+        if not structured_only:
+            print(f"❌ Invalid JSON in manifest: {e}")
+        print(
+            json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "invalid_manifest_json"})
+        )
         return False
 
     current_version = manifest.get("version", "")
@@ -100,14 +108,8 @@ def update_manifest() -> bool:
 
     manifest["version"] = version
     manifest["architecture"] = {
-        "64bit": {
-            "url": url_64_shimmed,
-            "hash": f"sha256:{hash_64}"
-        },
-        "arm64": {
-            "url": url_arm_shimmed,
-            "hash": f"sha256:{hash_arm}"
-        }
+        "64bit": {"url": url_64_shimmed, "hash": f"sha256:{hash_64}"},
+        "arm64": {"url": url_arm_shimmed, "hash": f"sha256:{hash_arm}"},
     }
     manifest["url"] = url_64_shimmed
     manifest["hash"] = f"sha256:{hash_64}"
@@ -124,7 +126,16 @@ def update_manifest() -> bool:
     except Exception as e:
         if not structured_only:
             print(f"❌ Failed to save manifest: {e}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
+        print(
+            json.dumps(
+                {
+                    "updated": False,
+                    "name": SOFTWARE_NAME,
+                    "version": version,
+                    "error": "save_failed",
+                }
+            )
+        )
         return False
 
 
@@ -141,6 +152,7 @@ def main() -> None:
     if auto_commit:
         try:
             from git_helpers import commit_manifest_change
+
             commit_manifest_change(SOFTWARE_NAME, str(BUCKET_FILE), push=True)
         except Exception as e:
             print(f"⚠️  Auto-commit failed: {e}")

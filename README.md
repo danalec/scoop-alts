@@ -42,7 +42,7 @@
 | [`ntoptimizer`](bucket/ntoptimizer.json) | NTDev | Lightweight Windows performance tuning and debloating utility | — |
 | [`ripgrep-all`](bucket/ripgrep-all.json) | GitHub Releases | Ripgrep wrapper searching inside PDFs, E-books, Office files, and archives | — |
 | [`taskexplorer`](bucket/taskexplorer.json) | GitHub Releases | Advanced task manager and security tool with driver-level inspection | — |
-| [`thorium-avx2`](bucket/thorium-avx2.json) | GitHub Releases | Fastest Chromium fork with compiler optimizations for AVX2 CPUs | — |
+| [`thorium-avx2`](bucket/thorium-avx2.json) | GitHub Releases | Fastest Chromium fork with compiler optimizations for AVX2 CPUs | `USER_DATA` |
 | [`ungoogled-chromium`](bucket/ungoogled-chromium.json) | GitHub Releases | Google-free Chromium with Widevine DRM integration | `User Data` |
 | [`unraid-usb-creator`](bucket/unraid-usb-creator.json) | LimeTech | Official Lime Technology tool to prepare bootable Unraid OS flash drives | — |
 | [`usb-safely-remove`](bucket/usb-safely-remove.json) | SafelyRemove | Enhanced USB device management and quick eject utility (Installer) | — |
@@ -143,7 +143,6 @@ Common runtime options:
 * `--only-providers github`: Update only packages hosted on GitHub.
 * `--retry 2`: Retry transient network failures.
 * `--json-summary .temp/summary.json`: Export machine-readable execution report.
-* `--validate-only`: Validate manifests without downloading binaries.
 
 ---
 

@@ -21,13 +21,17 @@
     },
     "installer": { "type": ["object", "array"] },
     "extract_dir": { "type": "string" },
-    "pre_install": { "type": "array" },
-    "post_install": { "type": "array" },
+    "pre_install": { "type": ["string", "array"] },
+    "post_install": { "type": ["string", "array"] },
     "uninstaller": { "type": ["object", "array"] },
     "persist": { "type": ["string", "array", "object"] },
     "architecture": { "type": "object" },
     "checkver": { "type": ["string", "object"] },
     "autoupdate": { "type": ["object", "array"] }
   },
-  "required": ["version", "description", "homepage", "url", "hash"]
+  "required": ["version", "description", "homepage"],
+  "anyOf": [
+    { "required": ["url", "hash"] },
+    { "required": ["architecture"] }
+  ]
 }

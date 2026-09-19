@@ -16,89 +16,118 @@ HOMEPAGE_URL = "https://github.com/espressif/esptool/releases"
 DOWNLOAD_URL_TEMPLATE = "https://github.com/espressif/esptool/releases/download/v$version/esptool-v$version-windows-amd64.zip"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "esptool.json"
 
+
 def update_manifest():
     """Update the Scoop manifest using shared version detection"""
-    structured_only = os.environ.get('STRUCTURED_ONLY') == '1'
+    structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
     if not structured_only:
         print(f"🔄 Updating {SOFTWARE_NAME}...")
-    
+
     # Configure software version detection
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['/releases/tag/v([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'],
+        version_patterns=["/releases/tag/v([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="A Python-based, open-source, platform-independent utility to communicate with the ROM bootloader in Espressif chips",
-        license="GPL-2.0-or-later"
+        license="GPL-2.0-or-later",
     )
-    
+
     # Get version information using shared detector
     version_info = get_version_info(config)
     if not version_info:
         if not structured_only:
             print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}))
+        print(
+            json.dumps(
+                {"updated": False, "name": SOFTWARE_NAME, "error": "version_info_unavailable"}
+            )
+        )
         return False
-    
-    version = version_info['version']
-    download_url = version_info['download_url']
-    hash_value = version_info['hash']
-    
+
+    version = version_info["version"]
+    download_url = version_info["download_url"]
+    hash_value = version_info["hash"]
+
     # Load existing manifest
     try:
-        with open(BUCKET_FILE, 'r', encoding='utf-8') as f:
+        with open(BUCKET_FILE, "r", encoding="utf-8") as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        if not structured_only:
+            print(f"❌ Manifest file not found: {BUCKET_FILE}")
+        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "manifest_not_found"}))
         return False
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON in manifest: {e}")
+        if not structured_only:
+            print(f"❌ Invalid JSON in manifest: {e}")
+        print(
+            json.dumps({"updated": False, "name": SOFTWARE_NAME, "error": "invalid_manifest_json"})
+        )
         return False
-    
+
     # Check if update is needed
-    current_version = manifest.get('version', '')
+    current_version = manifest.get("version", "")
     if current_version == version:
         if not structured_only:
             print(f"✅ {SOFTWARE_NAME} is already up to date (v{version})")
         print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version}))
         return True
-    
+
     # Update manifest
-    manifest['version'] = version
+    manifest["version"] = version
     # Prefer architecture-specific update when manifest uses architecture blocks
-    arch = manifest.get('architecture')
+    arch = manifest.get("architecture")
     if isinstance(arch, dict) and arch:
         # Choose preferred architecture key
-        arch_key = '64bit' if '64bit' in arch else ('arm64' if 'arm64' in arch else ('32bit' if '32bit' in arch else next(iter(arch.keys()))))
+        arch_key = (
+            "64bit"
+            if "64bit" in arch
+            else (
+                "arm64"
+                if "arm64" in arch
+                else ("32bit" if "32bit" in arch else next(iter(arch.keys())))
+            )
+        )
         if isinstance(arch.get(arch_key), dict):
             arch_entry = arch[arch_key]
-            arch_entry['url'] = download_url
-            arch_entry['hash'] = f"sha256:{hash_value}"
-            manifest['architecture'][arch_key] = arch_entry
+            arch_entry["url"] = download_url
+            arch_entry["hash"] = f"sha256:{hash_value}"
+            manifest["architecture"][arch_key] = arch_entry
         else:
             # Fallback to top-level if architecture entry is not a dict
-            manifest['url'] = download_url
-            manifest['hash'] = f"sha256:{hash_value}"
+            manifest["url"] = download_url
+            manifest["hash"] = f"sha256:{hash_value}"
     else:
-        manifest['url'] = download_url
-        manifest['hash'] = f"sha256:{hash_value}"
-    
+        manifest["url"] = download_url
+        manifest["hash"] = f"sha256:{hash_value}"
+
     # Save updated manifest
     try:
-        with open(BUCKET_FILE, 'w', encoding='utf-8') as f:
+        with open(BUCKET_FILE, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-        
+
         if not structured_only:
             print(f"✅ Updated {SOFTWARE_NAME}: {current_version} → {version}")
         print(json.dumps({"updated": True, "name": SOFTWARE_NAME, "version": version}))
         return True
-        
+
     except Exception as e:
         if not structured_only:
             print(f"❌ Failed to save manifest: {e}")
-        print(json.dumps({"updated": False, "name": SOFTWARE_NAME, "version": version, "error": "save_failed"}))
+        print(
+            json.dumps(
+                {
+                    "updated": False,
+                    "name": SOFTWARE_NAME,
+                    "version": version,
+                    "error": "save_failed",
+                }
+            )
+        )
         return False
-    
+
+
 def main():
     """Main update function"""
     success = update_manifest()
@@ -114,9 +143,11 @@ def main():
     if auto_commit:
         try:
             from git_helpers import commit_manifest_change
+
             commit_manifest_change(SOFTWARE_NAME, str(BUCKET_FILE), push=True)
         except Exception as e:
             print(f"⚠️  Auto-commit failed: {e}")
+
 
 if __name__ == "__main__":
     main()

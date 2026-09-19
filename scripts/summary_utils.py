@@ -22,8 +22,7 @@ def _build_summary_lines(payload: Dict[str, Any]) -> List[str]:
 
     if updated:
         packages = [
-            f"{item.get('package', '')} {item.get('version', '')}".strip()
-            for item in updated[:10]
+            f"{item.get('package', '')} {item.get('version', '')}".strip() for item in updated[:10]
         ]
         lines.append(f"Updated: {', '.join(packages)}")
 

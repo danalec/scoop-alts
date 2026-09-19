@@ -8,7 +8,7 @@ The scheduler runs periodic update sweeps across all package manifests, validate
 
 ## 🏗️ Architecture Overview
 
-The scheduler service is packaged as a lightweight Linux container (`alpine:3.20` or `python:3.11-slim`) utilizing BusyBox `crond` to manage scheduled updates:
+The scheduler service is packaged as a lightweight Linux container based on `python:3.12-slim` utilizing BusyBox `crond` to manage scheduled updates:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -48,7 +48,7 @@ services:
     container_name: scoop-alts-scheduler
     restart: unless-stopped
     environment:
-      - SCHEDULE_UPDATE_ALL=0 */4 * * *       # Run every 4 hours
+      - SCHEDULE_UPDATE_ALL=0 * * * *        # Run every hour
       - HEARTBEAT_SCHEDULE=*/5 * * * *        # Healthcheck heartbeat every 5 minutes
       - ORCHESTRATOR_FLAGS=--workers 6 --structured-output --retry 2
       - NOTIFY_WEBHOOK_URL=                  # Optional notification webhook
@@ -56,6 +56,7 @@ services:
       - SCOOP_GIT_BRANCH=master
       - GITHUB_TOKEN=                         # Optional GitHub PAT for higher API limits
     volumes:
+      - .:/app                                # Repository root (required for git auto-commit)
       - ./scripts:/app/scripts:ro
       - ./bucket:/app/bucket:rw
       - /mnt/user/data/scoop-alts-logs:/data/logs:rw
@@ -79,9 +80,9 @@ docker compose logs -f scheduler
 
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
-| `SCHEDULE_UPDATE_ALL` | `0 */4 * * *` | Cron expression controlling how frequently `update-all.py` executes. |
+| `SCHEDULE_UPDATE_ALL` | `0 * * * *` | Cron expression controlling how frequently `update-all.py` executes. |
 | `HEARTBEAT_SCHEDULE` | `*/5 * * * *` | Cron expression refreshing `/data/heartbeat` for container health monitoring. |
-| `ORCHESTRATOR_FLAGS` | `--workers 4 --structured-output` | Command-line flags passed directly to `update-all.py`. |
+| `ORCHESTRATOR_FLAGS` | `""` | Command-line flags passed directly to `update-all.py`. |
 | `NOTIFY_WEBHOOK_URL` | `""` | Destination webhook URL (Discord, Slack, or generic JSON) for run reports. |
 | `SCOOP_GIT_REMOTE` | `origin` | Target Git remote name to push automatic version update commits to. |
 | `SCOOP_GIT_BRANCH` | `master` | Target Git branch to push updates to. |
@@ -94,6 +95,7 @@ docker compose logs -f scheduler
 
 | Container Mount | Recommended Host Path | Purpose | Access Mode |
 | :--- | :--- | :--- | :---: |
+| `/app` | `.` (repository root) | Repository root so the entrypoint finds `/app/.git` for auto-commit/push | Read-Write (`rw`) |
 | `/app/scripts` | `./scripts` | Python automation modules and updaters | Read-Only (`ro`) |
 | `/app/bucket` | `./bucket` | Scoop JSON manifest files to update | Read-Write (`rw`) |
 | `/data/logs` | `.../scoop-alts-logs` | Run summaries, orchestrator logs, and stdout | Read-Write (`rw`) |
@@ -119,8 +121,8 @@ To allow the container to push updated manifests back to your Git repository:
 ## 🩺 Health Check & Monitoring
 
 The container includes an integrated healthcheck script (`docker/bin/healthcheck.sh`):
-* The heartbeat cron updates `/data/heartbeat` every 5 minutes.
-* If `/data/heartbeat` is older than 10 minutes (indicating the cron daemon hung or crashed), Docker marks the container as `unhealthy`.
+* The healthcheck simply verifies the cron daemon (PID 1) is still alive, so the container reports `healthy` immediately after start.
+* A separate heartbeat cron refreshes `/data/heartbeat` every 5 minutes; the heartbeat is informational and is not consulted by the healthcheck.
 
 Check health status:
 ```bash
@@ -135,7 +137,7 @@ Execute tasks inside the running container without restarting:
 
 ```bash
 # Run a full update cycle immediately
-docker compose exec scheduler /app/docker/bin/run_update_all.sh
+docker compose exec scheduler /usr/local/scoop-bin/run_update_all.sh
 
 # Run manifest schema validation
 docker compose exec scheduler python -u /app/scripts/automate-scoop.py validate

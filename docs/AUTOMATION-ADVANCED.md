@@ -166,12 +166,11 @@ def get_cached_version(url: str) -> str:
 
 ### Debug Mode Configuration
 ```bash
-# Enable comprehensive debugging
-export DEBUG_AUTOMATION=1
-export VERBOSE_LOGGING=1
+# Run the update-script test suite
+python scripts/automate-scoop.py test
 
-# Run with detailed output
-python scripts/automate-scoop.py test --debug --verbose
+# Test only specific packages
+python scripts/automate-scoop.py test --software thorium-avx2 ungoogled-chromium
 ```
 
 ### Custom Error Handling
@@ -337,12 +336,11 @@ class AutomationMetrics:
 
 ### Health Checks
 ```bash
-# Comprehensive health check
-python scripts/automate-scoop.py health-check --comprehensive
+# Validate all manifests against the schema
+python scripts/automate-scoop.py validate
 
-# Check specific components
-python scripts/automate-scoop.py health-check --component version-detection
-python scripts/automate-scoop.py health-check --component manifest-generation
+# Audit the provider classification map used for rate-limit throttling
+python scripts/automate-scoop.py audit-providers
 ```
 
 ## 🔧 Advanced Configuration Management

@@ -4,11 +4,10 @@ Codecharta Update Script
 Automatically checks for updates and updates the Scoop manifest using shared version detector.
 """
 
-import json
 import sys
 import os
 from pathlib import Path
-from version_detector import SoftwareVersionConfig, get_version_info
+from version_detector import SoftwareVersionConfig
 from manifest_manager import ManifestUpdater
 
 # Configuration
@@ -17,21 +16,23 @@ HOMEPAGE_URL = "https://api.github.com/repos/MaibornWolff/codecharta/tags"
 DOWNLOAD_URL_TEMPLATE = "https://github.com/MaibornWolff/codecharta/releases/download/vis-$version/codecharta-visualization-win32-x64.zip"
 BUCKET_DIR = Path(__file__).parent.parent / "bucket"
 
+
 def update_manifest():
     """Update the Scoop manifest using shared version detection"""
-    
+
     # Configure software version detection
     config = SoftwareVersionConfig(
         name=SOFTWARE_NAME,
         homepage=HOMEPAGE_URL,
-        version_patterns=['vis-([\\d.]+)'],
+        version_patterns=["vis-([\\d.]+)"],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
         description="CodeCharta Visualization: interactive 3D maps of code metrics to analyze hotspots and architecture.",
-        license="BSD-3-Clause"
+        license="BSD-3-Clause",
     )
-    
+
     updater = ManifestUpdater(config, BUCKET_DIR)
     return updater.update()
+
 
 def main():
     """Main update function"""
@@ -48,9 +49,13 @@ def main():
     if auto_commit:
         try:
             from git_helpers import commit_manifest_change
-            commit_manifest_change(SOFTWARE_NAME, str(BUCKET_DIR / f"{SOFTWARE_NAME}.json"), push=True)
+
+            commit_manifest_change(
+                SOFTWARE_NAME, str(BUCKET_DIR / f"{SOFTWARE_NAME}.json"), push=True
+            )
         except Exception as e:
             print(f"⚠️  Auto-commit failed: {e}")
+
 
 if __name__ == "__main__":
     main()

@@ -13,12 +13,14 @@ services:
       - ORCHESTRATOR_FLAGS=--fast --retry 1
       # - NOTIFY_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
     volumes:
+      - .:/app
       - ./scripts:/app/scripts:ro
       - ./bucket:/app/bucket
       - ./logs:/data/logs
       - ./cache:/data/cache
+      - ./deploy_key:/data/deploy_key:ro
     healthcheck:
-      test: ["CMD", "/app/bin/healthcheck.sh"]
+      test: ["CMD", "/usr/local/scoop-bin/healthcheck.sh"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -28,6 +30,3 @@ services:
         max-size: "10m"
         max-file: "3"
 
-volumes:
-  data:
-    driver: local
