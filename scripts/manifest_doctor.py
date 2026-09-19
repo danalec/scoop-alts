@@ -62,6 +62,7 @@ UTF8_FLAG = 0x800
 
 HASH_PREFIXED_RE = re.compile(r"sha256:[0-9a-fA-F]{64}")
 HASH_BARE_RE = re.compile(r"[0-9a-fA-F]{64}")
+VERSION_LIKE_RE = re.compile(r"v?\d+\.\d+(?:\.\d+)+")
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
@@ -399,7 +400,7 @@ def doctor_manifest(
         if finding:
             findings.append(finding)
 
-    # (3) version consistency (architecture entries only)
+    # (3) version consistency (architecture entries + extract_dir)
     version = manifest.get("version")
     if isinstance(version, str) and version:
         architecture = manifest.get("architecture")
@@ -412,6 +413,19 @@ def doctor_manifest(
                     finding = check_arch_version(key, url, version)
                     if finding:
                         findings.append(finding)
+        extract_dir = manifest.get("extract_dir")
+        if isinstance(extract_dir, str) and extract_dir:
+            embedded = VERSION_LIKE_RE.findall(extract_dir)
+            if embedded and not any(ver in extract_dir for ver in (version, version.lstrip("v"))):
+                findings.append(
+                    Finding(
+                        SEVERITY_WARNING,
+                        "version-consistency",
+                        f"extract_dir {extract_dir!r} embeds version-like string(s) "
+                        f"{embedded} but not the manifest version {version!r} "
+                        "(stale extract_dir? - the corecycler install failure class)",
+                    )
+                )
 
     # (1) zip layout
     refs = referenced_paths(manifest)

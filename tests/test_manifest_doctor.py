@@ -308,6 +308,7 @@ def test_top_level_url_version_not_checked():
 def test_zip_layout_all_references_present():
     transport = FakeRangeTransport(GOOD_ZIP)
     manifest = zip_manifest(
+        version="1.0.0",
         bin=["app.exe", "lib/tool.exe"],
         env_add_path=".",
         extract_dir="app-1.0.0",

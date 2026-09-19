@@ -12,7 +12,7 @@
       "Ungoogled Chromium"
     ]
   ],
-  "extract_dir": "ungoogled-chromium_143.0.7499.169-1.1_windows_x64",
+  "extract_dir": "ungoogled-chromium_153.0.8010.36-1.1_windows_x64",
   "post_install": [
     "$shouldRun = $false",
     "if ($env:SCOOP_SET_DEFAULT_BROWSER -eq '1') { $shouldRun = $true }",
