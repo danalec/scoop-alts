@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import re
 import struct
 import urllib.parse
@@ -526,6 +527,12 @@ def doctor_bucket(
     is suppressed and only the final JSON summary line is printed.
     """
     structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
+    # Windows consoles default to cp1252 - status lines contain emoji, which
+    # must not crash with UnicodeEncodeError when doctor runs there.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
     def log(message: str) -> None:
         if not structured_only:
