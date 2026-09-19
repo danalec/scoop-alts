@@ -1,214 +1,225 @@
-# Dan's Alternative Scoop Bucket
+# Dan's Alternative Scoop Bucket (`scoop-alts`)
 
-> Enhanced applications with automation-powered quality assurance
+[![Python CI](https://github.com/danalec/scoop-alts/actions/workflows/python-ci.yml/badge.svg)](https://github.com/danalec/scoop-alts/actions/workflows/python-ci.yml)
+[![Manifests](https://img.shields.io/badge/manifests-22%20packages-blue.svg)](bucket/)
+[![Scoop Compatible](https://img.shields.io/badge/scoop-compatible-green.svg)](https://scoop.sh)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
+[![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-brightgreen.svg)](https://www.python.org/)
 
-Alternative Scoop bucket featuring carefully curated applications with enhanced functionality, customized configurations, and automated quality-of-life improvements. Every package is maintained through a Python automation system that helps keep manifests reliable and up to date.
+> Curated Windows software manifests with enhanced packaging, automated quality assurance, and intelligent lifecycle management for [Scoop](https://scoop.sh).
 
-## Featured Applications
+`scoop-alts` is an alternative bucket providing software with enhanced configurations, customized persistence rules, Widevine DRM integrations, and bleeding-edge builds. Every manifest is tracked and validated continuously through a Python-based automation pipeline and a dedicated containerized scheduler.
 
-| Package | Description | Special Features |
-|---------|-------------|------------------|
-| **ungoogled-chromium** | Privacy-focused browser | ✅ Widevine DRM support for Netflix/Spotify · 💾 Persisted profile across updates · ⚙️ Opt-in default-browser post_install
-| **thorium-avx2** | Chromium-based browser optimized for AVX2 CPUs | ⚡ Tracks published `gz83/thorium` AVX2 Windows builds · 📦 Portable ZIP layout
-| **taskexplorer** | Advanced Windows task manager and process inspector | 🔎 Deep process, thread, handle, and memory inspection · 🤫 Silent installer support
-| **usb-safely-remove-portable** | Portable USB device removal utility | 🔄 Redirect-aware update logic · 📦 Direct versioned ZIP asset handling
+---
 
-This bucket currently ships 20 package manifests in `bucket/`.
+## 🌟 Featured Applications
 
-## Quick Start
+| Package | Category | Highlights & Special Features |
+| :--- | :--- | :--- |
+| **`ungoogled-chromium`** | Browser / Privacy | Includes Widevine DRM support for Spotify & Netflix, persisted user profile across updates, and optional default-browser configuration. |
+| **`thorium-avx2`** | Browser / Performance | Optimized AVX2-accelerated Chromium fork tracking upstream releases with portable ZIP extraction layout. |
+| **`agy`** | Developer / AI | Official **Antigravity CLI** by Google DeepMind. Multi-architecture support (`64bit` AMD64 and `arm64`) with automated upstream artifact tracking. |
+| **`taskexplorer`** | Utilities / System | Advanced process monitor and system inspector with thread, handle, network, and memory analysis. |
+| **`windhawk`** | Customization | Modular Windows modification engine with persistent configuration and mod directories across updates. |
+| **`corecycler`** | Benchmarking | Automated per-core CPU stress testing tool for fine-tuning Curve Optimizer on modern AMD Ryzen and Intel processors. |
+| **`usb-safely-remove-portable`** | Hardware / USB | Portable edition of the USB device manager with redirect-aware updater and clean state preservation. |
 
-### Install the Bucket
+---
+
+## 📦 Complete Package Catalog (22 Packages)
+
+| Manifest | Upstream Provider | Description | Persist Support |
+| :--- | :--- | :--- | :---: |
+| [`agy`](bucket/agy.json) | Google Cloud | Antigravity CLI — Agentic AI coding assistant by Google DeepMind | — |
+| [`atomic`](bucket/atomic.json) | GitHub Releases | High-performance alarm and event monitoring client | — |
+| [`cache-relocator`](bucket/cache-relocator.json) | SoftPerfect | Move browser and application caches to RAM disk or secondary storage | — |
+| [`chromium-crlset`](bucket/chromium-crlset.json) | Google Chrome | Latest Certificate Revocation List (CRLSet) updates for Chromium | — |
+| [`codecharta`](bucket/codecharta.json) | GitHub Releases | Code analysis and interactive 3D city visualization tool | — |
+| [`corecycler`](bucket/corecycler.json) | GitHub Releases | Script-driven per-core stability tester using Prime95/Y-Cruncher | — |
+| [`depressurizer`](bucket/depressurizer.json) | GitHub Releases | Steam library categorization and auto-tagging utility | — |
+| [`esptool`](bucket/esptool.json) | GitHub Releases | ROM bootloader utility for Espressif ESP8266 & ESP32 chips | — |
+| [`hdd-lff-portable`](bucket/hdd-lff-portable.json) | HDDGuru | Low-level formatting tool for SATA, IDE, SAS, SCSI, and SSD drives | — |
+| [`ntoptimizer`](bucket/ntoptimizer.json) | NTDev | Lightweight Windows performance tuning and debloating utility | — |
+| [`ripgrep-all`](bucket/ripgrep-all.json) | GitHub Releases | Ripgrep wrapper searching inside PDFs, E-books, Office files, and archives | — |
+| [`taskexplorer`](bucket/taskexplorer.json) | GitHub Releases | Advanced task manager and security tool with driver-level inspection | — |
+| [`thorium-avx2`](bucket/thorium-avx2.json) | GitHub Releases | Fastest Chromium fork with compiler optimizations for AVX2 CPUs | — |
+| [`ungoogled-chromium`](bucket/ungoogled-chromium.json) | GitHub Releases | Google-free Chromium with Widevine DRM integration | `User Data` |
+| [`unraid-usb-creator`](bucket/unraid-usb-creator.json) | LimeTech | Official Lime Technology tool to prepare bootable Unraid OS flash drives | — |
+| [`usb-safely-remove`](bucket/usb-safely-remove.json) | SafelyRemove | Enhanced USB device management and quick eject utility (Installer) | — |
+| [`usb-safely-remove-portable`](bucket/usb-safely-remove-portable.json) | SafelyRemove | Portable edition of USB Safely Remove with self-contained settings | — |
+| [`veracrypt`](bucket/veracrypt.json) | IDRIX | Open-source on-the-fly disk encryption software | — |
+| [`victoria`](bucket/victoria.json) | Direct Asset | Comprehensive HDD/SSD diagnostic, testing, and surface analysis tool | — |
+| [`widevinecdm`](bucket/widevinecdm.json) | Google Chrome | Widevine Content Decryption Module for third-party Chromium builds | — |
+| [`wifiscanner`](bucket/wifiscanner.json) | LizardSystems | 802.11a/b/g/n/ac/ax wireless network scanner and spectrum analyzer | — |
+| [`windhawk`](bucket/windhawk.json) | GitHub Releases | Customization engine for Windows programs using modular injectables | `AppData` |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Add the Bucket to Scoop
+
+Open PowerShell and run:
+
 ```powershell
 scoop bucket add danalec_scoop-alts https://github.com/danalec/scoop-alts
 ```
 
-### Install Popular Packages
+### 2. Install Packages
+
 ```powershell
+# Antigravity CLI (Google DeepMind)
+scoop install danalec_scoop-alts/agy
+
+# Privacy-hardened browser with Widevine DRM
 scoop install danalec_scoop-alts/ungoogled-chromium
+
+# High-performance AVX2 browser
 scoop install danalec_scoop-alts/thorium-avx2
+
+# Windows diagnostic and customization tools
 scoop install danalec_scoop-alts/taskexplorer
+scoop install danalec_scoop-alts/windhawk
 ```
+
+### 3. Updating Installed Packages
+
+```powershell
+scoop update
+scoop update danalec_scoop-alts/agy
+```
+
+---
+
+## 💡 Package-Specific Guides
 
 ### Ungoogled Chromium
 
-Install Ungoogled Chromium with Widevine:
-```powershell
-scoop install danalec_scoop-alts/ungoogled-chromium
+`ungoogled-chromium` includes custom extensions to support proprietary DRM media playback and user profile preservation:
+* **Widevine DRM**: Automatically deploys the compatible `WidevineCdm` module for Spotify, Netflix, and Disney+ web streaming.
+* **Persistent Profile**: Preserves user profiles across Scoop updates at `%USERPROFILE%\scoop\persist\ungoogled-chromium\User Data`.
+* **Clean Purge**: To remove all stored profile data on uninstall, pass `--purge`:
+  ```powershell
+  scoop uninstall ungoogled-chromium --purge
+  ```
+
+📖 *For full details on registry associations, migration from older installations, and default browser settings, see [docs/ungoogled-chromium.md](docs/ungoogled-chromium.md).*
+
+### Windhawk
+
+* **Persisted Path**: `%USERPROFILE%\scoop\persist\windhawk\windhawk\AppData`
+* **Clean Uninstall**: `scoop uninstall windhawk --purge`
+
+---
+
+## 🤖 Automation Architecture
+
+The repository maintains zero-toil manifest freshness through a modular Python automation engine:
+
+```mermaid
+flowchart TD
+    A["Upstream Releases\n(GitHub, Google, Vendor APIs)"] --> B["scripts/version_detector.py\n(Release Discovery & Checksum)"]
+    B --> C["scripts/update-*.py\n(Package-Specific Updater Scripts)"]
+    C --> D["scripts/manifest_manager.py\n(Manifest Updating & Schema Validation)"]
+    D --> E["bucket/*.json\n(Updated Scoop Manifests)"]
+    E --> F["scripts/git_helpers.py\n(Auto-Commit & Remote Sync)"]
+    G["Docker Container\n(scoop-alts-scheduler)"] -->|Runs on cron schedule| C
 ```
 
-For the full guide (persist, default‑browser setup, migration, clean uninstall, and verification), see:
+### Running the Orchestrator Manually
 
-[docs/ungoogled-chromium.md](docs/ungoogled-chromium.md)
-
-## Documentation
-For a centralized documentation index, see:
-[docs/index.md](docs/index.md)
-
-
-### Browse All Packages
-Online:
-https://github.com/danalec/scoop-alts/tree/main/bucket
-
-Locally (after adding the bucket):
-```powershell
-Get-ChildItem "$env:SCOOP\\buckets\\danalec_scoop-alts\\bucket\\*.json" | Select-Object -ExpandProperty BaseName
-```
-
-### Other packages with persist and purge
-
-Some packages in this bucket use Scoop’s persist to keep app data across updates and standard uninstalls. Use the --purge flag to remove those data folders during uninstall.
-
-- Windhawk
-  - Persisted path:
-    ``
-    %USERPROFILE%\scoop\persist\windhawk\windhawk\AppData
-    ``
-  - Clean uninstall (remove settings/mods):
-    ```powershell
-    scoop uninstall windhawk --purge
-    ```
-  - Verify the junction (optional):
-    ```powershell
-    Get-Item "$env:USERPROFILE\scoop\apps\windhawk\current\windhawk\AppData" | Format-List *
-    ```
-    LinkType should be Junction and Target should point to the persist path above.
-
-### Uninstall verification checklist
-
-- Confirm the app files and shim are removed:
-  - App directory removed:
-    - %USERPROFILE%\scoop\apps\ungoogled-chromium\current\
-  - Shim no longer resolves:
-    - PowerShell: Get-Command chrome (should report not found)
-- Confirm persisted data is removed when using --purge:
-  - Directory removed:
-    - %USERPROFILE%\scoop\persist\ungoogled-chromium\User Data\
-  - In the app directory, there should be no junction pointing to "User Data" (the whole app directory is gone after uninstall)
-- Registry sanity checks after cleanup:
-  - HKCU\Software\Clients\StartMenuInternet\Chromium — removed
-  - HKCU\Software\Classes\ChromiumHTML — removed
-  - HKCU\Software\RegisteredApplications — value named "Chromium" — removed
-  - HKCU\Software\Classes\http\shell\open\command — restored or no override to the Scoop path
-  - HKCU\Software\Classes\https\shell\open\command — restored or no override to the Scoop path
-  - If associations look broken, open Windows Default Apps and reselect your default browser.
-
-### Persist cheat sheet
-
-- ungoogled-chromium
-  - Persist path: %USERPROFILE%\scoop\persist\ungoogled-chromium\User Data
-  - Purge command: scoop uninstall ungoogled-chromium --purge
-  - Notes: Profile data is intentionally persisted. The uninstaller prompts for default‑browser registry cleanup and will restore http/https handlers from a backup if you opted-in to override them.
-- windhawk
-  - Persist path: %USERPROFILE%\scoop\persist\windhawk\windhawk\AppData
-  - Purge command: scoop uninstall windhawk --purge
-  - Optional: Verify junctions with Get-ChildItem $env:USERPROFILE\scoop\apps\windhawk\current -Force | Where-Object {$_.LinkType}
-
-
-## 🤖 Automation
-
-This bucket features **automated package maintenance** powered by a Python automation system that ensures packages stay up-to-date and reliable:
-
-### For Developers
-Complete automation framework available for creating your own automated Scoop buckets:
-- **[AUTOMATION-GUIDE.md](docs/AUTOMATION-GUIDE.md)**: Setup and usage documentation
-- **[AUTOMATION-SCRIPTS-DOCUMENTATION.md](docs/AUTOMATION-SCRIPTS-DOCUMENTATION.md)**: Technical reference
-
-## 🛠️ For Developers & Contributors
-
-### **Create Your Own Automated Bucket**
-This repository includes a complete automation framework for maintaining Scoop buckets:
+To run all package updaters concurrently:
 
 ```bash
-# Quick setup
-git clone https://github.com/danalec/scoop-alts
-cd scoop-alts
+# Install automation dependencies
 pip install -r scripts/requirements-automation.txt
 
-# Interactive wizard (no JSON editing required!)
-python scripts/automate-scoop.py wizard
+# Execute all updaters in parallel with structured output
+python scripts/update-all.py --workers 6 --structured-output
 ```
 
-**See [AUTOMATION-GUIDE.md](docs/AUTOMATION-GUIDE.md) for complete setup and usage documentation.**
+Common runtime options:
+* `--sequential`: Run updaters one by one (useful for debugging).
+* `--only-providers github`: Update only packages hosted on GitHub.
+* `--retry 2`: Retry transient network failures.
+* `--json-summary .temp/summary.json`: Export machine-readable execution report.
+* `--validate-only`: Validate manifests without downloading binaries.
 
-Audit provider classification and write a map:
+---
+
+## 🐳 Containerized Deployment (Docker Scheduler)
+
+This bucket includes a production-ready Docker container that automatically runs the update orchestrator on a scheduled cron:
+
+* **Compose File**: [`docker-compose.yml`](docker-compose.yml)
+* **Guide**: [docs/DOCKER-SETUP.md](docs/DOCKER-SETUP.md)
+
 ```bash
-python scripts/automate-scoop.py audit-providers --write-map
+# Start the update scheduler in background
+docker compose up -d
 ```
 
-### Orchestrator quick start
-Run all updates (parallel by default):
-```bash
-python scripts/update-all.py
+---
+
+## 📁 Repository Structure
+
 ```
-Common flags:
-```bash
-python scripts/update-all.py --workers 6
-python scripts/update-all.py --sequential --delay 0.5
-python scripts/update-all.py --fast
-python scripts/update-all.py --retry 2
-python scripts/update-all.py --structured-output
-python scripts/update-all.py --http-cache --http-cache-ttl 1800
-python scripts/update-all.py --json-summary .temp/update-summary.json
-python scripts/update-all.py --md-summary .temp/update-summary.md
-python scripts/update-all.py --log-file .temp/run.log
-python scripts/update-all.py --git-dry-run
-python scripts/update-all.py --git-remote origin --git-branch main
-python scripts/update-all.py --sequential --fail-fast
-python scripts/update-all.py --sequential --max-fail 2
-python scripts/update-all.py --circuit-threshold 3 --circuit-sleep 5.0
-python scripts/update-all.py --no-error-exit
-python scripts/update-all.py --only-providers github microsoft
-python scripts/update-all.py --skip-providers google
-python scripts/update-all.py --skip-scripts windhawk esptool
+scoop-alts/
+├── .github/
+│   └── workflows/          # GitHub Actions CI for manifest & python validation
+├── bin/                    # Utility migration PowerShell scripts
+├── bucket/                 # Scoop JSON package manifests (22 packages)
+├── docker/                 # Production Docker scheduler configurations & scripts
+│   └── bin/                # Entrypoints, healthchecks, and runners
+├── docs/                   # In-depth technical guides and documentation
+│   ├── index.md            # Master documentation index
+│   ├── AUTOMATION-GUIDE.md # Getting started with bucket automation
+│   ├── AUTOMATION-SCRIPTS-DOCUMENTATION.md # Architecture & module reference
+│   ├── AUTOMATION-ADVANCED.md # Advanced CI, throttling, and custom scripts
+│   ├── DOCKER-SETUP.md     # Containerized scheduler deployment guide
+│   └── ungoogled-chromium.md # Detailed guide for Ungoogled Chromium
+├── scripts/                # Python automation framework & package updaters
+│   ├── update-all.py       # Orchestrator runner for all package updaters
+│   ├── version_detector.py # Upstream version discovery and hash computation
+│   ├── manifest_manager.py # Scoop manifest schema mutation & validation
+│   ├── git_helpers.py      # Git automation, staging, and commit handling
+│   ├── providers.json      # Provider classification map for rate throttling
+│   └── update-*.py         # Package-specific updater implementations
+├── tests/                  # Unit and integration test suite
+├── Dockerfile              # Dockerfile for headless cron runner
+├── docker-compose.yml      # Compose specification for update scheduler
+├── CONTRIBUTING.md         # Contribution guidelines
+├── LICENSE                 # BSD 3-Clause License
+└── README.md               # Primary project documentation
 ```
 
-### Structured output
-- Use `--structured-output` to prefer strict JSON parsing from update scripts and avoid text heuristics in the orchestrator.
-- When `--structured-output` is set, the orchestrator sets `STRUCTURED_ONLY=1` for child scripts so they emit only a single JSON line.
+---
 
-### Manifest validation
-- Manifests are validated against a JSON Schema during CI and via `python scripts/automate-scoop.py validate`.
+## 📚 Master Documentation Index
 
-### GitHub API rate limits
-- Set `GITHUB_TOKEN` (or `GH_TOKEN`) in the environment to enable authenticated requests and higher GitHub API rate limits used by the version detector.
+All extended documentation is organized under [`docs/`](docs/):
 
-### Provider throttling mapping
-- Optionally place `scripts/providers.json` to map scripts or packages to a provider (`github`, `microsoft`, `google`, `other`) to improve throttling accuracy.
+* [Master Documentation Sitemap (`docs/index.md`)](docs/index.md)
+* [Automation Getting Started Guide (`docs/AUTOMATION-GUIDE.md`)](docs/AUTOMATION-GUIDE.md)
+* [Automation Technical Reference (`docs/AUTOMATION-SCRIPTS-DOCUMENTATION.md`)](docs/AUTOMATION-SCRIPTS-DOCUMENTATION.md)
+* [Advanced Automation & Throttling (`docs/AUTOMATION-ADVANCED.md`)](docs/AUTOMATION-ADVANCED.md)
+* [Containerized Scheduler Deployment (`docs/DOCKER-SETUP.md`)](docs/DOCKER-SETUP.md)
+* [Ungoogled Chromium Configuration (`docs/ungoogled-chromium.md`)](docs/ungoogled-chromium.md)
 
-### Resume failed scripts
-- Use `--resume .temp/update-summary.json` to rerun only the scripts that failed in the previous run.
-
-### CI environment guard
-- Set `AUTOMATION_DISABLE_WINMETA=1` to disable Windows-specific metadata extraction paths in the version detector (useful on non-Windows CI runners).
-
-### Webhook notifications
-- Provide `--webhook-url` (and optionally `--webhook-header-name`/`--webhook-header-value`) to POST the JSON summary to a webhook endpoint after a run.
-- Set `--webhook-type` to `slack` or `discord` to format payloads for those platforms (`generic` by default sends the raw JSON summary).
-
-### Environment overrides
-- `AUTOMATION_WEBHOOK_URL`, `AUTOMATION_WEBHOOK_HEADER_NAME`, `AUTOMATION_WEBHOOK_HEADER_VALUE` can provide webhook settings.
-- `AUTOMATION_JSON_SUMMARY` and `AUTOMATION_MD_SUMMARY` can provide default output paths for summaries.
-- `SCOOP_GIT_REMOTE` and `SCOOP_GIT_BRANCH` can control which remote/branch is used for auto push.
-- `AUTOMATION_LOG_FILE` can specify a default path for the orchestrator run log.
-
-### Update dashboard
-- Generate a Markdown dashboard from a summary JSON: `python scripts/generate-dashboard.py .temp/update-summary.json docs/update-health.md`.
+---
 
 ## 🤝 Contributing
 
-### **For Users**
-- 🐛 **Report Issues**: Found a problem? Open an issue!
-- 💡 **Request Packages**: Suggest new software to include
-- ⭐ **Star the Repo**: Help others discover this bucket
+Contributions are welcome! Please follow these standards:
+1. Ensure all manifests validate against the schema: `python scripts/automate-scoop.py validate`.
+2. Follow Conventional Commits format (`feat(bucket): add <package>`, `fix(scripts): resolve hash computation`).
+3. Keep all documentation, comments, and commit messages in English.
 
-### **For Developers**
-- 🔧 **Improve Automation**: Enhance the Python scripts
-- 📦 **Add Packages**: Contribute new software configurations
-- 🧪 **Testing**: Help improve validation and testing
-- 📚 **Documentation**: Improve guides and examples
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full developer guidelines.
 
-**See [AUTOMATION-GUIDE.md](docs/AUTOMATION-GUIDE.md) for detailed contribution instructions.**
+---
 
 ## 📄 License
 
-BSD-3-Clause - See [LICENSE](LICENSE) file for details.
+This repository is licensed under the [BSD-3-Clause License](LICENSE).
+Individual software packages installed via these manifests are governed by their respective upstream licenses.

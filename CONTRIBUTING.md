@@ -49,12 +49,14 @@ To add a new package to the bucket:
    - A manifest file in `bucket/<package-name>.json`
    - An update script in `scripts/update-<package-name>.py`
 
-3. Test the update script:
+3. Register the package provider mapping in `scripts/providers.json`.
+
+4. Test the update script:
    ```bash
    python scripts/update-<package-name>.py
    ```
 
-4. Validate the manifest:
+5. Validate the manifest:
    ```bash
    python scripts/automate-scoop.py validate
    ```
@@ -103,7 +105,7 @@ To add a new package to the bucket:
 
 ## Pull Request Process
 
-1. **Create a feature branch** from `main`:
+1. **Create a feature branch** from `master`:
    ```bash
    git checkout -b feature/your-feature-name
    ```

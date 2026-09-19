@@ -1,47 +1,145 @@
-# Docker Container Scheduler
+# Docker Container Scheduler Guide
 
-## Overview
-- Runs update-all.py on a schedule; automate-scoop.py is manual (on-demand)
-- Uses busybox crond for scheduling inside container
-- Provides logging, health checks, and optional webhook notifications
+This guide details the deployment and operational lifecycle of the containerized automation runner for **Dan's Alternative Scoop Bucket (`scoop-alts`)**.
 
-## Files
-- Dockerfile
-- docker-compose.yml
-- docker/bin/*
+The scheduler runs periodic update sweeps across all package manifests, validates generated schemas, records persistent audit logs, and automatically commits and pushes fresh manifests to Git.
 
-## Build and Run
-1. docker compose build
-2. docker compose up -d
+---
 
-## Configuration
-- SCHEDULE_UPDATE_ALL: cron expression for update-all.py
-- HEARTBEAT_SCHEDULE: cron expression for heartbeat
-- ORCHESTRATOR_FLAGS: flags for update-all.py
-- NOTIFY_WEBHOOK_URL: optional webhook for failures
+## 🏗️ Architecture Overview
 
-## Volumes
-- ./scripts mounted read-only at /app/scripts
-- ./bucket mounted at /app/bucket
-- ./logs mounted at /data/logs
-- ./cache mounted at /data/cache
+The scheduler service is packaged as a lightweight Linux container (`alpine:3.20` or `python:3.11-slim`) utilizing BusyBox `crond` to manage scheduled updates:
 
-## Health Check
-- Fails if /data/heartbeat is older than 10 minutes
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Docker Container                       │
+│  ┌─────────────────┐       ┌──────────────────────────────┐ │
+│  │  BusyBox crond  │ ───>  │ scripts/update-all.py        │ │
+│  └─────────────────┘       │ (Periodic manifest updates)  │ │
+│           │                └──────────────────────────────┘ │
+│           │                               │                 │
+│           v                               v                 │
+│  ┌─────────────────┐       ┌──────────────────────────────┐ │
+│  │ /data/heartbeat │       │ Git SSH Deploy Key           │ │
+│  │ (Healthcheck)   │       │ (Pushes commits to upstream) │ │
+│  └─────────────────┘       └──────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+          │                                  │
+          v                                  v
+  Persistent Volumes:                Remote Git Remotes:
+  - /data/logs                       - Forgejo (Unraid)
+  - /data/cache                      - GitHub
+```
 
-## Updating Scripts
-- Edit local scripts; container uses bind-mounted scripts
-- Restart container if schedules or environment change
+---
 
-## Manual: Add/Expand Bucket Recipes
-- Run wizard:
-  - docker compose exec scheduler python -u /app/scripts/automate-scoop.py wizard
-- Generate update scripts/manifests for selected software:
-  - docker compose exec scheduler python -u /app/scripts/automate-scoop.py generate-all --software app1 app2
-- Validate manifests:
-  - docker compose exec scheduler python -u /app/scripts/automate-scoop.py validate
-- Test update scripts:
-  - docker compose exec scheduler python -u /app/scripts/automate-scoop.py test
+## 🚀 Deployment
 
-Convenience:
-- You may also run: docker compose exec scheduler /app/bin/run_automate_scoop.sh
+### 1. `docker-compose.yml` Specification
+
+A standard deployment uses the provided [`docker-compose.yml`](../docker-compose.yml):
+
+```yaml
+version: '3.8'
+
+services:
+  scheduler:
+    build: .
+    container_name: scoop-alts-scheduler
+    restart: unless-stopped
+    environment:
+      - SCHEDULE_UPDATE_ALL=0 */4 * * *       # Run every 4 hours
+      - HEARTBEAT_SCHEDULE=*/5 * * * *        # Healthcheck heartbeat every 5 minutes
+      - ORCHESTRATOR_FLAGS=--workers 6 --structured-output --retry 2
+      - NOTIFY_WEBHOOK_URL=                  # Optional notification webhook
+      - SCOOP_GIT_REMOTE=origin
+      - SCOOP_GIT_BRANCH=master
+      - GITHUB_TOKEN=                         # Optional GitHub PAT for higher API limits
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./bucket:/app/bucket:rw
+      - /mnt/user/data/scoop-alts-logs:/data/logs:rw
+      - /mnt/user/data/scoop-alts-cache:/data/cache:rw
+      - /mnt/user/data/scoop-alts-config/deploy_key:/data/deploy_key:ro
+```
+
+### 2. Starting the Service
+
+```bash
+# Build and start container in detached mode
+docker compose up -d --build
+
+# View real-time container logs
+docker compose logs -f scheduler
+```
+
+---
+
+## ⚙️ Environment Variables Reference
+
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `SCHEDULE_UPDATE_ALL` | `0 */4 * * *` | Cron expression controlling how frequently `update-all.py` executes. |
+| `HEARTBEAT_SCHEDULE` | `*/5 * * * *` | Cron expression refreshing `/data/heartbeat` for container health monitoring. |
+| `ORCHESTRATOR_FLAGS` | `--workers 4 --structured-output` | Command-line flags passed directly to `update-all.py`. |
+| `NOTIFY_WEBHOOK_URL` | `""` | Destination webhook URL (Discord, Slack, or generic JSON) for run reports. |
+| `SCOOP_GIT_REMOTE` | `origin` | Target Git remote name to push automatic version update commits to. |
+| `SCOOP_GIT_BRANCH` | `master` | Target Git branch to push updates to. |
+| `GITHUB_TOKEN` | `""` | GitHub Personal Access Token to avoid rate limits during version discovery. |
+| `AUTOMATION_DISABLE_WINMETA` | `1` | Disables Windows-specific binary inspection when running on Linux containers. |
+
+---
+
+## 💾 Storage & Persistent Volumes
+
+| Container Mount | Recommended Host Path | Purpose | Access Mode |
+| :--- | :--- | :--- | :---: |
+| `/app/scripts` | `./scripts` | Python automation modules and updaters | Read-Only (`ro`) |
+| `/app/bucket` | `./bucket` | Scoop JSON manifest files to update | Read-Write (`rw`) |
+| `/data/logs` | `.../scoop-alts-logs` | Run summaries, orchestrator logs, and stdout | Read-Write (`rw`) |
+| `/data/cache` | `.../scoop-alts-cache` | Cached HTTP responses and ETag storage | Read-Write (`rw`) |
+| `/data/deploy_key` | `.../deploy_key` | OpenSSH private key with push permission to Git | Read-Only (`ro`) |
+
+---
+
+## 🔑 Git Authentication (SSH Deploy Key)
+
+To allow the container to push updated manifests back to your Git repository:
+
+1. Generate an SSH keypair:
+   ```bash
+   ssh-keygen -t ed25519 -C "scoop-alts-bot" -f ./deploy_key -N ""
+   ```
+2. Add the **public key** (`deploy_key.pub`) as a Deploy Key with **write access** in Forgejo or GitHub.
+3. Mount the **private key** (`deploy_key`) into the container at `/data/deploy_key` with permissions `0600`.
+4. The container entrypoint automatically loads this key via `GIT_SSH_COMMAND` and pre-configures known hosts.
+
+---
+
+## 🩺 Health Check & Monitoring
+
+The container includes an integrated healthcheck script (`docker/bin/healthcheck.sh`):
+* The heartbeat cron updates `/data/heartbeat` every 5 minutes.
+* If `/data/heartbeat` is older than 10 minutes (indicating the cron daemon hung or crashed), Docker marks the container as `unhealthy`.
+
+Check health status:
+```bash
+docker inspect --format '{{.State.Health.Status}}' scoop-alts-scheduler
+```
+
+---
+
+## 🛠️ On-Demand Management Commands
+
+Execute tasks inside the running container without restarting:
+
+```bash
+# Run a full update cycle immediately
+docker compose exec scheduler /app/docker/bin/run_update_all.sh
+
+# Run manifest schema validation
+docker compose exec scheduler python -u /app/scripts/automate-scoop.py validate
+
+# Run updates for a specific package only
+docker compose exec scheduler python -u /app/scripts/update-agy.py
+```

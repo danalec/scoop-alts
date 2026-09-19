@@ -1,17 +1,14 @@
-# Documentation
+# Documentation Index
 
-Centralized documentation for this repository.
+For the complete documentation sitemap and reference table, please refer to [index.md](index.md).
 
-## Automation System
+## Quick Links
 
-- Automation Guide: [AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md)
-- Scripts Technical Reference: [AUTOMATION-SCRIPTS-DOCUMENTATION.md](AUTOMATION-SCRIPTS-DOCUMENTATION.md)
-- Advanced Automation Guide: [AUTOMATION-ADVANCED.md](AUTOMATION-ADVANCED.md)
-
-## Application Guides
-
-- Ungoogled Chromium: [ungoogled-chromium.md](ungoogled-chromium.md)
-
-## Project Overview
-
-- Root README: [../README.md](../README.md)
+* [Project Overview](../README.md)
+* [Automation Getting Started Guide](AUTOMATION-GUIDE.md)
+* [Scripts Technical Reference](AUTOMATION-SCRIPTS-DOCUMENTATION.md)
+* [Advanced Automation Guide](AUTOMATION-ADVANCED.md)
+* [Docker Container Scheduler](DOCKER-SETUP.md)
+* [Ungoogled Chromium Manual](ungoogled-chromium.md)
+* [Contribution Guidelines](../CONTRIBUTING.md)
+* [Security Policy](../SECURITY.md)
