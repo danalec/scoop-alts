@@ -10,7 +10,7 @@ The scheduler runs periodic update sweeps across all package manifests, validate
 
 The scheduler service is packaged as a lightweight Linux container based on `python:3.12-slim` utilizing BusyBox `crond` to manage scheduled updates:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      Docker Container                       │
 │  ┌─────────────────┐       ┌──────────────────────────────┐ │
@@ -109,9 +109,11 @@ docker compose logs -f scheduler
 To allow the container to push updated manifests back to your Git repository:
 
 1. Generate an SSH keypair:
+
    ```bash
    ssh-keygen -t ed25519 -C "scoop-alts-bot" -f ./deploy_key -N ""
    ```
+
 2. Add the **public key** (`deploy_key.pub`) as a Deploy Key with **write access** in Forgejo or GitHub.
 3. Mount the **private key** (`deploy_key`) into the container at `/data/deploy_key` with permissions `0600`.
 4. The container entrypoint automatically loads this key via `GIT_SSH_COMMAND` and pre-configures known hosts.
@@ -121,10 +123,12 @@ To allow the container to push updated manifests back to your Git repository:
 ## 🩺 Health Check & Monitoring
 
 The container includes an integrated healthcheck script (`docker/bin/healthcheck.sh`):
+
 * The healthcheck simply verifies the cron daemon (PID 1) is still alive, so the container reports `healthy` immediately after start.
 * A separate heartbeat cron refreshes `/data/heartbeat` every 5 minutes; the heartbeat is informational and is not consulted by the healthcheck.
 
 Check health status:
+
 ```bash
 docker inspect --format '{{.State.Health.Status}}' scoop-alts-scheduler
 ```

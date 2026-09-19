@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from version_detector import SoftwareVersionConfig, get_version_info
+from version_detector import SoftwareVersionConfig, VersionDetector, get_version_info
 
 
 def is_forced() -> bool:
@@ -46,6 +46,7 @@ class ManifestUpdater:
         self.manifest_path = bucket_dir / self.manifest_filename
         self.structured_only = os.environ.get("STRUCTURED_ONLY") == "1"
         self.force = force or is_forced()
+        self.detector = VersionDetector()
 
     def log(self, message: str) -> None:
         """Print human-readable status messages when structured output is disabled."""
@@ -58,6 +59,7 @@ class ManifestUpdater:
         updated: bool,
         version: Optional[str] = None,
         error: Optional[str] = None,
+        forced: bool = False,
     ) -> None:
         """Emit the single-line JSON object consumed by the orchestrator."""
         payload: Dict[str, Any] = {"updated": updated, "name": self.config.name}
@@ -65,6 +67,8 @@ class ManifestUpdater:
             payload["version"] = version
         if error:
             payload["error"] = error
+        if forced:
+            payload["forced"] = True
         print(json.dumps(payload, ensure_ascii=False))
 
     def load_manifest(self) -> Optional[Dict[str, Any]]:
@@ -101,7 +105,7 @@ class ManifestUpdater:
             self.log(f"✅ Force-updated {self.config.name}: {version}")
         else:
             self.log(f"✅ Updated {self.config.name}: {previous_version} → {version}")
-        self.emit_result(updated=True, version=version)
+        self.emit_result(updated=True, version=version, forced=self.force)
         return True
 
     def select_architecture_key(self, manifest: Dict[str, Any]) -> Optional[str]:
@@ -132,33 +136,77 @@ class ManifestUpdater:
             if isinstance(architecture_entry, dict):
                 architecture_entry["url"] = download_url
                 architecture_entry["hash"] = f"sha256:{hash_value}"
+                # Top-level url/hash go stale when an architecture block carries
+                # the real metadata (see the veracrypt incident) - drop them.
+                manifest.pop("url", None)
+                manifest.pop("hash", None)
                 return
 
         manifest["url"] = download_url
         manifest["hash"] = f"sha256:{hash_value}"
 
+    def apply_architecture_templates(
+        self, manifest: Dict[str, Any], *, version: str, version_info: Dict[str, Any]
+    ) -> bool:
+        """Build per-architecture url/hash entries from architecture_templates.
+
+        Every architecture URL is hashed individually (the GitHub digest
+        shortcut in VersionDetector applies). On success the whole
+        ``architecture`` block is replaced and stale top-level ``url``/``hash``
+        fields are removed — they would otherwise keep pointing at the old
+        single-architecture artifact. Returns False (without touching the
+        manifest) when any arch hash cannot be computed.
+        """
+        templates = self.config.architecture_templates or {}
+        match_groups = version_info.get("match_groups") or {}
+        architecture: Dict[str, Any] = {}
+        for arch, template in templates.items():
+            download_url = self.detector.construct_download_url(template, version, match_groups)
+            hash_value = self.detector.calculate_hash(download_url)
+            if not hash_value:
+                self.log(f"❌ Failed to hash {self.config.name} {arch} asset: {download_url}")
+                self.emit_result(updated=False, version=version, error="arch_hash_failed")
+                return False
+            architecture[arch] = {"url": download_url, "hash": f"sha256:{hash_value}"}
+        manifest["architecture"] = architecture
+        manifest.pop("url", None)
+        manifest.pop("hash", None)
+        manifest["version"] = version
+        return True
+
     def update(self, version_info: Optional[Dict[str, Any]] = None) -> bool:
         """Fetch version metadata and update the manifest when required."""
         self.log(f"🔄 Updating {self.config.name}...")
 
+        manifest = self.load_manifest()
+        if manifest is None:
+            return False
+        current_version = str(manifest.get("version", ""))
+
         if version_info is None:
-            version_info = get_version_info(self.config)
+            # Pass the manifest version so an unchanged release skips the
+            # download/hash entirely; forced updates still recompute everything.
+            version_info = get_version_info(
+                self.config, current_version=None if self.force else current_version
+            )
 
         if not version_info:
             self.log(f"❌ Failed to get version info for {self.config.name}")
             self.emit_result(updated=False, error="version_info_unavailable")
             return False
 
-        manifest = self.load_manifest()
-        if manifest is None:
-            return False
-
-        # Multi-architecture manifests need per-arch URLs/hashes, which a single
-        # download template cannot produce — updating only the preferred arch key
-        # would leave the other entries stale (see bucket/widevinecdm.json history).
-        # Refuse rather than silently corrupt the manifest.
+        # Multi-architecture manifests without per-architecture templates need
+        # per-arch URLs/hashes, which a single download template cannot produce
+        # — updating only the preferred arch key would leave the other entries
+        # stale (see bucket/widevinecdm.json history). When architecture_templates
+        # is set, ManifestUpdater rewrites every entry itself, so >1 entries are
+        # the supported case. Refuse rather than silently corrupt the manifest.
         architecture = manifest.get("architecture")
-        if isinstance(architecture, dict) and len(architecture) > 1:
+        if (
+            isinstance(architecture, dict)
+            and len(architecture) > 1
+            and self.config.architecture_templates is None
+        ):
             self.log(
                 f"❌ {self.config.name} has multiple architecture entries; "
                 "ManifestUpdater supports a single entry — use a package-specific updater"
@@ -167,7 +215,6 @@ class ManifestUpdater:
             return False
 
         version = version_info["version"]
-        current_version = str(manifest.get("version", ""))
         if current_version == version and not self.force:
             self.log(f"✅ {self.config.name} is already up to date (v{version})")
             self.emit_result(updated=False, version=version)
@@ -177,12 +224,18 @@ class ManifestUpdater:
             self.log(f"🔄 Forcing update of {self.config.name} (v{version})...")
 
         try:
-            self.apply_download_metadata(
-                manifest,
-                version=version,
-                download_url=version_info["download_url"],
-                hash_value=version_info["hash"],
-            )
+            if self.config.architecture_templates:
+                if not self.apply_architecture_templates(
+                    manifest, version=version, version_info=version_info
+                ):
+                    return False
+            else:
+                self.apply_download_metadata(
+                    manifest,
+                    version=version,
+                    download_url=version_info["download_url"],
+                    hash_value=version_info["hash"],
+                )
         except Exception as error:
             self.log(f"❌ Error updating manifest content: {error}")
             self.emit_result(updated=False, version=version, error="manifest_update_failed")

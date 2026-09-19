@@ -45,4 +45,5 @@ repos:
     rev: v0.42.0
     hooks:
       - id: markdownlint
-        args: ["--disable", "MD013", "MD033", "MD041", "--"]
+        # MD051 disabled: it mis-slugs emoji-prefixed headings that GitHub renders fine
+        args: ["--disable", "MD013", "MD033", "MD041", "MD051", "--"]

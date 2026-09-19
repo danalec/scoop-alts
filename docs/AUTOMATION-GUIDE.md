@@ -1,6 +1,7 @@
 # Scoop Bucket Automation Guide
 
 Quick links:
+
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Creating or Updating a Package](#creating-or-updating-a-package)
@@ -80,6 +81,7 @@ success = ManifestUpdater(config, bucket_dir).update()
 ### What belongs in the package script
 
 Keep:
+
 - package name
 - homepage or API URL
 - version regex patterns
@@ -87,6 +89,7 @@ Keep:
 - package-specific metadata needed by `SoftwareVersionConfig`
 
 Avoid:
+
 - custom manifest rewrite logic
 - custom summary formatting
 - duplicated git logic
@@ -94,6 +97,7 @@ Avoid:
 ### Manifest updates
 
 `ManifestUpdater` handles:
+
 - loading the existing manifest
 - comparing versions
 - updating `version`
@@ -151,6 +155,7 @@ python scripts/update-all.py --skip-providers other
 ```
 
 Provider detection uses:
+
 - `scripts/providers.json` when present
 - otherwise a lightweight scan of each update script for known provider domains
 
@@ -163,6 +168,7 @@ python scripts/update-all.py --http-cache --http-cache-ttl 1800
 ```
 
 This sets:
+
 - `AUTOMATION_HTTP_CACHE=1`
 - `AUTOMATION_HTTP_CACHE_TTL=<seconds>`
 
@@ -188,6 +194,7 @@ python scripts/update-all.py `
 ```
 
 Supported webhook formats:
+
 - `generic`
 - `slack`
 - `discord`
@@ -225,6 +232,7 @@ python scripts/update-all.py --git-remote origin --git-branch main
 ```
 
 Environment equivalents:
+
 - `SCOOP_GIT_DRY_RUN`
 - `SCOOP_GIT_REMOTE`
 - `SCOOP_GIT_BRANCH`
@@ -234,6 +242,7 @@ Environment equivalents:
 ### No version found
 
 Check the package script configuration first:
+
 - Is `homepage` pointing to the page or API that actually contains the latest version?
 - Do the regex patterns still match the current response?
 - Does the package need a direct-download fallback instead of page scraping?
@@ -241,6 +250,7 @@ Check the package script configuration first:
 ### Script succeeds but no update is detected
 
 Check:
+
 - the manifest already contains the detected version
 - the script prints the structured JSON status line
 - `--structured-output` is not hiding a malformed child output format

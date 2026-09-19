@@ -3,6 +3,7 @@
 This guide covers installation, persisted profile behavior, default‑browser setup, migration, and clean uninstall steps for Ungoogled Chromium in the danalec_scoop-alts bucket.
 
 Quick links:
+
 - [Install](#install)
 - [Persist and Default Browser Setup](#persist-and-default-browser-setup)
 - [Persist Migration (no reinstall required)](#persist-migration-no-reinstall-required)
@@ -28,6 +29,7 @@ scoop install danalec_scoop-alts/ungoogled-chromium
   - Does not override system `http/https` handlers unless you explicitly opt in.
 
 Opt‑in environment variables:
+
 - Set `SCOOP_SET_DEFAULT_BROWSER=1` before install to register without a prompt.
 - Set `SCOOP_INTERACTIVE=1` before install to be prompted during post_install.
 - Set `SCOOP_OVERRIDE_DEFAULT_COMMAND=1` before install to override `http/https` handlers. The installer backs up previous values to a file:
@@ -50,7 +52,7 @@ Get-Item "$env:USERPROFILE\scoop\apps\ungoogled-chromium\current\User Data" | Fo
 
 LinkType should be `Junction` and Target should point to:
 
-```
+```text
 %USERPROFILE%\scoop\persist\ungoogled-chromium\User Data
 ```
 
@@ -73,7 +75,7 @@ scoop install danalec_scoop-alts/ungoogled-chromium
 
 Scoop’s persist keeps your profile under:
 
-```
+```text
 %USERPROFILE%\scoop\persist\ungoogled-chromium\User Data
 ```
 
@@ -84,6 +86,7 @@ scoop uninstall ungoogled-chromium --purge
 ```
 
 Notes:
+
 - This deletes the persisted `User Data` folder shown above.
 - The manifest’s uninstaller prompts to clean related registry entries (default‑browser associations) safely. You’ll be asked to confirm each removal.
 - If you had set `SCOOP_OVERRIDE_DEFAULT_COMMAND=1`, the uninstaller can restore `http/https` handlers from `$dir\default-association-backup.json` with confirmation.
@@ -106,4 +109,3 @@ Notes:
 ---
 
 [← Back to Docs Index](index.md)
-

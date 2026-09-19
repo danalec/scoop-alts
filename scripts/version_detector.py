@@ -14,7 +14,8 @@ import subprocess
 import logging
 import shutil
 import zipfile
-from typing import Optional, List, Dict, Any
+from urllib.parse import unquote
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -25,21 +26,26 @@ except ImportError:
     sync_playwright = None
 
 # Optional semantic version parsing
-_PVersion: Optional[Any] = None
-_PInvalid: Any = Exception
-try:
+if TYPE_CHECKING:
     from packaging.version import Version as _PVersion, InvalidVersion as _PInvalid
-except Exception:  # pragma: no cover
-    pass
+else:
+    try:
+        from packaging.version import Version as _PVersion, InvalidVersion as _PInvalid
+    except Exception:  # pragma: no cover
+        _PVersion = None  # type: ignore[assignment]
+        _PInvalid = Exception  # type: ignore[assignment]
 
 # Optional adapters/retries for robust and efficient HTTP requests
-HTTPAdapter: Any = None
-Retry: Any = None
-try:
+if TYPE_CHECKING:
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
-except Exception:  # pragma: no cover - environment may not have urllib3
-    pass
+else:
+    try:
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+    except Exception:  # pragma: no cover - environment may not have urllib3
+        HTTPAdapter = None  # type: ignore[assignment]
+        Retry = None  # type: ignore[assignment]
 
 # Optional caching support; used only if available and enabled by caller
 try:
@@ -400,18 +406,64 @@ class VersionDetector:
             except Exception:
                 return False
 
+    def _try_github_release_digest(self, url: str) -> Optional[str]:
+        """Return the sha256 hex digest GitHub publishes for a release asset.
+
+        Matches ``https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>``
+        and queries the release API for the asset's ``digest`` field, avoiding a
+        full download. Returns None for non-GitHub URLs, missing digest fields,
+        or any API/network failure so callers can fall back to downloading.
+        """
+        match = re.match(
+            r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/releases/download/"
+            r"(?P<tag>[^/]+)/(?P<asset>[^/?#]+)$",
+            url,
+        )
+        if not match:
+            return None
+        asset_name = unquote(match.group("asset"))
+        api_url = (
+            f"https://api.github.com/repos/{match.group('owner')}/{match.group('repo')}"
+            f"/releases/tags/{match.group('tag')}"
+        )
+        try:
+            response = self.session.get(api_url, timeout=DEFAULT_TIMEOUT)
+            response.raise_for_status()
+            release = response.json()
+            for asset in release.get("assets", []):
+                if asset.get("name") == asset_name:
+                    digest = str(asset.get("digest") or "")
+                    if digest.startswith("sha256:"):
+                        hex_digest = digest.split(":", 1)[1].strip().lower()
+                        if hex_digest:
+                            return hex_digest
+                    return None
+        except Exception:
+            return None
+        return None
+
     def calculate_hash(self, url: str) -> Optional[str]:
         """
-        Download file and calculate SHA256 hash with URL validation
+        Calculate the SHA256 hash for a download URL with URL validation.
+
+        GitHub release assets prefer the digest published in the release metadata
+        so the file does not need to be downloaded at all.
 
         Args:
-            url: URL of file to download and hash
+            url: URL of file to hash
 
         Returns:
             SHA256 hash string if successful, None otherwise
         """
         # Strip any fragment (e.g., "#/setup.exe") which is used by Scoop for local renaming
         clean_url = url.split("#", 1)[0]
+
+        # Query strings do not take part in the GitHub release-asset match
+        stripped_url = clean_url.split("?", 1)[0]
+        digest = self._try_github_release_digest(stripped_url)
+        if digest:
+            print(f"⚡ Using GitHub-provided digest: {digest}")
+            return digest
 
         # First validate the URL is accessible
         if not self.validate_url(clean_url):
@@ -696,7 +748,7 @@ class VersionDetector:
                     if signature == b"MZ":
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".exe") as temp_exe:
                             with temp_path.open("rb") as source:
-                                shutil.copyfileobj(source, temp_exe)
+                                shutil.copyfileobj(source, temp_exe)  # type: ignore[misc]
                             exe_path = Path(temp_exe.name)
                         try:
                             if version := self.get_local_executable_version(exe_path):
@@ -851,6 +903,8 @@ class SoftwareConfig:
     # Scoop allows persist to be a string or a list; keep it flexible
     persist: Optional[Any] = None
     architecture: Optional[Dict[str, Any]] = None
+    # Per-architecture download URL templates keyed by Scoop arch ("64bit", ...)
+    architecture_templates: Optional[Dict[str, str]] = None
 
     def __post_init__(self):
         """Handle backward compatibility and defaults"""
@@ -867,12 +921,17 @@ class SoftwareConfig:
 SoftwareVersionConfig = SoftwareConfig
 
 
-def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
+def get_version_info(
+    config: SoftwareVersionConfig, current_version: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Get complete version information for a software package
 
     Args:
         config: Software configuration object
+        current_version: Version already recorded in the manifest; when it
+            matches the detected version the download/hash is skipped and the
+            returned dict carries ``hash: None``
 
     Returns:
         Dictionary with version, download_url, and hash if successful
@@ -896,6 +955,12 @@ def get_version_info(config: SoftwareVersionConfig) -> Optional[Dict[str, Any]]:
         print(f"ℹ️  Falling back to direct download version detection: {version}")
     else:
         return None
+
+    # Skip the download and hash calculation entirely when the version is
+    # unchanged — the caller will not consume a hash in that case anyway.
+    if current_version is not None and current_version == version:
+        print(f"ℹ️  Version unchanged ({version}); skipping hash calculation")
+        return {"version": version, "download_url": download_url, "hash": None}
 
     # Calculate hash
     hash_value = detector.calculate_hash(download_url)

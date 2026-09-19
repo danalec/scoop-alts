@@ -41,6 +41,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 To add a new package to the bucket:
 
 1. Use the interactive wizard:
+
    ```bash
    python scripts/automate-scoop.py wizard
    ```
@@ -52,11 +53,13 @@ To add a new package to the bucket:
 3. Register the package provider mapping in `scripts/providers.json`.
 
 4. Test the update script:
+
    ```bash
    python scripts/update-<package-name>.py
    ```
 
 5. Validate the manifest:
+
    ```bash
    python scripts/automate-scoop.py validate
    ```
@@ -72,33 +75,38 @@ To add a new package to the bucket:
 ### Initial Setup
 
 1. Fork and clone the repository:
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/scoop-alts.git
    cd scoop-alts
    ```
 
 2. Create a virtual environment:
+
    ```bash
    python -m venv .venv
-   
+
    # Windows
    .venv\Scripts\activate
-   
+
    # Linux/macOS
    source .venv/bin/activate
    ```
 
 3. Install dependencies:
+
    ```bash
    pip install -r scripts/requirements-automation.txt
    ```
 
 4. Install pre-commit hooks:
+
    ```bash
    pre-commit install
    ```
 
 5. Run tests to verify setup:
+
    ```bash
    pytest tests/ -v
    ```
@@ -106,6 +114,7 @@ To add a new package to the bucket:
 ## Pull Request Process
 
 1. **Create a feature branch** from `master`:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -113,10 +122,11 @@ To add a new package to the bucket:
 2. **Make your changes** following the coding standards below.
 
 3. **Run tests and linting**:
+
    ```bash
    # Run tests
    pytest tests/ -v
-   
+
    # Run linting
    black --check scripts/ tests/
    ruff check scripts/ tests/
@@ -124,9 +134,10 @@ To add a new package to the bucket:
    ```
 
 4. **Commit your changes** using Conventional Commits format:
-   ```
+
+   ```text
    <type>(<scope>): <description>
-   
+
    # Types: feat, fix, docs, style, refactor, test, chore
    # Example: feat(bucket): add support for new-package
    ```
@@ -157,7 +168,7 @@ To add a new package to the bucket:
 
 ### Code Organization
 
-```
+```text
 scripts/
 ├── automate-scoop.py      # Main CLI entry point
 ├── update-all.py          # Update orchestrator
@@ -203,12 +214,12 @@ def update_manifest():
         version_patterns=['"tag_name":\\s*"v?([\\d.]+)"'],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
     )
-    
+
     version_info = get_version_info(config)
     if not version_info:
         print(f"❌ Failed to get version info for {SOFTWARE_NAME}")
         return False
-    
+
     # ... rest of update logic
     return True
 
@@ -256,10 +267,10 @@ def test_function_success_case(sample_config):
     """Test that function works correctly with valid input."""
     # Arrange
     expected = "expected_value"
-    
+
     # Act
     result = function_under_test(sample_config)
-    
+
     # Assert
     assert result == expected
 ```

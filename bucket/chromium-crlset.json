@@ -3,7 +3,7 @@
   "description": "Chromium's certificate revocation list",
   "homepage": "https://www.chromium.org/Home/chromium-security/crlsets/",
   "license": "BSD-3-Clause",
-  "url": "https://dl.google.com/release2/chrome_component/iot3qfktcm5hskcydkhd2ydz6m_10786/hfnkpimlhhgieaddgfemjhofmfblmnib_10786_all_adueewufdwqsktgqfob7f4vol73a.crx3",
+  "url": "http://www.google.com/dl/release2/chrome_component/iot3qfktcm5hskcydkhd2ydz6m_10786/hfnkpimlhhgieaddgfemjhofmfblmnib_10786_all_adueewufdwqsktgqfob7f4vol73a.crx3",
   "hash": "sha256:faaec4b8e19326cf039c0ba307968a602d171ee0a1d4f5b4c0b346e059de0f7c",
   "installer": {
     "script": [

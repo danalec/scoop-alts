@@ -1,6 +1,7 @@
 # Scripts Technical Reference
 
 Quick links:
+
 - [Overview](#overview)
 - [Core Modules](#core-modules)
 - [Update Script Contract](#update-script-contract)
@@ -33,9 +34,11 @@ The automation layer is organized around a small set of shared building blocks:
 ### `scripts/version_detector.py`
 
 Purpose:
+
 - Centralize HTTP access, version parsing, URL construction, and hash calculation.
 
 Important pieces:
+
 - `SoftwareConfig` / `SoftwareVersionConfig`
   Dataclass used by update scripts and generators.
 - `VersionDetector.fetch_latest_version()`
@@ -56,6 +59,7 @@ Important pieces:
 ```
 
 Behavior notes:
+
 - `AUTOMATION_HTTP_CACHE=1` enables optional request caching when `requests-cache` is installed.
 - `AUTOMATION_HTTP_CACHE_TTL` controls cache expiry.
 - `GITHUB_TOKEN` or `GH_TOKEN` is used automatically for GitHub API requests.
@@ -63,14 +67,17 @@ Behavior notes:
 ### `scripts/manifest_manager.py`
 
 Purpose:
+
 - Keep manifest rewriting logic in one place.
 
 Main API:
+
 - `ManifestUpdater(config, bucket_dir, manifest_filename=None, force=False)`
 - `ManifestUpdater.update() -> bool`
 - `is_forced() -> bool`
 
 What it does:
+
 1. Calls `get_version_info(config)`.
 2. Loads the target manifest.
 3. Compares the detected version with the current manifest version.
@@ -85,6 +92,7 @@ Structured output contract:
 ```
 
 Possible error codes:
+
 - `version_info_unavailable`
 - `manifest_not_found`
 - `invalid_manifest_json`
@@ -93,10 +101,12 @@ Possible error codes:
 - `save_failed`
 
 Architecture handling:
+
 - If the manifest contains an `architecture` block, `ManifestUpdater` prefers `64bit`, then `arm64`, then `32bit`, then the first available entry.
 - If no usable architecture block exists, it updates top-level `url` and `hash`.
 
 Forced updates:
+
 - When the detected version equals the current manifest version, the manifest is left untouched unless force mode is active.
 - `is_forced()` returns True when `FORCE=1` or `SCOOP_FORCE=1` is in the environment, or `--force` / `-f` / `--forcedly` / `forcedly` appears on the command line.
 - `ManifestUpdater` accepts `force=True` directly and also auto-detects via `is_forced()`, so updater scripts typically just pass `force=is_forced()`.
@@ -104,9 +114,11 @@ Forced updates:
 ### `scripts/update-all.py`
 
 Purpose:
+
 - Run update scripts and produce a clean summary of the run.
 
 Main responsibilities:
+
 - Discover `update-*.py` files.
 - Normalize CLI selections such as `corecycler` into `update-corecycler.py`.
 - Filter scripts by provider classification.
@@ -117,6 +129,7 @@ Main responsibilities:
 - Stage, commit, and optionally push changed manifests.
 
 Key helper functions:
+
 - `discover_update_scripts()`
 - `parse_script_output()`
 - `filter_by_providers()`
@@ -129,9 +142,11 @@ Key helper functions:
 ### `scripts/git_helpers.py`
 
 Purpose:
+
 - Provide a thin, reusable layer around the git commands used by automation.
 
 Main functions:
+
 - `run_git_command()`
 - `commit_manifest_change()`
 - `commit_with_message()`
@@ -141,6 +156,7 @@ Main functions:
 - `push_changes()`
 
 Environment variables honored by `push_changes()`:
+
 - `SCOOP_GIT_DRY_RUN=1`
   Skip the push step.
 - `SCOOP_GIT_REMOTE=<name>`
@@ -151,9 +167,11 @@ Environment variables honored by `push_changes()`:
 ### `scripts/summary_utils.py`
 
 Purpose:
+
 - Convert the JSON run summary into small provider-specific webhook payloads.
 
 Supported formats:
+
 - `generic`
   Sends the JSON summary as-is.
 - `slack`
@@ -183,6 +201,7 @@ success = ManifestUpdater(config, bucket_dir).update()
 ```
 
 Expected behavior:
+
 - The script prints normal log lines unless `STRUCTURED_ONLY=1`.
 - The final status line is always JSON.
 - Exit code `0` means success, including "already up to date".
@@ -210,6 +229,7 @@ Expected behavior:
 8. Optionally stage, commit, and push manifest changes.
 
 Provider classification sources:
+
 - Explicit overrides from `scripts/providers.json`
 - Fallback content inspection for GitHub, Microsoft, and Google URLs inside each script
 
@@ -223,6 +243,7 @@ Two commit strategies are supported:
   Staged `bucket/*.json` changes are grouped into "updated" and "added" commits.
 
 Related CLI flags:
+
 - `--skip-git`
 - `--git-per-package`
 - `--git-aggregate`
@@ -269,10 +290,12 @@ Related CLI flags:
 ### Webhooks
 
 Webhook delivery requires both:
+
 - `--json-summary`
 - `--webhook-url`
 
 Optional webhook flags:
+
 - `--webhook-type generic|slack|discord`
 - `--webhook-header-name`
 - `--webhook-header-value`

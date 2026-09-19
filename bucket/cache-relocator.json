@@ -4,7 +4,7 @@
   "homepage": "https://www.softperfect.com/products/cacherelocator/",
   "license": "Freeware",
   "url": "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip",
-  "hash": "sha256:5edd2fa5a22aa4a539b43f489e6a0fc0c8b0ba3041cac0d539516f0643bc8227",
+  "hash": "sha256:cc4938a260e646ca2e50c5f27ea36bf676a0fb81ae404feb8c47f3abd8dbc4d6",
   "bin": "cacherelocator.exe",
   "shortcuts": [
     [

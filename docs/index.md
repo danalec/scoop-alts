@@ -7,14 +7,17 @@ Welcome to the centralized documentation index for **Dan's Alternative Scoop Buc
 ## 📖 Architecture & Guides
 
 ### 1. Automation Framework
+
 * **[Automation Getting Started Guide](AUTOMATION-GUIDE.md)**: End-to-end introduction to creating new package manifests, using the interactive generator wizard, and setting up automated manifest updates.
 * **[Scripts Technical Reference](AUTOMATION-SCRIPTS-DOCUMENTATION.md)**: Deep dive into the shared Python architecture (`version_detector.py`, `manifest_manager.py`, `git_helpers.py`, `update-all.py`).
 * **[Advanced Automation & Throttling](AUTOMATION-ADVANCED.md)**: Complex regex patterns, multi-architecture asset matching, GitHub API rate limiting, and CI/CD workflows.
 
 ### 2. Infrastructure & Scheduling
+
 * **[Docker Container Scheduler](DOCKER-SETUP.md)**: Instructions for running the headless, cron-driven updater container (`scoop-alts-scheduler`) via Docker or Docker Compose.
 
 ### 3. Application Guides
+
 * **[Ungoogled Chromium Manual](ungoogled-chromium.md)**: Detailed instructions on Widevine DRM integration, profile persistence, default browser registration, and clean uninstallation.
 
 ---

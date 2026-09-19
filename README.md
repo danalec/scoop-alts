@@ -96,9 +96,11 @@ scoop update danalec_scoop-alts/agy
 ### Ungoogled Chromium
 
 `ungoogled-chromium` includes custom extensions to support proprietary DRM media playback and user profile preservation:
+
 * **Widevine DRM**: Automatically deploys the compatible `WidevineCdm` module for Spotify, Netflix, and Disney+ web streaming.
 * **Persistent Profile**: Preserves user profiles across Scoop updates at `%USERPROFILE%\scoop\persist\ungoogled-chromium\User Data`.
 * **Clean Purge**: To remove all stored profile data on uninstall, pass `--purge`:
+
   ```powershell
   scoop uninstall ungoogled-chromium --purge
   ```
@@ -139,6 +141,7 @@ python scripts/update-all.py --workers 6 --structured-output
 ```
 
 Common runtime options:
+
 * `--sequential`: Run updaters one by one (useful for debugging).
 * `--only-providers github`: Update only packages hosted on GitHub.
 * `--retry 2`: Retry transient network failures.
@@ -173,7 +176,7 @@ docker compose up -d
 
 ## 📁 Repository Structure
 
-```
+```text
 scoop-alts/
 ├── .github/
 │   └── workflows/          # GitHub Actions CI for manifest & python validation
@@ -221,6 +224,7 @@ All extended documentation is organized under [`docs/`](docs/):
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these standards:
+
 1. Ensure all manifests validate against the schema: `python scripts/automate-scoop.py validate`.
 2. Follow Conventional Commits format (`feat(bucket): add <package>`, `fix(scripts): resolve hash computation`).
 3. Keep all documentation, comments, and commit messages in English.

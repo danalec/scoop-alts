@@ -45,7 +45,7 @@ jobs:
           title: "Automated bucket updates"
           body: |
             Automated update run summary attached.
-            
+
             See `.temp/update-summary.json` for details.
           branch: "auto/update-bucket"
           add-paths: |

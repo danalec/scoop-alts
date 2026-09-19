@@ -1,6 +1,7 @@
 # Advanced Automation Guide
 
 Quick links:
+
 - [Advanced Configuration Examples](#advanced-configuration-examples)
 - [Complex Version Detection](#complex-version-detection)
 - [Performance Optimization](#performance-optimization)
@@ -36,6 +37,7 @@ This document contains advanced scenarios, complex configurations, and detailed 
 ## 🔧 Advanced Configuration Examples
 
 ### Multi-Architecture Software
+
 ```json
 {
   "name": "cross-platform-tool",
@@ -59,6 +61,7 @@ This document contains advanced scenarios, complex configurations, and detailed 
 ```
 
 ### Complex Installer with Pre/Post Actions
+
 ```json
 {
   "name": "complex-software",
@@ -129,6 +132,7 @@ def build_complex_download_url(version: str) -> str:
 ## 🚀 Performance Optimization
 
 ### HTTP Session Reuse
+
 ```python
 # Optimize HTTP requests with session reuse
 session = requests.Session()
@@ -142,6 +146,7 @@ response2 = session.get(download_url)
 ```
 
 ### Parallel Processing Configuration
+
 ```python
 # Configure parallel execution
 MAX_WORKERS = min(32, (os.cpu_count() or 1) + 4)
@@ -153,6 +158,7 @@ with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 ```
 
 ### Caching Strategies
+
 ```python
 # Implement response caching
 @lru_cache(maxsize=128)
@@ -165,6 +171,7 @@ def get_cached_version(url: str) -> str:
 ## 🛡️ Advanced Troubleshooting
 
 ### Debug Mode Configuration
+
 ```bash
 # Run the update-script test suite
 python scripts/automate-scoop.py test
@@ -174,6 +181,7 @@ python scripts/automate-scoop.py test --software thorium-avx2 ungoogled-chromium
 ```
 
 ### Custom Error Handling
+
 ```python
 def robust_version_detection(url: str, patterns: list) -> str:
     """Implement fallback version detection."""
@@ -192,6 +200,7 @@ def robust_version_detection(url: str, patterns: list) -> str:
 ```
 
 ### Performance Profiling
+
 ```python
 import cProfile
 import pstats
@@ -211,6 +220,7 @@ stats.sort_stats('cumulative').print_stats(20)
 ## 🔄 CI/CD Integration
 
 ### GitHub Actions Workflow
+
 ```yaml
 name: Automated Package Updates
 on:
@@ -247,6 +257,7 @@ jobs:
 ```
 
 ### Advanced Batch Operations
+
 ```bash
 # Update specific scripts with controlled concurrency
 python scripts/update-all.py --scripts corecycler esptool --workers 4
@@ -259,6 +270,7 @@ python scripts/update-all.py --verbose
 ```
 
 ### HTTP caching tips
+
 - When to use: helpful for repeated runs within a short period or to reduce load on provider APIs.
 - Recommended TTL: 600–1800 seconds. Default is 1800; shorter TTLs (e.g., 1200) are good when changes may occur frequently.
 - What is cached: HTTP GET responses via requests-cache; avoid caching endpoints that require fresh state (e.g., dynamic download URLs that expire quickly).
@@ -277,6 +289,7 @@ python scripts/update-all.py --retry 2
 ## 🎨 Custom Script Templates
 
 ### Creating Custom Templates
+
 ```python
 # custom_template.py
 CUSTOM_UPDATE_TEMPLATE = '''
@@ -313,6 +326,7 @@ if __name__ == "__main__":
 ## 📊 Monitoring & Metrics
 
 ### Success Tracking
+
 ```python
 # Track automation success rates
 class AutomationMetrics:
@@ -335,6 +349,7 @@ class AutomationMetrics:
 ```
 
 ### Health Checks
+
 ```bash
 # Validate all manifests against the schema
 python scripts/automate-scoop.py validate
@@ -346,6 +361,7 @@ python scripts/automate-scoop.py audit-providers
 ## 🔧 Advanced Configuration Management
 
 ### Environment-Specific Configs
+
 ```json
 {
   "environments": {
@@ -364,6 +380,7 @@ python scripts/automate-scoop.py audit-providers
 ```
 
 ### Dynamic Configuration Loading
+
 ```python
 def load_environment_config(env: str = "production") -> dict:
     """Load environment-specific configuration."""
@@ -379,15 +396,18 @@ def load_environment_config(env: str = "production") -> dict:
 ## 📚 Additional Resources
 
 ### Advanced Documentation
+
 - [AUTOMATION-SCRIPTS-DOCUMENTATION.md](AUTOMATION-SCRIPTS-DOCUMENTATION.md) - Technical reference
 - [AUTOMATION-GUIDE.md](AUTOMATION-GUIDE.md) - Basic setup and usage
 
 ### Performance Tools
+
 - **cProfile**: Python performance profiling
 - **memory_profiler**: Memory usage analysis
 - **py-spy**: Production profiling tool
 
 ### Community Resources
+
 - **GitHub Discussions**: Share advanced configurations
 - **Issue Tracker**: Report complex automation scenarios
 - **Wiki**: Community-contributed examples

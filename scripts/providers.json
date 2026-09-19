@@ -17,6 +17,7 @@
   "update-usb-safely-remove-portable.py": "other",
   "update-usb-safely-remove.py": "other",
   "update-veracrypt.py": "other",
+  "update-victoria.py": "other",
   "update-widevinecdm.py": "google",
   "update-wifiscanner.py": "other",
   "update-windhawk.py": "github"

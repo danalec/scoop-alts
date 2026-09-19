@@ -12,4 +12,3 @@ else
 fi
 
 curl -s -X POST -H "Content-Type: application/json" -d "$BODY" "${NOTIFY_WEBHOOK_URL}"
-

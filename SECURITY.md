@@ -70,6 +70,7 @@ This project includes several security-conscious design decisions:
 ### Manifest Validation
 
 All manifests are validated against a JSON schema to ensure:
+
 - Required fields are present
 - URLs use HTTPS where possible
 - Hash values are properly formatted
@@ -77,6 +78,7 @@ All manifests are validated against a JSON schema to ensure:
 ### Dependency Scanning
 
 We use automated tools to scan for vulnerable dependencies:
+
 - GitHub Dependabot alerts
 - Pre-commit hooks for linting
 
@@ -91,6 +93,7 @@ We use automated tools to scan for vulnerable dependencies:
 ### Download URLs
 
 Some packages may download from external sources. Users should:
+
 - Verify the source URL in manifests
 - Check that hashes match after download
 - Be cautious with packages from untrusted sources
@@ -98,6 +101,7 @@ Some packages may download from external sources. Users should:
 ### Registry Modifications
 
 Some packages (like ungoogled-chromium) may modify Windows registry settings for default browser functionality. These changes are:
+
 - Documented in the manifest
 - Reversible via uninstall
 - User-initiated (opt-in)
@@ -105,6 +109,7 @@ Some packages (like ungoogled-chromium) may modify Windows registry settings for
 ### Script Execution
 
 Update scripts make network requests to check for new versions. These scripts:
+
 - Use HTTPS for all requests
 - Respect rate limits
 - Do not execute arbitrary code from external sources
