@@ -2,19 +2,19 @@
 # Install with: pip install -r scripts/requirements-automation.txt
 
 # Core dependencies
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-packaging>=23.0.0
+requests>=2.34.2
+beautifulsoup4>=4.15.0
+packaging>=26.3
 
 # Optional dependencies for enhanced functionality
-requests-cache>=1.2.0
-playwright>=1.41.0
-rich>=13.0.0  # For rich terminal output and progress bars
+requests-cache>=1.3.3
+playwright>=1.63.0
+rich>=15.0.0  # For rich terminal output and progress bars
 
 # Development dependencies (optional)
-pytest>=7.4.0  # For testing
-black>=23.0.0  # For code formatting
-flake8>=6.0.0  # For linting
-pre-commit>=3.6.0  # For git hook management
-ruff>=0.6.0  # Fast Python linter
-jsonschema>=4.21.0  # For manifest schema validation
+pytest>=9.1.1  # For testing
+black>=26.5.1  # For code formatting
+flake8>=7.3.0  # For linting
+pre-commit>=4.6.2  # For git hook management
+ruff>=0.16.7  # Fast Python linter
+jsonschema>=4.26.0  # For manifest schema validation
