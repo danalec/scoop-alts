@@ -671,3 +671,105 @@ def test_cli_doctor_structured_only(tmp_path):
     payload = json.loads(lines[0])
     assert payload["command"] == "doctor"
     assert payload["passed"] == 1
+
+
+# ============================================================================
+# 7z layout checks (full download + 7z binary; skipped when 7z is absent)
+# ============================================================================
+
+import shutil
+
+SEVEN_ZIP = shutil.which("7z") or shutil.which("7za") or shutil.which("7zr")
+needs_7z = pytest.mark.skipif(SEVEN_ZIP is None, reason="no 7z binary available")
+
+
+def make_7z_bytes(files: dict) -> bytes:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "test.7z"
+        for rel, content in files.items():
+            target = Path(tmp) / "src" / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        subprocess.run(
+            [SEVEN_ZIP, "a", str(archive), f"{tmp}/src/*"],
+            check=True,
+            capture_output=True,
+        )
+        return archive.read_bytes()
+
+
+@needs_7z
+def test_7z_layout_verifies_references(monkeypatch):
+    archive = make_7z_bytes({"app-1.2.3/app.exe": b"MZ", "app-1.2.3/lib/tool.exe": b"MZ"})
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Length": str(len(archive))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def iter_content(self, chunk_size=65536):
+            yield archive
+
+        def close(self):
+            pass
+
+    def fake_get(url, **kwargs):
+        if kwargs.get("stream"):
+            return FakeResponse()
+        raise AssertionError("expected stream=True")
+
+    monkeypatch.setattr(md, "_requests_get", fake_get)
+    manifest = zip_manifest(
+        version="1.2.3",
+        url="https://example.com/downloads/app-1.2.3.7z",
+        bin=["app.exe", "lib/tool.exe"],
+        extract_dir="app-1.2.3",
+    )
+    report = md.doctor_manifest("seven.json", manifest, transport=FakeRangeTransport(GOOD_ZIP))
+    assert [f for f in report.findings if f.check == "zip-layout"] == []
+
+
+@needs_7z
+def test_7z_layout_missing_reference_errors(monkeypatch):
+    archive = make_7z_bytes({"app-1.2.3/app.exe": b"MZ"})
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Length": str(len(archive))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def iter_content(self, chunk_size=65536):
+            yield archive
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(md, "_requests_get", lambda url, **kw: FakeResponse())
+    manifest = zip_manifest(
+        version="1.2.3",
+        url="https://example.com/downloads/app-1.2.3.7z",
+        bin=["nope/missing.exe"],
+    )
+    report = md.doctor_manifest("seven.json", manifest, transport=FakeRangeTransport(GOOD_ZIP))
+    findings = findings_by_check(report, "zip-layout")
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert "missing.exe" in findings[0].message
+
+
+def test_7z_without_binary_cannot_check(monkeypatch):
+    monkeypatch.setattr(md, "_find_7z_binary", lambda: None)
+    with pytest.raises(md.ZipListingError):
+        md.list_7z_entries("https://example.com/app.7z")

@@ -92,6 +92,107 @@ def _requests_get(url: str, **kwargs: Any) -> Any:
     return requests.get(url, **kwargs)
 
 
+def _find_7z_binary() -> Optional[str]:
+    import shutil
+
+    for candidate in ("7z", "7za", "7zr"):
+        path = shutil.which(candidate)
+        if path:
+            return path
+    return None
+
+
+def _7z_max_bytes() -> int:
+    raw = os.environ.get("DOCTOR_7Z_MAX_MB", "200")
+    try:
+        return max(1, int(raw)) * 1024 * 1024
+    except ValueError:
+        return 200 * 1024 * 1024
+
+
+def list_7z_entries(url: str, max_bytes: Optional[int] = None) -> List[str]:
+    """List a remote .7z archive's entries by downloading it (capped) and
+    invoking the 7z binary. The 7z metadata header is usually compressed, so
+    unlike .zip it cannot be listed via range requests.
+
+    Raises ZipUrlNotFoundError for dead URLs and ZipListingError when the
+    archive cannot be checked (no binary, too large, network error).
+    """
+    import subprocess
+    import tempfile
+
+    limit = max_bytes if max_bytes is not None else _7z_max_bytes()
+    binary = _find_7z_binary()
+    if binary is None:
+        raise ZipListingError("no 7z binary available (install p7zip-full)")
+
+    try:
+        head = _requests_get(url, stream=True, timeout=30, allow_redirects=True)
+        try:
+            if head.status_code in (404, 410):
+                raise ZipUrlNotFoundError(url, head.status_code)
+            if head.status_code >= 400:
+                raise ZipListingError(f"HTTP {head.status_code}")
+            length = int(head.headers.get("Content-Length") or "0")
+        finally:
+            head.close()
+    except ZipListingError:
+        raise
+    except Exception as exc:
+        raise ZipListingError(f"HEAD failed: {exc}") from exc
+    if length > limit:
+        raise ZipListingError(f"archive is {length} bytes (cap {limit})")
+
+    tmp_path: Optional[Path] = None
+    try:
+        response = _requests_get(url, stream=True, timeout=120, allow_redirects=True)
+        with response:
+            if response.status_code >= 400:
+                raise ZipListingError(f"HTTP {response.status_code}")
+            with tempfile.NamedTemporaryFile(suffix=".7z", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+                downloaded = 0
+                for chunk in response.iter_content(chunk_size=65536):
+                    downloaded += len(chunk)
+                    if downloaded > limit:
+                        raise ZipListingError(f"archive exceeds cap {limit} bytes")
+                    tmp.write(chunk)
+    except ZipListingError:
+        raise
+    except Exception as exc:
+        raise ZipListingError(f"download failed: {exc}") from exc
+
+    try:
+        assert tmp_path is not None  # bound by the download block above
+        listing = subprocess.run(
+            [binary, "l", "-slt", str(tmp_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+        )
+        if listing.returncode != 0:
+            raise ZipListingError(f"7z could not read the archive: {listing.stderr.strip()[:120]}")
+        entries: List[str] = []
+        for line in listing.stdout.splitlines():
+            if line.startswith("Path = "):
+                entries.append(line[len("Path = ") :])
+        if not entries:
+            raise ZipListingError("7z reported no entries")
+        return entries
+    except ZipListingError:
+        raise
+    except Exception as exc:
+        raise ZipListingError(f"7z listing failed: {exc}") from exc
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 class HttpRangeTransport:
     """Fetch byte ranges over HTTP, tolerating servers that ignore Range."""
 
@@ -439,12 +540,16 @@ def doctor_manifest(
         parts = urllib.parse.urlsplit(base_url)
         if parts.scheme.lower() not in ("http", "https"):
             continue
-        if not parts.path.lower().endswith(".zip"):
+        lower_path = parts.path.lower()
+        if not (lower_path.endswith(".zip") or lower_path.endswith(".7z")):
             continue
         if transport is None:
             transport = HttpRangeTransport()
         try:
-            entries = list_zip_entries(base_url, transport)
+            if lower_path.endswith(".7z"):
+                entries = list_7z_entries(base_url)
+            else:
+                entries = list_zip_entries(base_url, transport)
         except ZipUrlNotFoundError as exc:
             findings.append(
                 Finding(SEVERITY_ERROR, "zip-layout", f"{location}: zip url dead: {exc}")

@@ -49,4 +49,5 @@ jobs:
 
       - name: Deep manifest lint (doctor)
         run: |
+          sudo apt-get update && sudo apt-get install -y p7zip-full
           python scripts/automate-scoop.py doctor

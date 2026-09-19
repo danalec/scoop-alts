@@ -11,6 +11,7 @@ jobs:
   smoke:
     name: Install all manifests with Scoop
     runs-on: windows-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,18 +31,29 @@ jobs:
         run: |
           # Install manifests directly by path - 'scoop bucket add' requires a
           # git URL and cannot register a plain local directory.
+          $perPackageTimeoutSec = 900
           $manifests = Get-ChildItem -Path "${{ github.workspace }}\bucket" -Filter '*.json' | Sort-Object Name
           New-Item -ItemType Directory -Force smoke-logs | Out-Null
           $results = foreach ($manifest in $manifests) {
               $name = $manifest.BaseName
-              $ok = $true
-              try {
-                  $output = & scoop install --no-update-scoop $manifest.FullName *>&1
-                  if (-not $?) { $ok = $false }
-              } catch {
-                  $output = @($output) + $_.Exception.Message
-                  $ok = $false
+              # Run each install in a background job so a hung installer
+              # cannot stall the whole sweep (bounded by $perPackageTimeoutSec).
+              $installJob = Start-Job -ArgumentList $manifest.FullName -ScriptBlock {
+                  param($manifestPath)
+                  & scoop install --no-update-scoop $manifestPath *>&1
               }
+              $finished = Wait-Job -Job $installJob -Timeout $perPackageTimeoutSec
+              $ok = $false
+              $output = @()
+              if ($finished) {
+                  $output = Receive-Job -Job $installJob
+                  $errors = @($output | Where-Object { "$_" -match '^\s*ERROR' })
+                  $ok = ($installJob.State -eq 'Completed') -and ($errors.Count -eq 0)
+              } else {
+                  Stop-Job -Job $installJob -Force -PassThru | Out-Null
+                  $output = @("TIMEOUT: scoop install did not finish within $perPackageTimeoutSec seconds")
+              }
+              Remove-Job -Job $installJob -Force -ErrorAction SilentlyContinue
               $output | Out-File -FilePath "smoke-logs\$name.log" -Encoding utf8
               [PSCustomObject]@{
                   Package = $name
