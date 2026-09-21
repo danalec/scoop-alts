@@ -42,7 +42,7 @@ Scoop smoke test: daily install observability ([workflow](.github/workflows/scoo
 | [`esptool`](bucket/esptool.json) | GitHub Releases | ROM bootloader utility for Espressif ESP8266 & ESP32 chips | — |
 | [`hdd-lff-portable`](bucket/hdd-lff-portable.json) | HDDGuru | Low-level formatting tool for SATA, IDE, SAS, SCSI, and SSD drives | — |
 | [`ntoptimizer`](bucket/ntoptimizer.json) | NTDev | Lightweight Windows performance tuning and debloating utility | — |
-| [`ripgrep-all`](bucket/ripgrep-all.json) | GitHub Releases | Ripgrep wrapper searching inside PDFs, E-books, Office files, and archives | — |
+| [`ripgrep-all`](bucket/ripgrep-all.json) | [danalec/ripgrep-all](https://github.com/danalec/ripgrep-all) | Ripgrep wrapper searching inside PDFs, E-books, Office files (incl. legacy .doc/.rtf), and archives | — |
 | [`taskexplorer`](bucket/taskexplorer.json) | GitHub Releases | Advanced task manager and security tool with driver-level inspection | — |
 | [`thorium-avx2`](bucket/thorium-avx2.json) | GitHub Releases | Fastest Chromium fork with compiler optimizations for AVX2 CPUs | `USER_DATA` |
 | [`ungoogled-chromium`](bucket/ungoogled-chromium.json) | GitHub Releases | Google-free Chromium with Widevine DRM integration | `User Data` |
