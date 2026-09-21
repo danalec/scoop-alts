@@ -1,7 +1,7 @@
 # Dan's Alternative Scoop Bucket (`scoop-alts`)
 
 [![Python CI](https://github.com/danalec/scoop-alts/actions/workflows/python-ci.yml/badge.svg)](https://github.com/danalec/scoop-alts/actions/workflows/python-ci.yml)
-[![Manifests](https://img.shields.io/badge/manifests-22%20packages-blue.svg)](bucket/)
+[![Manifests](https://img.shields.io/badge/manifests-23%20packages-blue.svg)](bucket/)
 [![Scoop Compatible](https://img.shields.io/badge/scoop-compatible-green.svg)](https://scoop.sh)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-brightgreen.svg)](https://www.python.org/)
@@ -28,7 +28,7 @@ Scoop smoke test: daily install observability ([workflow](.github/workflows/scoo
 
 ---
 
-## 📦 Complete Package Catalog (22 Packages)
+## 📦 Complete Package Catalog (23 Packages)
 
 | Manifest | Upstream Provider | Description | Persist Support |
 | :--- | :--- | :--- | :---: |
@@ -54,6 +54,7 @@ Scoop smoke test: daily install observability ([workflow](.github/workflows/scoo
 | [`widevinecdm`](bucket/widevinecdm.json) | Google Chrome | Widevine Content Decryption Module for third-party Chromium builds | — |
 | [`wifiscanner`](bucket/wifiscanner.json) | LizardSystems | 802.11a/b/g/n/ac/ax wireless network scanner and spectrum analyzer | — |
 | [`windhawk`](bucket/windhawk.json) | GitHub Releases | Customization engine for Windows programs using modular injectables | `AppData` |
+| [`zapfast`](bucket/zapfast.json) | [danalec/zapfast](https://github.com/danalec/zapfast) | Native WhatsApp client in Rust and egui, community build with pending upstream PRs merged | — |
 
 ---
 
