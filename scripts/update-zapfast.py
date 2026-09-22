@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ripgrep All Update Script
+ZapFast Update Script
 Automatically checks for updates and updates the Scoop manifest using the
 shared version detector. Windows-binary availability is asset-gated via the
 framework (require_release_asset): only releases that ship the expected
@@ -15,9 +15,9 @@ from manifest_manager import ManifestUpdater, is_forced
 from version_detector import SoftwareVersionConfig
 
 # Configuration
-SOFTWARE_NAME = "ripgrep-all"
-HOMEPAGE_URL = "https://github.com/danalec/ripgrep-all/releases"
-DOWNLOAD_URL_TEMPLATE = "https://github.com/danalec/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip"
+SOFTWARE_NAME = "zapfast"
+HOMEPAGE_URL = "https://github.com/danalec/zapfast/releases"
+DOWNLOAD_URL_TEMPLATE = "https://github.com/danalec/zapfast/releases/download/v$version/zapfast-v$version-x86_64-pc-windows-msvc.zip"
 BUCKET_DIR = Path(__file__).parent.parent / "bucket"
 
 
@@ -32,8 +32,8 @@ def update_manifest(force: bool = False) -> bool:
         # loudly instead of pinning a version series.
         version_patterns=[r"releases/tag/v([\d.]+)"],
         download_url_template=DOWNLOAD_URL_TEMPLATE,
-        description="Ripgrep-All - search in PDFs, e-books, Office docs (incl. legacy .doc and .rtf), archives, and media via ripgrep (danalec community build)",
-        license="AGPL-3.0-or-later",
+        description="Native WhatsApp client in Rust and egui, community build with pending upstream PRs merged",
+        license="MIT",
         require_release_asset=True,
     )
 
