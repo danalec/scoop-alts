@@ -10,6 +10,7 @@
   "update-hdd-lff-portable.py": "other",
   "update-ntoptimizer.py": "other",
   "update-ripgrep-all.py": "github",
+  "update-ripgrep-all-znver4.py": "github",
   "update-taskexplorer.py": "github",
   "update-thorium-avx2.py": "github",
   "update-ungoogled-chromium.py": "github",
