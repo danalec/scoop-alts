@@ -7,7 +7,12 @@
   "url": "https://github.com/danalec/ripgrep-all/releases/download/v0.10.10.3/ripgrep_all-v0.10.10.3-x86_64-pc-windows-msvc-znver4.zip",
   "hash": "sha256:6b1d98ee9e7a82d147f913e6762be3acb2807db1276e0c4202394f5b9886bab1",
   "extract_dir": "ripgrep_all-v0.10.10.3-x86_64-pc-windows-msvc-znver4",
-  "bin": "rga.exe",
+  "bin": [
+    [
+      "rga.exe",
+      "rga-znver4"
+    ]
+  ],
   "checkver": {
     "url": "https://api.github.com/repos/danalec/ripgrep-all/releases/latest",
     "regex": "\"tag_name\":\\s*\"v?([\\d.]+)\""
