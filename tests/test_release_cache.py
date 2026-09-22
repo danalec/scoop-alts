@@ -125,6 +125,32 @@ def test_cache_key_includes_query_params(cache_path):
     assert vd._cached_api_get(url, params={"per_page": 20}) == ["release"]
 
 
+def test_empty_api_payload_is_not_cached(cache_path):
+    """A 200 with an empty list/dict is a transient glitch, not a fact.
+
+    Caching it would poison the asset gate for the whole TTL (zapfast,
+    2026-09-22): the next runs keep seeing zero releases and fall back to
+    scraping, which then fails the update.
+    """
+    vd = VersionDetector()
+    session = _RecordingSession([])
+    vd.session = session
+    url = "https://api.github.com/repos/o/r/releases"
+    assert vd._cached_api_get(url, params={"per_page": 20}) == []
+    assert session.urls == [url]
+
+    session2 = _RecordingSession([{"tag_name": "v1.0.0"}])
+    vd.session = session2
+    assert vd._cached_api_get(url, params={"per_page": 20}) == [{"tag_name": "v1.0.0"}]
+    assert session2.urls == [url]
+
+    # Only the non-empty payload may be persisted; the empty glitch must not
+    # shadow it for the TTL window.
+    entries = json.loads(cache_path.read_text(encoding="utf-8"))
+    key = f"{url}?per_page=20"
+    assert entries[key]["body"] == [{"tag_name": "v1.0.0"}]
+
+
 def test_cache_network_failure_returns_none_and_writes_nothing(cache_path):
     vd = VersionDetector()
 

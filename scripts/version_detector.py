@@ -562,7 +562,11 @@ class VersionDetector:
                 body = response.text
         except Exception:
             return None
-        if ttl > 0:
+        # Never cache empty payloads: a 200 with an empty list/dict is almost
+        # always a transient API glitch (it poisoned the 2026-09-22 zapfast
+        # run for the whole 30-min TTL), and refetching is cheap since no
+        # asset download is involved.
+        if ttl > 0 and body:
             _write_release_cache_entry(cache_path, key, body)
         return body
 
