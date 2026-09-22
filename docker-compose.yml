@@ -11,6 +11,7 @@ services:
       - SCHEDULE_UPDATE_ALL=0 * * * *
       - HEARTBEAT_SCHEDULE=*/5 * * * *
       - ORCHESTRATOR_FLAGS=--fast --retry 1
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       # - NOTIFY_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
     volumes:
       - .:/app

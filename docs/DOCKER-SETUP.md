@@ -89,6 +89,15 @@ docker compose logs -f scheduler
 | `GITHUB_TOKEN` | `""` | GitHub Personal Access Token to avoid rate limits during version discovery. |
 | `AUTOMATION_DISABLE_WINMETA` | `1` | Disables Windows-specific binary inspection when running on Linux containers. |
 
+> **Supplying `GITHUB_TOKEN`:** create a `.env` file next to `docker-compose.yml`
+> (gitignored by default) with `GITHUB_TOKEN=ghp_...`, or export it in the host
+> shell before `docker compose up`. A fine-grained PAT with **no permissions**
+> is enough — the bucket only queries public release APIs, and the token only
+> raises the hourly quota from 60 to 5,000 requests. The compose file forwards
+> it into the container, and the entrypoint pins it into the crontab so the
+> scheduled job always sees it. Without it, hourly runs share the 60-request
+> anonymous quota per IP and can fail mid-run once it is exhausted.
+
 ---
 
 ## 💾 Storage & Persistent Volumes

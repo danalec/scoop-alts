@@ -23,6 +23,12 @@ fi
 
 CRONFILE=/var/spool/cron/crontabs/root
 {
+  # busybox crond propagates the daemon env to jobs, but pin the token into
+  # the crontab as well so the job keeps working even if env handling changes
+  # or the image swaps cron implementations.
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    echo "GITHUB_TOKEN=$GITHUB_TOKEN"
+  fi
   echo "${SCHEDULE_UPDATE_ALL} /usr/local/scoop-bin/run_update_all.sh"
   echo "${HEARTBEAT_SCHEDULE} date +%s > /data/heartbeat"
 } > "$CRONFILE"
