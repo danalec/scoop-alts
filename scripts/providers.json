@@ -21,6 +21,5 @@
   "update-victoria.py": "other",
   "update-widevinecdm.py": "google",
   "update-wifiscanner.py": "other",
-  "update-windhawk.py": "github",
-  "update-zapfast.py": "github"
+  "update-windhawk.py": "github"
 }
