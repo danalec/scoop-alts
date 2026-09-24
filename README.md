@@ -54,6 +54,7 @@ Scoop smoke test: daily install observability ([workflow](.github/workflows/scoo
 | [`widevinecdm`](bucket/widevinecdm.json) | Google Chrome | Widevine Content Decryption Module for third-party Chromium builds | — |
 | [`wifiscanner`](bucket/wifiscanner.json) | LizardSystems | 802.11a/b/g/n/ac/ax wireless network scanner and spectrum analyzer | — |
 | [`windhawk`](bucket/windhawk.json) | GitHub Releases | Customization engine for Windows programs using modular injectables | `AppData` |
+| [`zapfast`](bucket/zapfast.json) | [crmne/zapfast](https://github.com/crmne/zapfast) | Fast, native WhatsApp client in Rust and egui | — |
 
 ---
 
