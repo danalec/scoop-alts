@@ -497,6 +497,47 @@ class TestManifestUpdater(unittest.TestCase):
         ]
         self.assertNotIn("revision", payloads[-1])
 
+    def test_refresh_extract_dir_with_autoupdate_template(self):
+        manifest = {
+            "version": "1.0.0",
+            "extract_dir": "app-old",
+            "autoupdate": {"extract_dir": "app-$version-x64"},
+        }
+        ManifestUpdater._refresh_extract_dir(manifest, version="2.0.0", previous_version="1.0.0")
+        self.assertEqual(manifest["extract_dir"], "app-2.0.0-x64")
+
+    def test_refresh_extract_dir_replaces_previous_version(self):
+        manifest = {
+            "version": "1.0.0",
+            "extract_dir": "app-1.0.0-x64",
+        }
+        ManifestUpdater._refresh_extract_dir(manifest, version="2.0.0", previous_version="1.0.0")
+        self.assertEqual(manifest["extract_dir"], "app-2.0.0-x64")
+
+    def test_refresh_extract_dir_replaces_stale_embedded_version(self):
+        # Scenario where extract_dir had lagged behind a previous version
+        manifest = {
+            "version": "1.5.0",
+            "extract_dir": "ungoogled-chromium_153.0.8010.36-1.1_windows_x64",
+        }
+        ManifestUpdater._refresh_extract_dir(
+            manifest, version="154.0.8037.57-1.1", previous_version="153.0.8010.52-1.1"
+        )
+        self.assertEqual(
+            manifest["extract_dir"], "ungoogled-chromium_154.0.8037.57-1.1_windows_x64"
+        )
+
+    def test_refresh_extract_dir_skips_when_unchanged_or_missing(self):
+        manifest = {"version": "1.0.0", "extract_dir": "app-1.0.0"}
+        ManifestUpdater._refresh_extract_dir(manifest, version="1.0.0", previous_version="1.0.0")
+        self.assertEqual(manifest["extract_dir"], "app-1.0.0")
+
+        manifest_no_dir = {"version": "1.0.0"}
+        ManifestUpdater._refresh_extract_dir(
+            manifest_no_dir, version="2.0.0", previous_version="1.0.0"
+        )
+        self.assertNotIn("extract_dir", manifest_no_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

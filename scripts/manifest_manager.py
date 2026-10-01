@@ -174,8 +174,18 @@ class ManifestUpdater:
         extract_dir = manifest.get("extract_dir")
         if not isinstance(extract_dir, str) or not extract_dir:
             return
+        autoupdate = manifest.get("autoupdate")
+        if isinstance(autoupdate, dict):
+            template = autoupdate.get("extract_dir")
+            if isinstance(template, str) and "$version" in template:
+                manifest["extract_dir"] = template.replace("$version", version)
+                return
         if previous_version in extract_dir:
             manifest["extract_dir"] = extract_dir.replace(previous_version, version)
+            return
+        manifest["extract_dir"] = re.sub(
+            r"\d+(?:\.\d+)+(?:-[0-9.]+)?", version, extract_dir, count=1
+        )
 
     def apply_architecture_templates(
         self, manifest: Dict[str, Any], *, version: str, version_info: Dict[str, Any]
