@@ -13,8 +13,8 @@ rich>=15.0.0  # For rich terminal output and progress bars
 
 # Development dependencies (optional)
 pytest>=9.1.1  # For testing
-black>=26.5.1  # For code formatting
+black>=26.10.0  # For code formatting
 flake8>=7.4.1  # For linting
 pre-commit>=4.6.2  # For git hook management
-ruff>=0.16.9  # Fast Python linter
+ruff>=0.16.10  # Fast Python linter
 jsonschema>=4.26.0  # For manifest schema validation
