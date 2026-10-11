@@ -1291,6 +1291,14 @@ def main() -> None:
 
     if args.dry_run:
         print("\n🔍 DRY RUN - No scripts will be executed")
+        # The summary writers run below, after the updaters, so a dry run can only
+        # report an empty result set. Saying nothing here used to make
+        # `--dry-run --json-summary` look like it worked while writing no file.
+        if args.json_summary or args.md_summary:
+            print(
+                "⚠️  --dry-run writes no summary: the file is produced from live updater "
+                "results. Drop --dry-run to generate it, or ignore this flag."
+            )
         return
 
     print("\n" + "=" * 80)

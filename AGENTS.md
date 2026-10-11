@@ -133,8 +133,9 @@ individual updaters honor `FORCE=1`, `SCOOP_FORCE=1`, or `--force`/`-f`. Pass `f
   `providers.json` entry, then validate.
 - **Check `git status` before staging** — automation may have committed manifests since your last
   action; those machine-owned changes are not yours to revert.
-- `docs/update-health.md` is generated output and is git-ignored; regenerate it locally with
-  `--md-summary`.
+- `docs/update-health.md` is generated output and is git-ignored; it is written by
+  `scripts/generate-dashboard.py` from the JSON that `update-all.py --json-summary` produces —
+  not by `generate-site.py --md-summary`, and never from a `--dry-run` run.
 
 ## Who writes to main
 
