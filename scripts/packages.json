@@ -1,0 +1,180 @@
+{
+  "atomic": {
+    "homepage": "https://api.github.com/repos/kenforthewin/atomic/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"v?([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/kenforthewin/atomic/releases/download/v$version/Atomic_$version_x64-setup.exe#/setup.exe",
+    "description": "AI-augmented personal knowledge base built from semantically connected markdown notes.",
+    "license": "MIT"
+  },
+  "cache-relocator": {
+    "homepage": "https://www.softperfect.com/products/cacherelocator/",
+    "version_patterns": [
+      "Latest version[\\s\\S]*?([0-9]+\\.[0-9]+)"
+    ],
+    "download_url_template": "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip",
+    "description": "SoftPerfect Cache Relocator - Relocate browser and app caches to another drive",
+    "license": "Freeware"
+  },
+  "chromium-crlset": {
+    "homepage": "https://clients2.google.com/service/update2/crx?x=id%3Dhfnkpimlhhgieaddgfemjhofmfblmnib%26v%3D0.0.0.0%26uc%26acceptformat%3Dcrx3",
+    "version_patterns": [
+      "codebase=\"(?P<codebase>https?://[^\"]+)\".*?version=\"(?P<version>\\d+)\""
+    ],
+    "download_url_template": "$matchcodebase",
+    "description": "Chromium's certificate revocation list",
+    "license": "BSD-3-Clause",
+    "force_https": true
+  },
+  "codecharta": {
+    "homepage": "https://api.github.com/repos/MaibornWolff/codecharta/tags",
+    "version_patterns": [
+      "vis-([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/MaibornWolff/codecharta/releases/download/vis-$version/codecharta-visualization-win32-x64.zip",
+    "description": "CodeCharta Visualization: interactive 3D maps of code metrics to analyze hotspots and architecture.",
+    "license": "BSD-3-Clause"
+  },
+  "corecycler": {
+    "homepage": "https://api.github.com/repos/sp00n/corecycler/tags",
+    "version_patterns": [
+      "v([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/sp00n/CoreCycler/releases/download/v$version/CoreCycler-v$version.7z",
+    "description": "CoreCycler - CPU stress testing tool for stability testing",
+    "license": "MIT"
+  },
+  "depressurizer": {
+    "homepage": "https://api.github.com/repos/julianxhokaxhiu/Depressurizer/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\""
+    ],
+    "download_url_template": "https://github.com/julianxhokaxhiu/Depressurizer/releases/download/$version/Depressurizer-v$version.0_Release.zip",
+    "description": "Depressurizer - A Steam library categorizing tool",
+    "license": "GPL-3.0"
+  },
+  "esptool": {
+    "homepage": "https://github.com/espressif/esptool/releases",
+    "version_patterns": [
+      "/releases/tag/v([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"
+    ],
+    "download_url_template": "https://github.com/espressif/esptool/releases/download/v$version/esptool-v$version-windows-amd64.zip",
+    "description": "A Python-based, open-source, platform-independent utility to communicate with the ROM bootloader in Espressif chips",
+    "license": "GPL-2.0-or-later"
+  },
+  "hdd-lff-portable": {
+    "homepage": "https://hddguru.com/software/HDD-LLF-Low-Level-Format-Tool/",
+    "version_patterns": [
+      "HDDLLF\\.([\\d\\.]+)\\.exe"
+    ],
+    "download_url_template": "https://hddguru.com/software/HDD-LLF-Low-Level-Format-Tool/HDDLLF.$version.exe",
+    "description": "HDD Low Level Format Tool (Portable) - A utility for low-level formatting of SATA, IDE, SAS, SCSI or SSD drives",
+    "license": "Freeware"
+  },
+  "ntoptimizer": {
+    "homepage": "https://bestorderflow.com/",
+    "version_patterns": [
+      "Version\\s+([0-9]+\\.[0-9]+(?:\\.[0-9]+)+(?:\\.[0-9]+)?)"
+    ],
+    "download_url_template": "https://bestorderflow.com/images/free/NTOptimizer.zip",
+    "description": "Optimizer tool for NinjaTrader",
+    "license": "Proprietary"
+  },
+  "ripgrep-all-znver4": {
+    "homepage": "https://github.com/danalec/ripgrep-all/releases",
+    "version_patterns": [
+      "releases/tag/v([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/danalec/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc-znver4.zip",
+    "description": "Ripgrep-All - search in PDFs, e-books, Office docs (incl. legacy .doc and .rtf), archives, and media via ripgrep (danalec community build, Zen 4+ tuned)",
+    "license": "AGPL-3.0-or-later",
+    "require_release_asset": true
+  },
+  "ripgrep-all": {
+    "homepage": "https://github.com/danalec/ripgrep-all/releases",
+    "version_patterns": [
+      "releases/tag/v([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/danalec/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip",
+    "description": "Ripgrep-All - search in PDFs, e-books, Office docs (incl. legacy .doc and .rtf), archives, and media via ripgrep (danalec community build)",
+    "license": "AGPL-3.0-or-later",
+    "require_release_asset": true
+  },
+  "taskexplorer": {
+    "homepage": "https://api.github.com/repos/DavidXanatos/TaskExplorer/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"v?([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/DavidXanatos/TaskExplorer/releases/download/v$version/TaskExplorer-v$version.exe#/setup.exe",
+    "description": "Advanced task manager with deep process and system inspection panels",
+    "license": "Freeware"
+  },
+  "thorium-avx2": {
+    "homepage": "https://github.com/gz83/thorium/releases",
+    "version_patterns": [
+      "releases/tag/M([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/gz83/thorium/releases/download/M$version/Thorium_AVX2_$version.zip",
+    "description": "Thorium AVX2 - Chromium fork named after radioactive element No. 90. Optimized for AVX2. If your CPU does not support AVX2 DO NOT INSTALL.",
+    "license": "BSD-3-Clause",
+    "require_release_asset": true
+  },
+  "ungoogled-chromium": {
+    "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.[0-9]+)\""
+    ],
+    "download_url_template": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip",
+    "extract_dir": "ungoogled-chromium_$version_windows_x64",
+    "description": "Ungoogled Chromium - Google Chromium without Google's integration",
+    "license": "BSD-3-Clause"
+  },
+  "unraid-usb-creator": {
+    "homepage": "https://unraid.net/download",
+    "version_patterns": [
+      "USB Creator.*?([\\d.]+)"
+    ],
+    "download_url_template": "https://releases.unraid.net/dl/stable/usb-creator.exe",
+    "description": "Unraid USB Creator - Create bootable Unraid USB drives",
+    "license": "Proprietary"
+  },
+  "veracrypt": {
+    "homepage": "https://api.github.com/repos/veracrypt/VeraCrypt/releases/latest",
+    "version_patterns": [
+      "VeraCrypt_([\\d.]+\\d)"
+    ],
+    "download_url_template": "https://github.com/veracrypt/VeraCrypt/releases/download/VeraCrypt_$version/VeraCrypt_Setup_x64_$version.msi",
+    "description": "VeraCrypt - Disk encryption with strong security based on TrueCrypt",
+    "license": "Apache-2.0"
+  },
+  "wifiscanner": {
+    "homepage": "https://lizardsystems.com/wi-fi-scanner/",
+    "version_patterns": [
+      "['\\\"]version['\\\"]\\s*:\\s*['\\\"]([\\d.]+)['\\\"]",
+      "Version\\s+([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)"
+    ],
+    "download_url_template": "https://lizardsystems.com/download/wifiscanner_setup.exe",
+    "description": "LizardSystems Wi-Fi Scanner",
+    "license": "Freeware"
+  },
+  "windhawk": {
+    "homepage": "https://api.github.com/repos/ramensoftware/windhawk/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"v?([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/ramensoftware/windhawk/releases/download/v$version/windhawk_setup.exe#/setup.exe",
+    "description": "The customization marketplace for Windows programs",
+    "license": "GPL-3.0-or-later"
+  },
+  "zapfast": {
+    "homepage": "https://github.com/crmne/zapfast/releases",
+    "version_patterns": [
+      "releases/tag/v([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/crmne/zapfast/releases/download/v$version/zapfast-v$version-x86_64-pc-windows-msvc.zip",
+    "description": "Fast, native WhatsApp client in Rust and egui",
+    "license": "MIT",
+    "require_release_asset": true
+  }
+}

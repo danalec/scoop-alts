@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /scripts
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build(deps)
+      include: scope
+    groups:
+      automation:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /.github/workflows
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci(deps)
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"

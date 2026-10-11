@@ -1,0 +1,15 @@
+on:
+  # Manual fallback only - the Docker scheduler is the primary writer; an automatic excavator would race it
+  workflow_dispatch:
+name: Excavator
+jobs:
+  excavate:
+    name: Excavate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@main
+      - name: Excavate
+        uses: ScoopInstaller/GithubActions@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKIP_UPDATED: 1
