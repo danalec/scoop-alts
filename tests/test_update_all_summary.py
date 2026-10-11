@@ -35,3 +35,43 @@ def test_write_json_summary(tmp_path):
     data = json.loads((tmp_path / "sum.json").read_text("utf-8"))
     assert data["counts"]["updated"] == 1
     assert data["results"][0]["version"] == "1.2.3"
+
+
+def _run_main(monkeypatch, argv):
+    """Invoke update-all.py's main() with a synthetic argv.
+
+    `--dry-run` returns before any updater runs, so this never touches the network.
+    """
+    mod = load_update_all()
+    monkeypatch.setattr("sys.argv", ["update-all.py", *argv])
+    # Keep the test hermetic if the host happens to export these overrides.
+    monkeypatch.delenv("AUTOMATION_JSON_SUMMARY", raising=False)
+    monkeypatch.delenv("AUTOMATION_MD_SUMMARY", raising=False)
+    # On Windows this detaches and replaces sys.stdout, which tears down capsys.
+    monkeypatch.setattr(mod, "ensure_utf8_console", lambda: None)
+    mod.main()
+    return mod
+
+
+def test_dry_run_with_json_summary_warns_and_writes_nothing(monkeypatch, tmp_path, capsys):
+    target = tmp_path / "update-summary.json"
+    _run_main(monkeypatch, ["--dry-run", "--json-summary", str(target)])
+
+    assert "--dry-run writes no summary" in capsys.readouterr().out
+    assert not target.exists()
+
+
+def test_dry_run_with_md_summary_warns(monkeypatch, tmp_path, capsys):
+    target = tmp_path / "update-summary.md"
+    _run_main(monkeypatch, ["--dry-run", "--md-summary", str(target)])
+
+    assert "--dry-run writes no summary" in capsys.readouterr().out
+    assert not target.exists()
+
+
+def test_dry_run_without_summary_flags_does_not_warn(monkeypatch, capsys):
+    _run_main(monkeypatch, ["--dry-run"])
+
+    out = capsys.readouterr().out
+    assert "DRY RUN" in out
+    assert "--dry-run writes no summary" not in out

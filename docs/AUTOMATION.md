@@ -178,12 +178,16 @@ what the pre-commit hooks run on any `bucket/*.json` change. The `--offline` fla
 the zip-layout check downloads release archives, which a commit hook must never do. Run the full
 `doctor` by hand, or in CI, when you want that check.
 
-To regenerate the local health dashboard:
+To regenerate the local health dashboard, run the updaters for real and render the summary:
 
 ```cmd
-python scripts\update-all.py --dry-run --skip-git --json-summary .temp\update-summary.json
+python scripts\update-all.py --skip-git --json-summary .temp\update-summary.json
 python scripts\generate-dashboard.py .temp\update-summary.json docs\update-health.md
 ```
+
+Do not add `--dry-run` here. The summary is written from live updater results *after* the
+run, so a dry run returns before the writer is reached and leaves no file behind; `update-all.py`
+now prints a warning if you combine the two flags.
 
 ## Troubleshooting
 
