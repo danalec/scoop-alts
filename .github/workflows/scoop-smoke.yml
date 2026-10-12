@@ -36,24 +36,39 @@ jobs:
           New-Item -ItemType Directory -Force smoke-logs | Out-Null
           $results = foreach ($manifest in $manifests) {
               $name = $manifest.BaseName
-              # Run each install in a background job so a hung installer
-              # cannot stall the whole sweep (bounded by $perPackageTimeoutSec).
-              $installJob = Start-Job -ArgumentList $manifest.FullName -ScriptBlock {
-                  param($manifestPath)
-                  & scoop install --no-update-scoop $manifestPath *>&1
-              }
-              $finished = Wait-Job -Job $installJob -Timeout $perPackageTimeoutSec
               $ok = $false
               $output = @()
-              if ($finished) {
-                  $output = Receive-Job -Job $installJob
-                  $errors = @($output | Where-Object { "$_" -match '^\s*ERROR' })
-                  $ok = ($installJob.State -eq 'Completed') -and ($errors.Count -eq 0)
-              } else {
-                  Stop-Job -Job $installJob -Force -PassThru | Out-Null
-                  $output = @("TIMEOUT: scoop install did not finish within $perPackageTimeoutSec seconds")
+              $installJob = $null
+              # This workflow is observability, so an unexpected error must be
+              # recorded as a FAIL for that package instead of aborting the sweep:
+              # one broken manifest would otherwise cost the report for all others.
+              try {
+                  # Run each install in a background job so a hung installer
+                  # cannot stall the whole sweep (bounded by $perPackageTimeoutSec).
+                  $installJob = Start-Job -ArgumentList $manifest.FullName -ScriptBlock {
+                      param($manifestPath)
+                      & scoop install --no-update-scoop $manifestPath *>&1
+                  }
+                  $finished = Wait-Job -Job $installJob -Timeout $perPackageTimeoutSec
+                  if ($finished) {
+                      $output = Receive-Job -Job $installJob
+                      $errors = @($output | Where-Object { "$_" -match '^\s*ERROR' })
+                      $ok = ($installJob.State -eq 'Completed') -and ($errors.Count -eq 0)
+                  } else {
+                      # Stop-Job takes no -Force parameter in Windows PowerShell 5.1
+                      # (nor in PowerShell 7). Passing it threw ParameterBindingException,
+                      # which failed the whole step and lost every remaining package.
+                      Stop-Job -Job $installJob -ErrorAction SilentlyContinue | Out-Null
+                      $output = @("TIMEOUT: scoop install did not finish within $perPackageTimeoutSec seconds")
+                  }
+              } catch {
+                  $ok = $false
+                  $output = @($output) + @("HARNESS-ERROR: " + $_.Exception.Message)
+              } finally {
+                  if ($installJob) {
+                      Remove-Job -Job $installJob -Force -ErrorAction SilentlyContinue
+                  }
               }
-              Remove-Job -Job $installJob -Force -ErrorAction SilentlyContinue
               $output | Out-File -FilePath "smoke-logs\$name.log" -Encoding utf8
               [PSCustomObject]@{
                   Package = $name
@@ -62,8 +77,10 @@ jobs:
           }
           $results | Format-Table -AutoSize
           $results | ForEach-Object { "$($_.Status)`t$($_.Package)" } | Out-File -FilePath smoke-results.txt -Encoding utf8
-          $passed = ($results | Where-Object { $_.Status -eq 'PASS' }).Count
-          $failed = ($results | Where-Object { $_.Status -eq 'FAIL' }).Count
+          # Wrap in @() so the count survives a single match: .Count on a lone
+          # PSCustomObject yields nothing under Windows PowerShell 5.1.
+          $passed = @($results | Where-Object { $_.Status -eq 'PASS' }).Count
+          $failed = @($results | Where-Object { $_.Status -eq 'FAIL' }).Count
           Write-Output "Scoop smoke summary: $passed passed, $failed failed"
           # Never fail the job on package install failures (observability, not a gate).
           exit 0
