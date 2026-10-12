@@ -16,7 +16,10 @@ from version_detector import SoftwareVersionConfig, get_version_info
 # Configuration
 SOFTWARE_NAME = "usb-safely-remove"
 HOMEPAGE_URL = "https://safelyremove.com/download.htm"
-DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/startdownload.htm?imm&v=&t="
+# The vendor endpoint redirects to the real asset and carries no filename, so
+# Scoop derived an invalid path from the query string ("Illegal characters in
+# path"). The "#/name" fragment tells Scoop what to call the download.
+DOWNLOAD_URL_TEMPLATE = "https://safelyremove.com/startdownload.htm?imm&v=&t=#/USBSafelyRemove.exe"
 BUCKET_FILE = Path(__file__).parent.parent / "bucket" / "usb-safely-remove.json"
 
 
