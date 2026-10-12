@@ -101,6 +101,16 @@
     "license": "AGPL-3.0-or-later",
     "require_release_asset": true
   },
+  "spotifast": {
+    "homepage": "https://github.com/crmne/spotifast/releases",
+    "version_patterns": [
+      "releases/tag/v([\\d.]+)"
+    ],
+    "download_url_template": "https://github.com/crmne/spotifast/releases/download/v$version/spotifast-v$version-x86_64-pc-windows-msvc.zip",
+    "description": "Native and fast Spotify client - one lightweight Rust app for your whole library, local playback, and Spotify Connect",
+    "license": "MIT",
+    "require_release_asset": true
+  },
   "taskexplorer": {
     "homepage": "https://api.github.com/repos/DavidXanatos/TaskExplorer/releases/latest",
     "version_patterns": [
