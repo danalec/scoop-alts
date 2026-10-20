@@ -1121,7 +1121,17 @@ def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateRes
                 committed = False
             return committed
 
-        stage_bucket_changes()
+        stage_bucket_changes(allowed)
+
+        # A manifest removed from the bucket has no updater in this run, so it
+        # is not part of ``allowed``; stage the removal explicitly.
+        for app_name in get_removed_manifests():
+            manifest_path = BUCKET_DIR / f"{app_name}{MANIFEST_EXTENSION}"
+            rc, out, err = run_git_command(["git", "add", "-A", "--", str(manifest_path)])
+            if rc != 0:
+                print(f"⚠️  git add -A {manifest_path} failed: {err or out}")
+                committed = False
+
         for app_name, path in list_untracked_manifests():
             if app_name not in allowed:
                 print(
