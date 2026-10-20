@@ -124,6 +124,47 @@ def _write_release_cache_entry(path: Path, key: str, body: Any) -> None:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Trailing path segments that carry no identity of their own. The segment
+# before them does - usually the repository or product name.
+_GENERIC_PAGE_SEGMENTS = {
+    "releases",
+    "release",
+    "download",
+    "downloads",
+    "dl",
+    "latest",
+    "tag",
+    "tags",
+    "stable",
+    "products",
+    "product",
+    "index",
+    "home",
+    "en",
+    "us",
+    "www",
+    "api",
+}
+
+
+def _page_marker(homepage_url: str) -> str:
+    """Return the product identity carried by a homepage url, normalized.
+
+    Returns an empty string for urls that do not identify a page (a bare
+    origin, or a file), which disables the check for those.
+    """
+    path = urlsplit(homepage_url).path
+    segments = [segment for segment in path.split("/") if segment]
+    if not segments:
+        return ""
+    specific = [s for s in segments if s.lower() not in _GENERIC_PAGE_SEGMENTS]
+    candidate = specific[-1] if specific else segments[-1]
+    if "." in candidate:
+        candidate = candidate.rsplit(".", 1)[0]
+    marker = re.sub(r"[^a-z0-9]", "", candidate.lower())
+    return marker if len(marker) >= 4 else ""
+
+
 if os.environ.get("AUTOMATION_LIB_SILENT") == "1":
 
     def _noop_print(*args, **kwargs):
@@ -259,6 +300,28 @@ class VersionDetector:
             print(f"⚠️  Playwright fetch failed: {e}")
             return None
 
+    @staticmethod
+    def _page_looks_like_product(homepage_url: str, content: str) -> bool:
+        """Return False when the body is not the page the homepage points at.
+
+        The check only applies to HTML pages whose url carries a meaningful
+        path segment; api endpoints, archives and listings are left alone. The
+        product name is matched as a majority of 4-grams, because a page may
+        spell it slightly differently than the url does.
+        """
+        marker = _page_marker(homepage_url)
+        if not marker:
+            return True
+
+        stripped = content.lstrip()
+        if not stripped.startswith("<"):
+            return True  # not an HTML document
+
+        haystack = re.sub(r"[^a-z0-9]", "", content.lower())
+        grams = [marker[index : index + 4] for index in range(max(1, len(marker) - 3))]
+        present = sum(1 for gram in grams if gram in haystack)
+        return (present / len(grams)) >= 0.6
+
     def fetch_latest_version(
         self, homepage_url: str, version_patterns: List[str]
     ) -> Optional[VersionResult]:
@@ -299,6 +362,20 @@ class VersionDetector:
                 )
 
             content = response.text
+
+            # A vendor that is having an outage can answer 200 with an error or
+            # maintenance page instead of the product page. Scraping a version
+            # out of that page publishes a version the vendor never shipped -
+            # the wifiscanner updater took 1.89 from such a page and committed
+            # it. The page has to look like the page we asked for.
+            if not self._page_looks_like_product(homepage_url, content):
+                logger.warning(
+                    "Fetched page for %s does not look like the product page; "
+                    "refusing to scrape a version from it",
+                    homepage_url,
+                )
+                print(f"⚠️  {homepage_url} did not return the product page; skipping version scan")
+                return None
 
             # Try each pattern and collect all matches
             all_results: List[VersionResult] = []

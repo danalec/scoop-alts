@@ -34,6 +34,11 @@ from git_helpers import (  # noqa: E402
     stage_manifest_removal,
 )
 from summary_utils import format_webhook_body  # noqa: E402
+from failure_classification import (  # noqa: E402
+    FAILURE_CODE,
+    FAILURE_UPSTREAM,
+    classify_failure,
+)
 
 try:
     import requests
@@ -664,6 +669,7 @@ class ResultsSummary(TypedDict):
     updated: List[UpdateResult]
     no_updates: List[UpdateResult]
     counts: Dict[str, int]
+    failures: List[Dict[str, str]]
 
 
 def summarize_results(results: Sequence[UpdateResult]) -> ResultsSummary:
@@ -672,6 +678,13 @@ def summarize_results(results: Sequence[UpdateResult]) -> ResultsSummary:
     failed = [result for result in results if not result.success]
     updated = [result for result in results if result.updated]
     no_updates = [result for result in successful if not result.updated]
+    failures = [
+        {
+            "package": package_name_from_script(result.script_name),
+            "kind": classify_failure(result.output),
+        }
+        for result in failed
+    ]
     return {
         "successful": successful,
         "failed": failed,
@@ -683,7 +696,10 @@ def summarize_results(results: Sequence[UpdateResult]) -> ResultsSummary:
             "failed": len(failed),
             "updated": len(updated),
             "no_updates": len(no_updates),
+            "failed_upstream": sum(1 for f in failures if f["kind"] == FAILURE_UPSTREAM),
+            "failed_code": sum(1 for f in failures if f["kind"] == FAILURE_CODE),
         },
+        "failures": failures,
     }
 
 
@@ -716,11 +732,22 @@ def print_summary(results: Sequence[UpdateResult], total_duration: float) -> Non
 
     if failed:
         print("\n❌ FAILED SCRIPTS:")
-        for result in failed:
-            print(f"   • {result.script_name} ({result.duration:.1f}s)")
-            for line in result.output.strip().splitlines()[:3]:
-                if line.strip():
-                    print(f"     {line.strip()}")
+        upstream = [r for r in failed if classify_failure(r.output) == FAILURE_UPSTREAM]
+        code_failures = [r for r in failed if classify_failure(r.output) != FAILURE_UPSTREAM]
+        if upstream:
+            print(
+                f"   🌐 {len(upstream)} upstream/network failure(s) - "
+                "the vendor or the network, not our code:"
+            )
+            for result in upstream:
+                print(f"      • {result.script_name} ({result.duration:.1f}s)")
+        if code_failures:
+            print(f"   🐛 {len(code_failures)} failure(s) in our code:")
+            for result in code_failures:
+                print(f"      • {result.script_name} ({result.duration:.1f}s)")
+                for line in result.output.strip().splitlines()[:3]:
+                    if line.strip():
+                        print(f"        {line.strip()}")
 
     if no_updates:
         print("\nℹ️  NO UPDATES NEEDED:")
@@ -763,6 +790,7 @@ def write_json_summary(
             },
             "total_duration_seconds": round(total_duration, 3),
             "counts": counts,
+            "failures": summary["failures"],
             "results": [],
         }
 
@@ -777,6 +805,7 @@ def write_json_summary(
                     "updated": result.updated,
                     "duration_seconds": round(result.duration, 3),
                     "version": version,
+                    "failure_kind": ("" if result.success else classify_failure(result.output)),
                     "error_preview": (
                         "\n".join(result.output.strip().splitlines()[:3])
                         if not result.success
@@ -1460,8 +1489,23 @@ def main() -> None:
 
     failed_count = len([result for result in results if not result.success])
     if failed_count > 0 and not args.no_error_exit:
-        print(f"\n⚠️  {failed_count} script(s) failed")
-        sys.exit(1)
+        upstream_failures = [
+            result
+            for result in results
+            if not result.success and classify_failure(result.output) == FAILURE_UPSTREAM
+        ]
+        code_failures = failed_count - len(upstream_failures)
+        if code_failures:
+            print(f"\n⚠️  {code_failures} script(s) failed in our code")
+            sys.exit(1)
+        # Everything that failed, failed upstream: the vendor or the network.
+        # The packages that could be reached were still updated and published,
+        # so this is a partial run rather than a broken one.
+        print(
+            f"\n🌐 {failed_count} script(s) could not run because of upstream/network "
+            "problems; the rest were updated and published"
+        )
+        sys.exit(2)
 
     if not git_ok:
         # The scheduler treats a zero exit as success and resets the working

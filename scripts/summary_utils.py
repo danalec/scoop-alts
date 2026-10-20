@@ -20,6 +20,14 @@ def _build_summary_lines(payload: Dict[str, Any]) -> List[str]:
         ),
     ]
 
+    failures = payload.get("failures", []) or []
+    upstream = [f.get("package", "") for f in failures if f.get("kind") == "upstream"]
+    code = [f.get("package", "") for f in failures if f.get("kind") != "upstream"]
+    if upstream:
+        lines.append(f"🌐 Upstream/network failures: {', '.join(upstream)}")
+    if code:
+        lines.append(f"🐛 Failures in our code: {', '.join(code)}")
+
     if updated:
         packages = [
             f"{item.get('package', '')} {item.get('version', '')}".strip() for item in updated[:10]
