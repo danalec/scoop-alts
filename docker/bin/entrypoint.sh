@@ -49,6 +49,9 @@ if [ -n "${REPO_URL:-}" ]; then
     echo "Cloning $REPO_URL into $REPO_DIR"
     git clone "$REPO_URL" "$REPO_DIR"
   fi
+  # Keep the clone tracking REPO_URL even when it was cloned earlier from a
+  # different remote, so the runner always starts from the current tip.
+  git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
   git -C "$REPO_DIR" config user.name "scoop-alts-scheduler"
   git -C "$REPO_DIR" config user.email "scoop-alts-scheduler@localhost"
   # The clone inherits a single push url; the scheduler may publish to more
