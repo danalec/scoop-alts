@@ -141,33 +141,59 @@ class TestHandleGitIntegration:
 
         assert committed == ["gone: Remove manifest"]
 
+    def test_manifest_left_half_written_by_a_failed_updater_is_not_staged(
+        self, neutral_git, tmp_path, monkeypatch
+    ):
+        # An updater that timed out may have left a truncated manifest on disk.
+        # A bulk "git add -u" would stage it and publish a broken manifest, so
+        # the staging is restricted to the packages whose updater succeeded.
+        staged = []
+        monkeypatch.setattr(
+            neutral_git, "stage_bucket_changes", lambda allowed=None: staged.append(allowed)
+        )
+        monkeypatch.setattr(neutral_git, "get_removed_manifests", lambda: [])
+
+        results = [
+            _result("update-ok.py", success=True, updated=True),
+            _result("update-timeout.py", success=False),
+        ]
+        neutral_git.handle_git_integration(_args(git_aggregate=True), results)
+
+        assert staged == [{"ok"}]
+
 
 class TestCommitScope:
-    def test_commit_is_scoped_to_the_given_paths(self, git_helpers, monkeypatch):
-        # A commit without a pathspec takes the whole index, sweeping in
-        # unrelated staged files.
+    def test_commit_uses_a_restricted_index(self, git_helpers, monkeypatch):
+        # A pathspec on "git commit" would commit the *working tree* state of
+        # those paths and ignore the index, publishing changes that were never
+        # staged. The commit runs against a temporary index instead.
         calls = []
         monkeypatch.setattr(
             git_helpers,
             "run_git_command",
-            lambda args, cwd=None: (calls.append(args), (0, "", ""))[1],
+            lambda args, cwd=None, env=None: (calls.append((args, env)), (0, "", ""))[1],
         )
 
         git_helpers.commit_with_message("msg", paths=["bucket/app.json"])
 
-        assert calls[0][-2:] == ["--", "bucket/app.json"]
+        args, env = calls[-1]
+        assert args == ["git", "commit", "-m", "msg"]
+        assert env is not None
+        assert "GIT_INDEX_FILE" in env
 
-    def test_commit_without_paths_keeps_the_whole_index(self, git_helpers, monkeypatch):
+    def test_commit_without_paths_uses_the_whole_index(self, git_helpers, monkeypatch):
         calls = []
         monkeypatch.setattr(
             git_helpers,
             "run_git_command",
-            lambda args, cwd=None: (calls.append(args), (0, "", ""))[1],
+            lambda args, cwd=None, env=None: (calls.append((args, env)), (0, "", ""))[1],
         )
 
         git_helpers.commit_with_message("msg")
 
-        assert calls[0] == ["git", "commit", "-m", "msg"]
+        args, env = calls[-1]
+        assert args == ["git", "commit", "-m", "msg"]
+        assert env is None
 
     def test_commit_manifest_change_reports_a_failed_push(self, git_helpers, tmp_path, monkeypatch):
         manifest = tmp_path / "app.json"

@@ -6,9 +6,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +51,11 @@ BUCKET_DIR = REPO_ROOT / "bucket"
 MANIFEST_EXTENSION = ".json"
 
 
-def run_git_command(args: Sequence[str], cwd: Optional[Path] = None) -> Tuple[int, str, str]:
+def run_git_command(
+    args: Sequence[str],
+    cwd: Optional[Path] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> Tuple[int, str, str]:
     """Run a git command and return ``(returncode, stdout, stderr)``."""
     try:
         result = subprocess.run(
@@ -58,6 +65,7 @@ def run_git_command(args: Sequence[str], cwd: Optional[Path] = None) -> Tuple[in
             cwd=str(cwd or REPO_ROOT),
             encoding="utf-8",
             errors="replace",
+            env=env,
         )
     except Exception as error:
         logger.error("Git command failed: %s", error)
@@ -86,18 +94,86 @@ def get_manifest_version_from_file(manifest_path: Path) -> str:
     return version
 
 
+def _repo_relative(path: str) -> str:
+    """Return ``path`` relative to the repository root, with forward slashes."""
+    candidate = Path(path)
+    try:
+        return candidate.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return candidate.as_posix()
+
+
+def _staged_entries(paths: Sequence[str]) -> List[Tuple[str, str, str]]:
+    """Return ``(mode, sha, path)`` for the staged content of the given paths."""
+    entries: List[Tuple[str, str, str]] = []
+    for path in paths:
+        relative = _repo_relative(path)
+        rc, out, _ = run_git_command(["git", "ls-files", "-s", "--", relative])
+        if rc != 0 or not out.strip():
+            continue
+        for line in out.strip().splitlines():
+            meta, _, name = line.partition("\t")
+            parts = meta.split()
+            if len(parts) != 3:
+                continue
+            mode, sha, _stage = parts
+            entries.append((mode, sha, name))
+    return entries
+
+
+@contextmanager
+def restricted_index(paths: Sequence[str]):
+    """Yield an environment whose git index holds only ``paths``.
+
+    The commit runs against a copy of the index, so the developer's other
+    staged files stay staged and only the wanted paths are committed. A
+    pathspec on ``git commit`` cannot do that: it commits the *working tree*
+    state of the given paths and ignores the index, which would publish
+    changes that were never staged - a manifest that a timed-out updater left
+    half-written, for instance.
+    """
+    index_path = REPO_ROOT / ".git" / "index"
+    handle = tempfile.NamedTemporaryFile(delete=False, suffix=".index")
+    temp_index = Path(handle.name)
+    handle.close()
+    env = {**os.environ, "GIT_INDEX_FILE": str(temp_index)}
+    try:
+        if index_path.exists():
+            shutil.copyfile(index_path, temp_index)
+        else:
+            temp_index.unlink(missing_ok=True)
+
+        # Start from HEAD, then re-apply the staged content of the wanted
+        # paths only.
+        run_git_command(["git", "read-tree", "HEAD"], env=env)
+        for mode, sha, name in _staged_entries(paths):
+            run_git_command(
+                ["git", "update-index", "--add", "--cacheinfo", f"{mode},{sha},{name}"], env=env
+            )
+        # A wanted path that no longer exists on disk was deleted: carry the
+        # deletion over. "update-index --remove" only drops entries whose file
+        # is missing, so it is a no-op for the paths that are still there.
+        for path in paths:
+            run_git_command(
+                ["git", "update-index", "--remove", "--", _repo_relative(path)], env=env
+            )
+        yield env
+    finally:
+        temp_index.unlink(missing_ok=True)
+
+
 def commit_with_message(message: str, paths: Optional[Sequence[str]] = None) -> bool:
     """Create a commit with the given message.
 
-    ``paths`` scopes the commit to the given pathspec. Without it the commit
-    takes the whole index, which swept in unrelated staged files and left a
-    rejected commit's leftovers for the next package's commit.
+    ``paths`` restricts the commit to the staged content of those paths. The
+    rest of the index is left alone, so a developer's other staged files are
+    neither committed nor unstaged.
     """
-    args = ["git", "commit", "-m", message]
     if paths:
-        args += ["--", *paths]
-
-    rc, out, err = run_git_command(args)
+        with restricted_index(paths) as env:
+            rc, out, err = run_git_command(["git", "commit", "-m", message], env=env)
+    else:
+        rc, out, err = run_git_command(["git", "commit", "-m", message])
     if rc != 0:
         reason = err or out
         if "nothing to commit" in reason.lower():
@@ -178,17 +254,33 @@ def push_changes() -> bool:
     return True
 
 
-def stage_bucket_changes() -> None:
+def stage_bucket_changes(allowed: Optional[Set[str]] = None) -> None:
     """Stage changes to *tracked* manifests inside ``bucket/``.
 
     Only tracked files are staged on purpose. ``git add bucket`` also stages
     untracked manifests, and an untracked manifest whose updater failed must
     not be published; the caller stages those explicitly, one by one, once
     their updater succeeded.
+
+    ``allowed`` restricts the staging to the given packages. It matters
+    because an updater that timed out may have left a half-written manifest
+    behind, and a bulk ``git add -u`` would stage that truncated file and
+    publish it.
     """
-    rc, out, err = run_git_command(["git", "add", "-u", "--", "bucket"])
-    if rc != 0:
-        print(f"⚠️  git add failed: {err or out}")
+    if allowed is None:
+        rc, out, err = run_git_command(["git", "add", "-u", "--", "bucket"])
+        if rc != 0:
+            print(f"⚠️  git add failed: {err or out}")
+        return
+
+    for package in sorted(allowed):
+        # Relative to the repository root, because that is where the git
+        # command runs - an absolute path would break as soon as the two
+        # disagree.
+        manifest_rel = f"{BUCKET_DIR.name}/{package}{MANIFEST_EXTENSION}"
+        rc, out, err = run_git_command(["git", "add", "-u", "--", manifest_rel])
+        if rc != 0:
+            print(f"⚠️  git add -u {manifest_rel} failed: {err or out}")
 
 
 def stage_manifest(manifest_path: Path) -> bool:

@@ -241,6 +241,59 @@ class TestStagedBucketChanges:
         assert updated == ["keep"]
         assert deleted == ["gone"]
 
+    def test_commit_with_paths_publishes_only_the_staged_content(self, git_helpers, tmp_path):
+        # "git commit -- <pathspec>" commits the *working tree* state of those
+        # paths and ignores the index, so a manifest that a timed-out updater
+        # left half-written would be published even though it was never staged.
+        repo_dir = _bucket_repo(tmp_path)
+        bucket = repo_dir / "bucket"
+        (bucket / "keep.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
+        # A tracked manifest that was modified but never staged - what a
+        # timed-out updater leaves behind.
+        (bucket / "gone.json").write_text('{"version": "3.0.0", "url":', encoding="utf-8")
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            git_helpers.run_git_command(["git", "add", "--", "bucket/keep.json"])
+            assert git_helpers.commit_with_message("only keep", paths=["bucket/keep.json"]) is True
+
+        head = subprocess.run(
+            ["git", "show", "HEAD:bucket/gone.json"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        )
+        # The file was never staged, so HEAD must still hold the committed
+        # version - not the truncated working-tree content.
+        assert "3.0.0" not in head.stdout
+        assert "1.0.0" in head.stdout
+
+    def test_commit_with_paths_leaves_other_staged_files_alone(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        (repo_dir / "bucket" / "keep.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
+        (repo_dir / "other.txt").write_text("staged by someone else", encoding="utf-8")
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            git_helpers.run_git_command(["git", "add", "--", "bucket/keep.json", "other.txt"])
+            assert git_helpers.commit_with_message("only the manifest", paths=["bucket/keep.json"])
+
+        committed = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert "bucket/keep.json" in committed
+        assert "other.txt" not in committed
+
+        # The unrelated file is still staged for whoever staged it.
+        still_staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert "other.txt" in still_staged
+
     def test_stage_bucket_changes_does_not_stage_untracked_manifests(self, git_helpers, tmp_path):
         repo_dir = _bucket_repo(tmp_path)
         (repo_dir / "bucket" / "new.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
@@ -251,6 +304,23 @@ class TestStagedBucketChanges:
 
         assert added == []
         assert (updated, deleted) == ([], [])
+
+    def test_stage_bucket_changes_stages_only_the_allowed_packages(self, git_helpers, tmp_path):
+        # An updater that timed out can leave a half-written manifest behind.
+        # Staging the whole bucket would publish that truncated file.
+        repo_dir = _bucket_repo(tmp_path)
+        bucket = repo_dir / "bucket"
+        (bucket / "keep.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
+        (bucket / "broken.json").write_text('{"version": "3.0.0", "url"', encoding="utf-8")
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            git_helpers.stage_bucket_changes({"keep"})
+            added, updated, deleted = git_helpers.get_staged_bucket_changes()
+
+        assert updated == ["keep"]
+        assert "broken" not in updated
+        assert added == []
+        assert deleted == []
 
     def test_rename_reports_the_new_name_as_added(self, git_helpers, tmp_path):
         # git reports a rename as "R100\told\tnew"; reporting only the old name
