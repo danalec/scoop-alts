@@ -1,11 +1,11 @@
 {
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Advanced task manager with deep process, thread, memory, handle, and system inspection panels",
   "homepage": "https://github.com/DavidXanatos/TaskExplorer",
   "license": "Freeware",
   "changelog": "https://github.com/DavidXanatos/TaskExplorer/releases",
-  "url": "https://github.com/DavidXanatos/TaskExplorer/releases/download/v2.0.0/TaskExplorer-v2.0.0.exe#/setup.exe",
-  "hash": "sha256:1d4058c10216091e1a9c147e897c7ff07208c70202da97f22d8c115164339bd0",
+  "url": "https://github.com/DavidXanatos/TaskExplorer/releases/download/v2.0.1/TaskExplorer-v2.0.1.exe#/setup.exe",
+  "hash": "sha256:9bc3996ab828fb8d13cae2a2d405d9fa414925b202cc685dfdb81d5d2555522d",
   "installer": {
     "script": [
       "$args = @('/VERYSILENT', '/SP-', '/NORESTART', \"/DIR=$dir\")",

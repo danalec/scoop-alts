@@ -166,13 +166,17 @@ def test_shipped_manifest_keeps_asset_order(kuna):
     """The committed manifest must stay in the order the updater writes.
 
     Scoop pairs ``extract_dir`` with archives by index, so the Windows archive
-    has to stay first or extract_dir would bind to the specs tarball.
+    has to stay first or extract_dir would bind to the specs tarball. The
+    version is read from the manifest instead of being pinned: the order is
+    the invariant, and a hardcoded version would break the test on every
+    legitimate release.
     """
     manifest = json.loads((REPO_ROOT / "bucket" / "kuna.json").read_text(encoding="utf-8"))
+    version = manifest["version"]
     urls = manifest["architecture"]["64bit"]["url"]
     hashes = manifest["architecture"]["64bit"]["hash"]
     assert len(urls) == len(hashes) == 2
-    assert urls[0].endswith("kuna-v1.785-windows-x86_64.zip")
-    assert urls[1].endswith("kuna-v1.785-specs.tar.gz")
-    assert manifest["extract_dir"] == "kuna-v1.785-windows-x86_64"
+    assert urls[0].endswith(f"kuna-v{version}-windows-x86_64.zip")
+    assert urls[1].endswith(f"kuna-v{version}-specs.tar.gz")
+    assert manifest["extract_dir"] == f"kuna-v{version}-windows-x86_64"
     assert manifest["env_set"]["KUNA_SPECS"] == "$dir\\specs"
