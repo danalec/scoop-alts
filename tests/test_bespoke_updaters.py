@@ -11,6 +11,7 @@ network access; the detector and download helpers are replaced by fakes.
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,14 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 def load_updater(module_name):
     """Import a hyphenated ``update-<pkg>.py``, which is not importable by name."""
     spec = importlib.util.spec_from_file_location(module_name, SCRIPTS_DIR / f"{module_name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_update_all_module():
+    """Import the orchestrator, whose file name is not importable by name."""
+    spec = importlib.util.spec_from_file_location("update_all_probe", SCRIPTS_DIR / "update-all.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -439,3 +448,134 @@ def test_usb_portable_update_fails_when_redirect_unresolved(usb_portable, monkey
     monkeypatch.setattr(module, "get_redirected_download_info", lambda: None)
 
     assert module.update_manifest() is False
+
+
+# ------------------------------------------------------------------ structured output
+#
+# The orchestrator parses the child's stdout as authoritative: it looks for a
+# single-line JSON object carrying an "updated" key. The check this replaces
+# only grepped the updater's *source text* for the string "STRUCTURED_ONLY",
+# which proved nothing about the behaviour and broke on a harmless rename.
+
+
+def assert_structured_result(captured):
+    """The contract: exactly one line of stdout, and it is a JSON result."""
+    lines = [line for line in captured.splitlines() if line.strip()]
+    assert len(lines) == 1, f"expected a single structured line, got {lines!r}"
+    payload = json.loads(lines[0])
+    assert "updated" in payload, f"the result must carry an 'updated' key: {payload!r}"
+    assert isinstance(payload["updated"], bool)
+    return payload
+
+
+def test_agy_emits_a_single_structured_line(agy, monkeypatch, capsys):
+    monkeypatch.setenv("STRUCTURED_ONLY", "1")
+    _wire_agy(agy, version="2.0.0")
+    write_manifest(agy.BUCKET_FILE, {"version": "1.0.0"})
+
+    agy.update_manifest()
+
+    payload = assert_structured_result(capsys.readouterr().out)
+    assert payload["updated"] is True
+    assert payload["name"] == "agy"
+
+
+def test_victoria_emits_a_single_structured_line(victoria, monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("STRUCTURED_ONLY", "1")
+    victoria.BUCKET_FILE = tmp_path / "victoria.json"
+    write_manifest(victoria.BUCKET_FILE, {"version": "5.36"})
+
+    class _Result:
+        def __init__(self, value):
+            self.version = value
+            self.match_groups = {}
+
+    class _Detector:
+        def fetch_latest_version(self, url, patterns):
+            return _Result("5.37")
+
+        def calculate_hash(self, url):
+            return "a" * 64
+
+    monkeypatch.setattr(victoria, "VersionDetector", _Detector)
+
+    victoria.update_manifest()
+
+    payload = assert_structured_result(capsys.readouterr().out)
+    assert payload["updated"] is True
+    assert payload["name"] == "victoria"
+
+
+def test_usb_emits_a_single_structured_line(usb, monkeypatch, capsys):
+    monkeypatch.setenv("STRUCTURED_ONLY", "1")
+    module, state, manifest_path = usb
+    write_manifest(manifest_path, {"version": "1.0.0"})
+    state["result"] = {
+        "version": "2.4.1",
+        "download_url": "https://x/y",
+        "hash": "e" * 64,
+    }
+
+    module.update_manifest()
+
+    payload = assert_structured_result(capsys.readouterr().out)
+    assert payload["updated"] is True
+    assert payload["name"] == "usb-safely-remove"
+
+
+def test_usb_portable_emits_a_single_structured_line(usb_portable, monkeypatch, capsys):
+    monkeypatch.setenv("STRUCTURED_ONLY", "1")
+    module, manifest_path = usb_portable
+    write_manifest(manifest_path, {"version": "6.3.0"})
+    monkeypatch.setattr(
+        module,
+        "get_redirected_download_info",
+        lambda: {
+            "version": "6.4.1",
+            "download_url": "https://cdn/usbsafelyremovesetup_6-4-1.zip",
+        },
+    )
+
+    module.update_manifest()
+
+    payload = assert_structured_result(capsys.readouterr().out)
+    assert payload["updated"] is True
+    assert payload["name"] == "usb-safely-remove-portable"
+
+
+def test_orchestrator_parses_what_the_updaters_print(monkeypatch, capsys, tmp_path):
+    """The orchestrator's own parser must accept the updaters' output."""
+    update_all = load_update_all_module()
+    module = load_updater("update-victoria")
+    monkeypatch.setenv("STRUCTURED_ONLY", "1")
+    monkeypatch.setattr(module, "BUCKET_FILE", tmp_path / "missing.json")
+
+    try:
+        module.update_manifest()
+    except SystemExit:
+        pass
+    captured = capsys.readouterr().out
+
+    payload = update_all.extract_structured_result(captured)
+    assert payload is not None, f"the orchestrator could not parse {captured!r}"
+    assert payload["updated"] is False
+
+
+def test_victoria_patterns_match_real_vendor_phrasings(victoria):
+    """The patterns must actually match the phrasings the vendor uses.
+
+    Asserting only that a pattern mentions "Victoria" said nothing about
+    whether it still matches the page.
+    """
+    patterns = victoria.build_config().version_patterns
+
+    pages = {
+        "english": "<h1>Victoria 5.37 HDD/SSD</h1>",
+        "russian": "<title>Что нового в версии 5.37</title>",
+        "fallback": "Victoria 5.37 is available",
+    }
+    for label, page in pages.items():
+        matched = [p for p in patterns if re.search(p, page, re.IGNORECASE)]
+        assert matched, f"no pattern matched the {label} phrasing: {page!r}"
+        version = re.search(matched[0], page, re.IGNORECASE).group(1)
+        assert version == "5.37", f"{label} phrasing produced {version!r}"

@@ -136,6 +136,11 @@ def update_manifest(force: bool = False):
             arch_entry["url"] = download_url
             arch_entry["hash"] = f"sha256:{hash_value}"
             manifest["architecture"][arch_key] = arch_entry
+            # The top-level pair would shadow the architecture block: scoop
+            # falls back to it for any unlisted architecture, and the doctor
+            # rejects the combination outright.
+            manifest.pop("url", None)
+            manifest.pop("hash", None)
         else:
             # Fallback to top-level if architecture entry is not a dict
             manifest["url"] = download_url

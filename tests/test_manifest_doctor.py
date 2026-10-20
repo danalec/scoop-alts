@@ -75,6 +75,11 @@ def exe_manifest(**overrides):
 
 def zip_manifest(**overrides):
     manifest = exe_manifest(url="https://example.com/downloads/app-1.2.3.zip")
+    # Keep the fixture self-consistent: a version override has to move the url
+    # with it, otherwise the manifest claims one version and downloads another
+    # - which the doctor's version-consistency check rightly reports.
+    if "version" in overrides and "url" not in overrides:
+        manifest["url"] = f"https://example.com/downloads/app-{overrides['version']}.zip"
     manifest.update(overrides)
     return manifest
 
@@ -916,3 +921,95 @@ def test_referenced_paths_extract_dir_override_replaces_top_level():
     refs = md.referenced_paths(manifest, "arch-root")
     assert ("extract_dir", "arch-root") in refs
     assert ("extract_dir", "top-root") not in refs
+
+
+# ============================================================================
+# Download url file name: scoop derives the cache file name from the raw url
+# (core.ps1 -> cache_path -> [System.IO.Path]::GetExtension($url)), so a query
+# string that follows the last dot ends up inside the file name and the cache
+# path becomes invalid. This is the usb-safely-remove install failure class.
+# ============================================================================
+
+
+def test_scoop_url_extension_matches_dotnet_semantics():
+    # .NET returns the substring from the last '.' that follows the last
+    # separator - applied to the raw url, so the query string is swallowed.
+    assert md.scoop_url_extension("https://host/app.zip?token=1") == ".zip?token=1"
+    assert md.scoop_url_extension("https://host/app.zip") == ".zip"
+    assert md.scoop_url_extension("https://host/app.zip#/renamed.exe") == ".exe"
+    # A dot in the host only is not an extension.
+    assert md.scoop_url_extension("https://host.example.com/download") == ""
+    assert md.scoop_url_extension("https://host.example.com/download") == ""
+
+
+def test_url_filename_check_flags_query_without_rename_fragment():
+    manifest = exe_manifest(url="https://safelyremove.com/startdownload.htm?imm&v=&t=")
+    report = md.doctor_manifest("x.json", manifest, offline=True)
+    findings = findings_by_check(report, "url-filename")
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert "#/filename.ext" in findings[0].message
+    assert "label syntax is incorrect" in findings[0].message
+
+
+def test_url_filename_check_accepts_rename_fragment():
+    manifest = exe_manifest(url="https://safelyremove.com/startdownload.htm?imm&v=&t=#/app.exe")
+    report = md.doctor_manifest("x.json", manifest, offline=True)
+    assert findings_by_check(report, "url-filename") == []
+
+
+def test_url_filename_check_accepts_ordinary_urls():
+    for url in (
+        "https://github.com/x/y/releases/download/v1.2.3/app-1.2.3.zip",
+        "https://example.com/download/freeware/tool.zip",
+        "https://host.example.com/download",
+        # A dot in the query only (no dot in the path) is safe: the derived
+        # extension is then taken from the query and carries no illegal char.
+        "https://example.com/download?file=tool.exe",
+    ):
+        manifest = exe_manifest(url=url)
+        report = md.doctor_manifest("x.json", manifest, offline=True)
+        assert findings_by_check(report, "url-filename") == [], url
+
+
+def test_url_filename_check_flags_query_after_the_file_name():
+    # The query follows the last dot, so it lands inside the extension and
+    # scoop's cache path becomes invalid - the same failure as
+    # 'startdownload.htm?imm&v=&t='.
+    manifest = exe_manifest(url="https://example.com/downloads/app.exe?token=1")
+    report = md.doctor_manifest("x.json", manifest, offline=True)
+    findings = findings_by_check(report, "url-filename")
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+
+
+def test_url_filename_check_covers_architecture_urls():
+    manifest = exe_manifest(url="https://example.com/app-1.2.3.zip")
+    manifest["architecture"] = {
+        "64bit": {
+            "url": "https://example.com/app-1.2.3.zip?token=1",
+            "hash": HASH_OK,
+        }
+    }
+    report = md.doctor_manifest("x.json", manifest, offline=True)
+    findings = findings_by_check(report, "url-filename")
+    assert len(findings) == 1
+    assert findings[0].message.startswith("architecture.64bit.url")
+
+
+def test_version_consistency_flags_stale_top_level_url():
+    # A url that still points at the previous artifact installs it under the
+    # new version number. Only urls that embed a version-like token count -
+    # plenty of valid download urls are versionless by design.
+    manifest = zip_manifest(version="9.9.9", url="https://example.com/downloads/app-1.2.3.zip")
+    report = md.doctor_manifest("x.json", manifest, offline=True)
+    findings = findings_by_check(report, "version-consistency")
+    assert len(findings) == 1
+    assert findings[0].severity == "warning"
+    assert "url 'https://example.com/downloads/app-1.2.3.zip'" in findings[0].message
+
+
+def test_version_consistency_accepts_versionless_url():
+    manifest = zip_manifest(version="2.8", url="https://example.com/download/freeware/tool.zip")
+    report = md.doctor_manifest("x.json", manifest, offline=True)
+    assert findings_by_check(report, "version-consistency") == []

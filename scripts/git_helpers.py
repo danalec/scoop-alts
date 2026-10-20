@@ -86,9 +86,18 @@ def get_manifest_version_from_file(manifest_path: Path) -> str:
     return version
 
 
-def commit_with_message(message: str) -> bool:
-    """Create a commit with the given message."""
-    rc, out, err = run_git_command(["git", "commit", "-m", message])
+def commit_with_message(message: str, paths: Optional[Sequence[str]] = None) -> bool:
+    """Create a commit with the given message.
+
+    ``paths`` scopes the commit to the given pathspec. Without it the commit
+    takes the whole index, which swept in unrelated staged files and left a
+    rejected commit's leftovers for the next package's commit.
+    """
+    args = ["git", "commit", "-m", message]
+    if paths:
+        args += ["--", *paths]
+
+    rc, out, err = run_git_command(args)
     if rc != 0:
         reason = err or out
         if "nothing to commit" in reason.lower():
@@ -135,11 +144,11 @@ def commit_manifest_change(app_name: str, manifest_path: str, push: bool = False
             else f"{app_name}: Update manifest"
         )
 
-    if not commit_with_message(message):
+    if not commit_with_message(message, paths=[str(path)]):
         return False
 
     if push:
-        push_changes()
+        return push_changes()
     return True
 
 
@@ -170,22 +179,102 @@ def push_changes() -> bool:
 
 
 def stage_bucket_changes() -> None:
-    """Stage all changes inside ``bucket/``."""
-    rc, out, err = run_git_command(["git", "add", "bucket"])
+    """Stage changes to *tracked* manifests inside ``bucket/``.
+
+    Only tracked files are staged on purpose. ``git add bucket`` also stages
+    untracked manifests, and an untracked manifest whose updater failed must
+    not be published; the caller stages those explicitly, one by one, once
+    their updater succeeded.
+    """
+    rc, out, err = run_git_command(["git", "add", "-u", "--", "bucket"])
     if rc != 0:
         print(f"⚠️  git add failed: {err or out}")
 
 
-def get_staged_bucket_changes() -> Tuple[List[str], List[str]]:
-    """Return ``(added_apps, updated_apps)`` from staged bucket manifest changes."""
+def stage_manifest(manifest_path: Path) -> bool:
+    """Stage a single manifest, including a newly created one."""
+    rc, out, err = run_git_command(["git", "add", "--", str(manifest_path)])
+    if rc != 0:
+        print(f"⚠️  git add {manifest_path} failed: {err or out}")
+        return False
+    return True
+
+
+def get_staged_bucket_changes() -> Tuple[List[str], List[str], List[str]]:
+    """Return ``(added_apps, updated_apps, deleted_apps)`` from staged bucket changes.
+
+    Deletions are reported because ``git add bucket`` stages them too: a
+    manifest removed from the bucket used to be invisible here, and the
+    aggregate git path then concluded there was nothing to commit and left the
+    removal staged but uncommitted.
+    """
     rc, out, err = run_git_command(["git", "diff", "--cached", "--name-status"])
     if rc != 0:
         print(f"⚠️  git diff --cached failed: {err or out}")
-        return [], []
+        return [], [], []
 
     prefix = f"{BUCKET_DIR.name}/"
     added: List[str] = []
     updated: List[str] = []
+    deleted: List[str] = []
+
+    def _manifest_name(path_text: str) -> Optional[str]:
+        normalized_path = path_text.replace("\\", "/")
+        if not normalized_path.startswith(prefix) or not normalized_path.endswith(
+            MANIFEST_EXTENSION
+        ):
+            return None
+        return Path(normalized_path).stem
+
+    for line in out.splitlines():
+        parts = line.strip().split("\t")
+        if len(parts) < 2:
+            continue
+
+        status = parts[0]
+        if status.startswith("R"):
+            # A rename prints "R100\told\tnew": the old manifest is gone and
+            # the new one is genuinely new. Reporting only the old name (as a
+            # plain "R" would) attributes the change to a package that no
+            # longer exists.
+            if len(parts) < 3:
+                continue
+            old_name = _manifest_name(parts[1])
+            new_name = _manifest_name(parts[2])
+            if old_name:
+                deleted.append(old_name)
+            if new_name:
+                added.append(new_name)
+            continue
+
+        name = _manifest_name(parts[1])
+        if name is None:
+            continue
+
+        if status.startswith("A"):
+            added.append(name)
+        elif status.startswith("M"):
+            updated.append(name)
+        elif status.startswith("D"):
+            deleted.append(name)
+
+    return sorted(added), sorted(updated), sorted(deleted)
+
+
+def get_removed_manifests() -> List[str]:
+    """Return manifests deleted from the working tree but still tracked in HEAD.
+
+    The per-package git path stages one manifest at a time and never stages the
+    whole bucket, so a manifest dropped from the bucket would otherwise stay
+    deleted on disk and uncommitted, silently drifting from HEAD.
+    """
+    rc, out, err = run_git_command(["git", "diff", "--name-status", "--", BUCKET_DIR.name])
+    if rc != 0:
+        print(f"⚠️  git diff failed: {err or out}")
+        return []
+
+    prefix = f"{BUCKET_DIR.name}/"
+    removed: List[str] = []
 
     for line in out.splitlines():
         parts = line.strip().split("\t", 1)
@@ -193,19 +282,18 @@ def get_staged_bucket_changes() -> Tuple[List[str], List[str]]:
             continue
 
         status, path_text = parts
+        if not status.startswith("D"):
+            continue
+
         normalized_path = path_text.replace("\\", "/")
         if not normalized_path.startswith(prefix) or not normalized_path.endswith(
             MANIFEST_EXTENSION
         ):
             continue
 
-        app_name = Path(normalized_path).stem
-        if status.startswith("A"):
-            added.append(app_name)
-        elif status.startswith(("M", "R")):
-            updated.append(app_name)
+        removed.append(Path(normalized_path).stem)
 
-    return sorted(added), sorted(updated)
+    return sorted(removed)
 
 
 def list_untracked_manifests() -> List[Tuple[str, Path]]:
