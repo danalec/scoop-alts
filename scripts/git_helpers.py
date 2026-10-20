@@ -176,10 +176,15 @@ def commit_with_message(message: str, paths: Optional[Sequence[str]] = None) -> 
         rc, out, err = run_git_command(["git", "commit", "-m", message])
     if rc != 0:
         reason = err or out
-        if "nothing to commit" in reason.lower():
+        lowered = reason.lower()
+        if "nothing to commit" in lowered or "no changes added to commit" in lowered:
+            # Nothing left for this group - benign, not a failure. The
+            # aggregate path commits one group at a time and the first commit
+            # takes the whole bucket with it, so the groups after it
+            # legitimately have nothing left to do.
             print("ℹ️  No changes staged to commit.")
-        else:
-            print(f"⚠️  git commit failed: {reason}")
+            return True
+        print(f"⚠️  git commit failed: {reason}")
         return False
 
     print(out or "✅ Commit created")
@@ -292,6 +297,22 @@ def stage_manifest(manifest_path: Path) -> bool:
     return True
 
 
+def stage_manifest_removal(manifest_path: Path) -> bool:
+    """Stage the removal of a manifest that no longer exists in the working tree.
+
+    ``git add -A -- <path>`` cannot do this: the pathspec is matched against
+    the working tree, and a deleted file matches nothing ("pathspec did not
+    match any files"). ``update-index --remove`` drops the index entry of a
+    file that is gone, which is exactly the removal.
+    """
+    relative = _repo_relative(str(manifest_path))
+    rc, out, err = run_git_command(["git", "update-index", "--remove", "--", relative])
+    if rc != 0:
+        print(f"⚠️  git update-index --remove {relative} failed: {err or out}")
+        return False
+    return True
+
+
 def get_staged_bucket_changes() -> Tuple[List[str], List[str], List[str]]:
     """Return ``(added_apps, updated_apps, deleted_apps)`` from staged bucket changes.
 
@@ -360,7 +381,7 @@ def get_removed_manifests() -> List[str]:
     whole bucket, so a manifest dropped from the bucket would otherwise stay
     deleted on disk and uncommitted, silently drifting from HEAD.
     """
-    rc, out, err = run_git_command(["git", "diff", "--name-status", "--", BUCKET_DIR.name])
+    rc, out, err = run_git_command(["git", "diff", "HEAD", "--name-status", "--", BUCKET_DIR.name])
     if rc != 0:
         print(f"⚠️  git diff failed: {err or out}")
         return []
@@ -390,8 +411,10 @@ def get_removed_manifests() -> List[str]:
 
 def list_untracked_manifests() -> List[Tuple[str, Path]]:
     """Return untracked manifest files inside ``bucket/``."""
+    # Relative to the repository root, because that is where the git command
+    # runs - an absolute path breaks as soon as the two disagree.
     rc, out, err = run_git_command(
-        ["git", "ls-files", "--others", "--exclude-standard", str(BUCKET_DIR)]
+        ["git", "ls-files", "--others", "--exclude-standard", "--", BUCKET_DIR.name]
     )
     if rc != 0:
         print(f"⚠️  git ls-files failed: {err or out}")

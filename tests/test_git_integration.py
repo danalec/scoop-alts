@@ -63,6 +63,7 @@ def neutral_git(update_all, monkeypatch, tmp_path):
     monkeypatch.setattr(update_all, "list_untracked_manifests", lambda: [])
     monkeypatch.setattr(update_all, "get_removed_manifests", lambda: [])
     monkeypatch.setattr(update_all, "stage_manifest", lambda p: True)
+    monkeypatch.setattr(update_all, "stage_manifest_removal", lambda p: True)
     monkeypatch.setattr(update_all, "commit_with_message", lambda *a, **k: True)
     monkeypatch.setattr(update_all, "push_changes", lambda: True)
     monkeypatch.setattr(update_all, "run_git_command", lambda *a, **k: (0, "", ""))
@@ -213,3 +214,80 @@ class TestSuccessfulPackages:
         ]
 
         assert update_all.successful_packages(results) == {"ok"}
+
+
+class TestAggregateGroups:
+    """The aggregate path commits one group at a time.
+
+    The first group takes every staged change with it, so the groups after it
+    have nothing left to commit. That is benign - the run must not fail over
+    it.
+    """
+
+    def _scratch_repo(self, tmp_path, update_all, git_helpers):
+        import subprocess
+
+        # The orchestrator uses the real git_helpers module, so that is the one
+        # whose REPO_ROOT has to be redirected.
+        import git_helpers as real_git_helpers
+
+        repo_dir = tmp_path / "repo"
+        (repo_dir / "bucket").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=repo_dir, check=True)
+        (repo_dir / "bucket" / "good.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+        subprocess.run(["git", "add", "bucket"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=repo_dir, check=True)
+
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(real_git_helpers, "REPO_ROOT", repo_dir)
+        monkey.setattr(real_git_helpers, "BUCKET_DIR", repo_dir / "bucket")
+        monkey.setattr(update_all, "BUCKET_DIR", repo_dir / "bucket")
+        monkey.setattr(update_all, "push_changes", lambda: True)
+        return repo_dir, monkey
+
+    def test_two_groups_do_not_fail_the_run(self, update_all, git_helpers, tmp_path):
+        repo_dir, monkey = self._scratch_repo(tmp_path, update_all, git_helpers)
+        try:
+            # One manifest updated, one brand new: two non-empty groups.
+            (repo_dir / "bucket" / "good.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
+            (repo_dir / "bucket" / "new.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+
+            results = [
+                _result("update-good.py", success=True, updated=True),
+                _result("update-new.py", success=True, updated=True),
+            ]
+            ok = update_all.handle_git_integration(_args(git_aggregate=True), results)
+        finally:
+            monkey.undo()
+
+        assert ok is True, "the run must not fail when a later group has nothing left to commit"
+
+        import subprocess
+
+        published = subprocess.run(
+            ["git", "show", "HEAD:bucket/good.json"], cwd=repo_dir, capture_output=True, text=True
+        )
+        assert "2.0.0" in published.stdout
+
+    def test_a_removal_already_staged_is_committed(self, update_all, git_helpers, tmp_path):
+        import subprocess
+
+        repo_dir, monkey = self._scratch_repo(tmp_path, update_all, git_helpers)
+        try:
+            # Removed from the working tree AND already staged, e.g. by a
+            # "git rm" that ran before the orchestrator.
+            (repo_dir / "bucket" / "good.json").unlink()
+            subprocess.run(["git", "add", "-A", "--", "bucket/good.json"], cwd=repo_dir, check=True)
+
+            ok = update_all.handle_git_integration(_args(), [])
+        finally:
+            monkey.undo()
+
+        assert ok is True
+
+        still_there = subprocess.run(
+            ["git", "ls-files", "bucket/good.json"], cwd=repo_dir, capture_output=True, text=True
+        )
+        assert still_there.stdout.strip() == "", "the removal must reach a commit"

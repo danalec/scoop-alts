@@ -31,6 +31,7 @@ from git_helpers import (  # noqa: E402
     run_git_command,
     stage_bucket_changes,
     stage_manifest,
+    stage_manifest_removal,
 )
 from summary_utils import format_webhook_body  # noqa: E402
 
@@ -1107,9 +1108,7 @@ def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateRes
             # removal would never be committed without an explicit step.
             for app_name in get_removed_manifests():
                 manifest_path = BUCKET_DIR / f"{app_name}{MANIFEST_EXTENSION}"
-                rc, out, err = run_git_command(["git", "add", "-A", "--", str(manifest_path)])
-                if rc != 0:
-                    print(f"⚠️  git add -A {manifest_path} failed: {err or out}")
+                if not stage_manifest_removal(manifest_path):
                     committed = False
                     continue
                 if not commit_with_message(
@@ -1127,9 +1126,7 @@ def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateRes
         # is not part of ``allowed``; stage the removal explicitly.
         for app_name in get_removed_manifests():
             manifest_path = BUCKET_DIR / f"{app_name}{MANIFEST_EXTENSION}"
-            rc, out, err = run_git_command(["git", "add", "-A", "--", str(manifest_path)])
-            if rc != 0:
-                print(f"⚠️  git add -A {manifest_path} failed: {err or out}")
+            if not stage_manifest_removal(manifest_path):
                 committed = False
 
         for app_name, path in list_untracked_manifests():
