@@ -12,11 +12,21 @@ services:
       - HEARTBEAT_SCHEDULE=*/5 * * * *
       - ORCHESTRATOR_FLAGS=--fast --retry 1
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      # - NOTIFY_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
+      # The forge serves git over SSH on this port, under this alias: the same
+      # IP answers the NAS on 22, so the alias keeps the two apart.
+      - DEPLOY_KEY_SSH_HOST=${DEPLOY_KEY_SSH_HOST:-}
+      - DEPLOY_KEY_SSH_HOSTNAME=${DEPLOY_KEY_SSH_HOSTNAME:-}
+      - DEPLOY_KEY_SSH_PORT=${DEPLOY_KEY_SSH_PORT:-}
+      # The scheduler works on its own clone (see the volume below), so it never
+      # resets the working tree of whoever is developing in the repository.
+      - REPO_URL=${REPO_URL:-}
+      - REPO_PUSH_URLS=${REPO_PUSH_URLS:-}
+      - SCOOP_GIT_REMOTE=origin
+      - SCOOP_GIT_BRANCH=main
+      - SYNC_REMOTE=origin
+      - SYNC_BRANCH=main
     volumes:
-      - .:/app
-      - ./scripts:/app/scripts:ro
-      - ./bucket:/app/bucket
+      - scoop-repo:/app/repo
       - ./logs:/data/logs
       - ./cache:/data/cache
       - ./deploy_key:/data/deploy_key:ro
@@ -30,3 +40,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  scoop-repo:

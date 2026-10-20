@@ -1,10 +1,10 @@
 {
-  "version": "155.0.8059.39-1.1",
+  "version": "155.0.8059.84-1.1",
   "description": "Ungoogled Chromium - Google Chromium without Google's integration",
   "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
   "license": "BSD-3-Clause",
-  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/155.0.8059.39-1.1/ungoogled-chromium_155.0.8059.39-1.1_windows_x64.zip",
-  "hash": "sha256:7ab1bac653c531ea06cd4f08a59120e129d53f73f2cf7a00ae52a43276849f11",
+  "url": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/155.0.8059.84-1.1/ungoogled-chromium_155.0.8059.84-1.1_windows_x64.zip",
+  "hash": "sha256:ce4697b197faf3f8f7cb4838832930bdbd3f8c5be48a0e95dea9457c8293fab0",
   "bin": "chrome.exe",
   "shortcuts": [
     [
@@ -12,7 +12,7 @@
       "Ungoogled Chromium"
     ]
   ],
-  "extract_dir": "ungoogled-chromium_155.0.8059.39-1.1_windows_x64",
+  "extract_dir": "ungoogled-chromium_155.0.8059.84-1.1_windows_x64",
   "post_install": [
     "$shouldRun = $false",
     "if ($env:SCOOP_SET_DEFAULT_BROWSER -eq '1') { $shouldRun = $true }",

@@ -40,29 +40,40 @@ The scheduler service is packaged as a lightweight Linux container based on `pyt
 A standard deployment uses the provided [`docker-compose.yml`](../docker-compose.yml):
 
 ```yaml
-version: '3.8'
-
 services:
   scheduler:
     build: .
+    image: scoop-alts-scheduler:latest
     container_name: scoop-alts-scheduler
     restart: unless-stopped
     environment:
       - SCHEDULE_UPDATE_ALL=0 * * * *        # Run every hour
       - HEARTBEAT_SCHEDULE=*/5 * * * *        # Healthcheck heartbeat every 5 minutes
-      - ORCHESTRATOR_FLAGS=--workers 6 --structured-output --retry 2
+      - ORCHESTRATOR_FLAGS=--fast --retry 1
       - NOTIFY_WEBHOOK_URL=                  # Optional notification webhook
+      - GITHUB_TOKEN=                         # Optional GitHub PAT for higher API limits
+      - DEPLOY_KEY_SSH_HOST=                  # Alias of a forge on a non-default SSH port
+      - DEPLOY_KEY_SSH_HOSTNAME=
+      - DEPLOY_KEY_SSH_PORT=
+      - REPO_URL=                             # Repository the scheduler clones
+      - REPO_PUSH_URLS=                       # Comma-separated push targets
       - SCOOP_GIT_REMOTE=origin
       - SCOOP_GIT_BRANCH=main
-      - GITHUB_TOKEN=                         # Optional GitHub PAT for higher API limits
+      - SYNC_REMOTE=origin
+      - SYNC_BRANCH=main
     volumes:
-      - .:/app                                # Repository root (required for git auto-commit)
-      - ./scripts:/app/scripts:ro
-      - ./bucket:/app/bucket:rw
-      - /mnt/user/data/scoop-alts-logs:/data/logs:rw
-      - /mnt/user/data/scoop-alts-cache:/data/cache:rw
-      - /mnt/user/data/scoop-alts-config/deploy_key:/data/deploy_key:ro
+      - scoop-repo:/app/repo                   # The scheduler's own clone
+      - ./logs:/data/logs:rw
+      - ./cache:/data/cache:rw
+      - ./deploy_key:/data/deploy_key:ro
 ```
+
+> **The scheduler keeps its own clone** (`scoop-repo` volume), not a bind mount of
+> your working tree. The runner starts with `git reset --hard origin/main`, and
+> that discards whatever sits in the checkout it runs against - a branch in
+> progress, uncommitted edits, everything. With its own clone the runner
+> publishes from `/app/repo` and your working tree is never touched. Pull to
+> pick up the manifests it published.
 
 ### 2. Starting the Service
 
@@ -90,6 +101,11 @@ docker compose logs -f scheduler
 | `SYNC_BRANCH` | `main` | Branch the runner fast-forwards to before each run. |
 | `GITHUB_TOKEN` | `""` | GitHub Personal Access Token to avoid rate limits during version discovery. |
 | `AUTOMATION_DISABLE_WINMETA` | `1` | Disables Windows-specific binary inspection when running on Linux containers. |
+| `REPO_URL` | `""` | Repository the scheduler clones into its own volume. |
+| `REPO_PUSH_URLS` | `""` | Comma-separated push targets, e.g. `git@github.com:owner/repo.git,ssh://git@forge/owner/repo.git`. |
+| `DEPLOY_KEY_SSH_HOST` | `""` | Alias of a forge whose git SSH lives on a non-default port. |
+| `DEPLOY_KEY_SSH_HOSTNAME` | `""` | Real address behind that alias. |
+| `DEPLOY_KEY_SSH_PORT` | `""` | Port that alias resolves to. |
 
 > **Supplying `GITHUB_TOKEN`:** create a `.env` file next to `docker-compose.yml`
 > (gitignored by default) with `GITHUB_TOKEN=ghp_...`, or export it in the host
@@ -105,8 +121,9 @@ docker compose logs -f scheduler
 The scheduler is the only automatic writer of the branch, so a checkout that has
 fallen behind turns every push into a non-fast-forward rejection. `run_update_all.sh`
 therefore fetches `SYNC_REMOTE`/`SYNC_BRANCH` and hard-resets to it before invoking
-`update-all.py`. The reset discards only manifest changes left behind by an
-interrupted previous run — the orchestrator never edits scripts or workflows.
+`update-all.py`. The reset runs on the scheduler's own clone in the `scoop-repo`
+volume, so it discards only what a previous interrupted run left in *that* clone —
+your working tree is never touched.
 
 ---
 
@@ -114,12 +131,10 @@ interrupted previous run — the orchestrator never edits scripts or workflows.
 
 | Container Mount | Recommended Host Path | Purpose | Access Mode |
 | :--- | :--- | :--- | :---: |
-| `/app` | `.` (repository root) | Repository root so the entrypoint finds `/app/.git` for auto-commit/push | Read-Write (`rw`) |
-| `/app/scripts` | `./scripts` | Python automation modules and updaters | Read-Only (`ro`) |
-| `/app/bucket` | `./bucket` | Scoop JSON manifest files to update | Read-Write (`rw`) |
-| `/data/logs` | `.../scoop-alts-logs` | Run summaries, orchestrator logs, and stdout | Read-Write (`rw`) |
-| `/data/cache` | `.../scoop-alts-cache` | Cached HTTP responses and ETag storage | Read-Write (`rw`) |
-| `/data/deploy_key` | `.../deploy_key` | OpenSSH private key with push permission to Git | Read-Only (`ro`) |
+| `/app/repo` | `scoop-repo` (named volume) | The scheduler's own clone, where it commits and pushes | Read-Write (`rw`) |
+| `/data/logs` | `./logs` | Run summaries, orchestrator logs, and stdout | Read-Write (`rw`) |
+| `/data/cache` | `./cache` | Cached HTTP responses and ETag storage | Read-Write (`rw`) |
+| `/data/deploy_key` | `./deploy_key` | OpenSSH private key with push permission to Git | Read-Only (`ro`) |
 
 ---
 
@@ -127,15 +142,20 @@ interrupted previous run — the orchestrator never edits scripts or workflows.
 
 To allow the container to push updated manifests back to your Git repository:
 
-1. Generate an SSH keypair:
+1. Generate an SSH keypair — **without a passphrase**, the container copies the
+   key into `/root/.ssh` and uses it directly, with no ssh-agent:
 
    ```bash
    ssh-keygen -t ed25519 -C "scoop-alts-bot" -f ./deploy_key -N ""
    ```
 
 2. Add the **public key** (`deploy_key.pub`) as a Deploy Key with **write access** in Forgejo or GitHub.
-3. Mount the **private key** (`deploy_key`) into the container at `/data/deploy_key` with permissions `0600`.
-4. The container entrypoint automatically loads this key via `GIT_SSH_COMMAND` and pre-configures known hosts.
+3. Mount the **private key** (`deploy_key`) into the container at `/data/deploy_key`.
+4. The entrypoint copies the key to `/root/.ssh/id_ed25519` and writes an
+   `/root/.ssh/config` that offers it for every host, plus a per-host block for
+   `DEPLOY_KEY_SSH_HOST` — the alias a forge on a non-default SSH port needs.
+5. Point `REPO_URL` at the repository to clone and `REPO_PUSH_URLS` at the
+   remotes to publish to (comma-separated, e.g. a forge and GitHub).
 
 ---
 
