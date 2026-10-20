@@ -28,9 +28,19 @@ if python -u "${REPO_DIR}/scripts/update-all.py" ${ORCHESTRATOR_FLAGS} >"$OUT" 2
   ln -sf "$(basename "$OUT")" /data/logs/update-all-latest.log
   date -Iseconds > /data/last_success_update_all
 else
-  date -Iseconds > /data/last_failure_update_all
-  if [ -n "${NOTIFY_WEBHOOK_URL:-}" ]; then
-    /usr/local/scoop-bin/notify.sh "update-all failed" "$OUT"
+  rc=$?
+  # Exit 2 means the run published what it could and only upstream/network
+  # problems were left; exit 1 means something in our code failed.
+  if [ "$rc" = "2" ]; then
+    date -Iseconds > /data/last_partial_update_all
+    if [ -n "${NOTIFY_WEBHOOK_URL:-}" ]; then
+      /usr/local/scoop-bin/notify.sh "update-all partial (upstream failures)" "$OUT"
+    fi
+  else
+    date -Iseconds > /data/last_failure_update_all
+    if [ -n "${NOTIFY_WEBHOOK_URL:-}" ]; then
+      /usr/local/scoop-bin/notify.sh "update-all failed" "$OUT"
+    fi
   fi
-  exit 1
+  exit $rc
 fi

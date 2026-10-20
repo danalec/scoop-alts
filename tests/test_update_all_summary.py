@@ -75,3 +75,52 @@ def test_dry_run_without_summary_flags_does_not_warn(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "DRY RUN" in out
     assert "--dry-run writes no summary" not in out
+
+
+def test_summary_separates_upstream_failures_from_code_failures(tmp_path):
+    mod = load_update_all()
+
+    class Args:
+        json_summary = tmp_path / "sum.json"
+        timeout = 120
+        workers = 3
+        parallel = True
+        github_workers = 3
+        microsoft_workers = 3
+        google_workers = 4
+
+    results = [
+        mod.UpdateResult("update-ok.py", True, "", 1.0, True),
+        mod.UpdateResult(
+            "update-net.py", False, "NewConnectionError: Connection refused", 2.0, False
+        ),
+        mod.UpdateResult("update-bug.py", False, "KeyError: 'version'", 0.5, False),
+    ]
+
+    mod.write_json_summary(results, 3.5, Args, "Parallel")
+    data = json.loads((tmp_path / "sum.json").read_text("utf-8"))
+
+    assert data["counts"]["failed"] == 2
+    assert data["counts"]["failed_upstream"] == 1
+    assert data["counts"]["failed_code"] == 1
+    assert data["failures"] == [
+        {"package": "net", "kind": "upstream"},
+        {"package": "bug", "kind": "code"},
+    ]
+    kinds = {r["package"]: r["failure_kind"] for r in data["results"]}
+    assert kinds["net"] == "upstream"
+    assert kinds["bug"] == "code"
+
+
+def test_webhook_body_names_the_upstream_packages():
+    mod = load_update_all()
+    payload = {
+        "counts": {"total": 3, "successful": 2, "failed": 1, "updated": 1},
+        "results": [{"package": "ok", "version": "1.0.0", "updated": True}],
+        "failures": [{"package": "vendor-pkg", "kind": "upstream"}],
+    }
+
+    body = mod.format_webhook_body(payload, "slack")
+
+    assert "Upstream/network failures: vendor-pkg" in body["text"]
+    assert "Failures in our code" not in body["text"]
