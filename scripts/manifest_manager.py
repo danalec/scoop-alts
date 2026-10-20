@@ -209,7 +209,14 @@ class ManifestUpdater:
                 self.log(f"❌ Failed to hash {self.config.name} {arch} asset: {download_url}")
                 self.emit_result(updated=False, version=version, error="arch_hash_failed")
                 return False
-            architecture[arch] = {"url": download_url, "hash": f"sha256:{hash_value}"}
+            # Keep whatever the architecture entry carried besides the
+            # download metadata (a per-architecture extract_dir, bin or
+            # shortcuts): replacing the entry wholesale would silently drop it.
+            existing = manifest.get("architecture", {}).get(arch)
+            entry = dict(existing) if isinstance(existing, dict) else {}
+            entry["url"] = download_url
+            entry["hash"] = f"sha256:{hash_value}"
+            architecture[arch] = entry
         manifest["architecture"] = architecture
         manifest.pop("url", None)
         manifest.pop("hash", None)

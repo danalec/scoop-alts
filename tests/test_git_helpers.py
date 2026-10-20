@@ -203,3 +203,111 @@ class TestRepoRootConstant:
     def test_repo_root_is_directory(self, git_helpers):
         """Test that REPO_ROOT is a directory."""
         assert git_helpers.REPO_ROOT.is_dir()
+
+
+def _bucket_repo(tmp_path):
+    """Build a git repo whose bucket/ holds two committed manifests."""
+    repo_dir = tmp_path / "bucket_repo"
+    (repo_dir / "bucket").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo_dir, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo_dir, check=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=repo_dir, check=True)
+    for name in ("keep.json", "gone.json"):
+        (repo_dir / "bucket" / name).write_text('{"version": "1.0.0"}', encoding="utf-8")
+    subprocess.run(["git", "add", "bucket"], cwd=repo_dir, check=True)
+    subprocess.run(["git", "commit", "-qm", "init"], cwd=repo_dir, check=True)
+    return repo_dir
+
+
+class TestStagedBucketChanges:
+    """A deletion staged by the git path must be visible to the commit step."""
+
+    def test_reports_added_updated_and_deleted(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        bucket = repo_dir / "bucket"
+        (bucket / "gone.json").unlink()
+        (bucket / "keep.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
+        (bucket / "new.json").write_text('{"version": "9.9.9"}', encoding="utf-8")
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            git_helpers.stage_bucket_changes()
+            # A new manifest is staged explicitly, never as a side effect of
+            # staging the bucket - an untracked manifest is only published when
+            # its updater succeeded.
+            assert git_helpers.stage_manifest(bucket / "new.json") is True
+            added, updated, deleted = git_helpers.get_staged_bucket_changes()
+
+        assert added == ["new"]
+        assert updated == ["keep"]
+        assert deleted == ["gone"]
+
+    def test_stage_bucket_changes_does_not_stage_untracked_manifests(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        (repo_dir / "bucket" / "new.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            git_helpers.stage_bucket_changes()
+            added, updated, deleted = git_helpers.get_staged_bucket_changes()
+
+        assert added == []
+        assert (updated, deleted) == ([], [])
+
+    def test_rename_reports_the_new_name_as_added(self, git_helpers, tmp_path):
+        # git reports a rename as "R100\told\tnew"; reporting only the old name
+        # would attribute the change to a package that no longer exists.
+        repo_dir = _bucket_repo(tmp_path)
+        bucket = repo_dir / "bucket"
+        (bucket / "gone.json").rename(bucket / "new.json")
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            git_helpers.stage_bucket_changes()
+            assert git_helpers.stage_manifest(bucket / "new.json") is True
+            added, updated, deleted = git_helpers.get_staged_bucket_changes()
+
+        assert added == ["new"]
+        assert deleted == ["gone"]
+        assert updated == []
+
+    def test_empty_bucket_reports_nothing(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            added, updated, deleted = git_helpers.get_staged_bucket_changes()
+
+        assert (added, updated, deleted) == ([], [], [])
+
+
+class TestRemovedManifests:
+    """A manifest dropped from the working tree must be reported and committable."""
+
+    def test_detects_working_tree_removal(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        (repo_dir / "bucket" / "gone.json").unlink()
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            assert git_helpers.get_removed_manifests() == ["gone"]
+
+    def test_no_removal_reports_nothing(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            assert git_helpers.get_removed_manifests() == []
+
+    def test_removal_can_be_staged_and_committed(self, git_helpers, tmp_path):
+        repo_dir = _bucket_repo(tmp_path)
+        manifest_path = repo_dir / "bucket" / "gone.json"
+        manifest_path.unlink()
+
+        with patch.object(git_helpers, "REPO_ROOT", repo_dir):
+            removed = git_helpers.get_removed_manifests()
+            assert removed == ["gone"]
+            rc, out, err = git_helpers.run_git_command(
+                ["git", "add", "-A", "--", str(manifest_path)]
+            )
+            assert rc == 0, err or out
+            assert git_helpers.commit_with_message("gone: Remove manifest") is True
+
+        # The removal is now part of HEAD, not just staged.
+        tracked = subprocess.run(
+            ["git", "ls-files", "bucket"], cwd=repo_dir, capture_output=True, text=True, check=True
+        ).stdout
+        assert "gone.json" not in tracked
+        assert "keep.json" in tracked

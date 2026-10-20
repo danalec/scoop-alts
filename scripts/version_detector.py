@@ -321,40 +321,7 @@ class VersionDetector:
                         all_results.append(VersionResult(version=v, match_groups=groups))
 
             if all_results:
-                # Prefer semantic version ordering when available
-                best_result: Optional[VersionResult] = None
-
-                # Sort based on version string
-                def get_version_obj(res: VersionResult):
-                    if _PVersion:
-                        try:
-                            return _PVersion(res.version)
-                        except _PInvalid:
-                            pass
-                    return None
-
-                # Fallback key
-                def version_key(res: VersionResult) -> List[int]:
-                    parts = re.split(r"[._-]", res.version)
-                    key: List[int] = []
-                    for p in parts:
-                        try:
-                            key.append(int(p))
-                        except ValueError:
-                            # Non-numeric parts sort after numeric
-                            key.append(-1)
-                    return key
-
-                if _PVersion:
-                    # Filter out invalid versions if using packaging.version
-                    valid_versions = [r for r in all_results if get_version_obj(r) is not None]
-                    if valid_versions:
-                        best_result = sorted(
-                            valid_versions, key=lambda r: _PVersion(r.version), reverse=True
-                        )[0]
-
-                if not best_result:
-                    best_result = sorted(all_results, key=version_key, reverse=True)[0]
+                best_result = self._pick_best_version(all_results)
 
                 logger.info(f"Found version: {best_result.version}")
                 print(f"✅ Found version: {best_result.version}")
@@ -391,20 +358,11 @@ class VersionDetector:
                                 all_results.append(VersionResult(version=v, match_groups=groups))
 
                     if all_results:
-                        # Reuse sorting logic (simplified here or extracted later)
-                        def version_key_pw(res: VersionResult) -> List[int]:
-                            parts = re.split(r"[._-]", res.version)
-                            key: List[int] = []
-                            for p in parts:
-                                try:
-                                    key.append(int(p))
-                                except ValueError:
-                                    key.append(-1)
-                            return key
-
-                        # Just use the simple sort for now to avoid code duplication complexity in search/replace
-                        # Ideally refactor sorting into a method
-                        best_result = sorted(all_results, key=version_key_pw, reverse=True)[0]
+                        # Reuse the same ordering as the requests path. The
+                        # simplified key used to be applied here, and it sorts
+                        # a prerelease above its stable release ("1.2.3-beta"
+                        # becomes [1, 2, 3, -1] and beats [1, 2, 3]).
+                        best_result = self._pick_best_version(all_results)
 
                         logger.info(f"Found version with Playwright: {best_result.version}")
                         print(f"✅ Found version with Playwright: {best_result.version}")
@@ -436,6 +394,45 @@ class VersionDetector:
             logger.error(f"Error during version detection for {homepage_url}: {e}")
             print(f"❌ Error during version detection: {e}")
             return None
+
+    def _pick_best_version(self, results: List[VersionResult]) -> VersionResult:
+        """Return the highest version among the scraped candidates.
+
+        Semantic ordering (``packaging.version``) wins when it is available:
+        it is the only ordering that knows a prerelease ranks *below* its
+        stable release. The simplified fallback key turns a non-numeric part
+        into ``-1``, which makes "1.2.3-beta" ([1, 2, 3, -1]) sort *above*
+        "1.2.3" ([1, 2, 3]) - so it is only used for versions the semantic
+        parser rejects.
+        """
+        if not results:
+            raise ValueError("no version candidates to choose from")
+
+        def get_version_obj(res: VersionResult):
+            if _PVersion:
+                try:
+                    return _PVersion(res.version)
+                except _PInvalid:
+                    pass
+            return None
+
+        def version_key(res: VersionResult) -> List[int]:
+            parts = re.split(r"[._-]", res.version)
+            key: List[int] = []
+            for p in parts:
+                try:
+                    key.append(int(p))
+                except ValueError:
+                    # Non-numeric parts sort after numeric
+                    key.append(-1)
+            return key
+
+        if _PVersion:
+            valid_versions = [r for r in results if get_version_obj(r) is not None]
+            if valid_versions:
+                return sorted(valid_versions, key=lambda r: _PVersion(r.version), reverse=True)[0]
+
+        return sorted(results, key=version_key, reverse=True)[0]
 
     def _github_latest_release_fallback(
         self,

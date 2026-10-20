@@ -354,6 +354,10 @@ class ScoopAutomation:
         self.bucket_dir = bucket_dir or Path(__file__).parent.parent / "bucket"
         self.scripts_dir = scripts_dir or Path(__file__).parent
         self.config_file = self.scripts_dir / "software-configs.json"
+        # False when the JSON schema could not be loaded and only the basic
+        # field checks ran; the caller reports it so a degraded check is never
+        # presented as a full pass.
+        self.schema_validation_applied = True
 
         self.manifest_generator = ManifestGenerator(self.bucket_dir)
 
@@ -453,6 +457,7 @@ class ScoopAutomation:
         all_valid = True
 
         schema = None
+        schema_error: Optional[str] = None
         try:
             from jsonschema import Draft202012Validator  # type: ignore
 
@@ -465,8 +470,25 @@ class ScoopAutomation:
                 validator = Draft202012Validator(schema)
             else:
                 validator = None
-        except Exception:
+                schema_error = f"schema file not found: {schema_path}"
+        except Exception as error:
             validator = None
+            schema_error = f"{type(error).__name__}: {error}"
+
+        if validator is None:
+            # A silently degraded schema check looks exactly like a passing
+            # one, and a broken jsonschema install then hides every schema
+            # violation from the gate that is supposed to catch them.
+            self.schema_validation_applied = False
+            print(
+                "⚠️  SCHEMA VALIDATION SKIPPED: the JSON schema could not be loaded "
+                f"({schema_error})."
+            )
+            print(
+                "   Only the basic field checks below ran. Install the dependencies "
+                "(pip install -r scripts/requirements-automation.txt) to enable the "
+                "full schema validation."
+            )
 
         for manifest_path in manifest_paths:
             try:
@@ -836,7 +858,13 @@ def main():
         print("🔍 Validating manifests...")
         valid = automation.validate_manifests()
         if valid:
-            print("✅ All manifests are valid")
+            if automation.schema_validation_applied:
+                print("✅ All manifests are valid")
+            else:
+                print(
+                    "✅ All manifests passed the basic field checks "
+                    "(schema validation was SKIPPED - see the warning above)"
+                )
         else:
             print("❌ Some manifests have validation errors")
             sys.exit(1)

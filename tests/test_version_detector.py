@@ -911,3 +911,34 @@ def test_fetch_latest_version_successful_scrape_skips_api_fallback():
     assert result is not None
     assert result.version == "5.0.1"
     assert [url for url, _ in session.requests] == [ESPTOOL_RELEASES_PAGE]
+
+
+def test_pick_best_version_prefers_the_stable_release_over_a_prerelease():
+    # The simplified fallback key turns a non-numeric part into -1, which
+    # makes "1.2.3-beta" ([1, 2, 3, -1]) sort ABOVE "1.2.3" ([1, 2, 3]).
+    vd = VersionDetector()
+    results = [VersionResult(version="1.2.3-beta"), VersionResult(version="1.2.3")]
+
+    best = vd._pick_best_version(results)
+
+    assert best.version == "1.2.3"
+
+
+def test_pick_best_version_still_orders_plain_versions():
+    vd = VersionDetector()
+    results = [
+        VersionResult(version="1.2.3"),
+        VersionResult(version="1.10.0"),
+        VersionResult(version="1.9.9"),
+    ]
+
+    assert vd._pick_best_version(results).version == "1.10.0"
+
+
+def test_pick_best_version_falls_back_for_unparseable_versions():
+    # Without a semantic parser the simplified key is the only option; it must
+    # still return the highest candidate instead of raising.
+    vd = VersionDetector()
+    results = [VersionResult(version="2024.1"), VersionResult(version="2023.9")]
+
+    assert vd._pick_best_version(results).version == "2024.1"

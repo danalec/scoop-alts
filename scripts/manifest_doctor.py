@@ -485,6 +485,54 @@ def check_scheme(location: str, url: str) -> Optional[Finding]:
     return Finding(SEVERITY_ERROR, "scheme", f"{location}: download url must be https: {url}")
 
 
+# Characters that cannot appear in a Windows path component. Scoop builds the
+# cache file name with [System.IO.Path]::GetExtension() applied to the *raw*
+# URL, so a query string that follows the file name is swallowed into the
+# "extension" and the cache path becomes invalid.
+WINDOWS_ILLEGAL_PATH_CHARS = '<>:"/\\|?*'
+
+
+def scoop_url_extension(url: str) -> str:
+    """Replicate ``[System.IO.Path]::GetExtension()`` applied to a raw URL.
+
+    .NET returns the substring starting at the last ``.`` that follows the last
+    directory separator. Scoop hands it the whole URL, so for
+    ``https://host/app.zip?token=1`` it yields ``.zip?token=1`` - the query
+    string ends up inside the cache file name.
+    """
+    last_dot = url.rfind(".")
+    if last_dot == -1:
+        return ""
+    last_sep = max(url.rfind("/"), url.rfind("\\"))
+    if last_dot < last_sep:
+        return ""
+    return url[last_dot:]
+
+
+def check_url_filename(location: str, url: str) -> Optional[Finding]:
+    """Reject download URLs whose derived cache file name is not a valid path.
+
+    Scoop derives the cache file name from the URL, and the derived name keeps
+    the query string when the query follows the last dot. The install then dies
+    with "The filename, directory name, or volume label syntax is incorrect",
+    and nothing in the manifest looks wrong to a reader. The fix is a
+    ``#/filename.ext`` fragment, which is what the bucket already uses
+    elsewhere.
+    """
+    extension = scoop_url_extension(url)
+    illegal = sorted({char for char in extension if char in WINDOWS_ILLEGAL_PATH_CHARS})
+    if not illegal:
+        return None
+    return Finding(
+        SEVERITY_ERROR,
+        "url-filename",
+        f"{location}: scoop derives the cache file name from the URL, and "
+        f"{''.join(illegal)} in {extension!r} makes that path invalid - the "
+        f"install fails with 'The filename, directory name, or volume label "
+        f"syntax is incorrect'. Append a '#/filename.ext' fragment: {url}",
+    )
+
+
 def check_hash_format(location: str, value: Any) -> Optional[Finding]:
     if not isinstance(value, str):
         return None  # dict/list hashes (e.g. xpath lookups) cannot be checked here
@@ -649,13 +697,19 @@ def doctor_manifest(
         if finding:
             findings.append(finding)
 
+    # (6) the url must yield a usable cache file name
+    for location, url in urls:
+        finding = check_url_filename(location, url)
+        if finding:
+            findings.append(finding)
+
     # (2) hash format
     for location, value in iter_hashes(manifest):
         finding = check_hash_format(location, value)
         if finding:
             findings.append(finding)
 
-    # (3) version consistency (architecture entries + extract_dir)
+    # (3) version consistency (architecture entries + top-level url + extract_dir)
     version = manifest.get("version")
     if isinstance(version, str) and version:
         architecture = manifest.get("architecture")
@@ -668,6 +722,24 @@ def doctor_manifest(
                     finding = check_arch_version(key, url, version)
                     if finding:
                         findings.append(finding)
+        # A stale top-level url installs the previous artifact under the new
+        # version number. Only flag urls that actually embed a version-like
+        # token: plenty of valid download urls are versionless by design
+        # (a static "freeware" path, a "Victoria537.zip" style file name).
+        for location, url in urls:
+            if location.startswith("architecture."):
+                continue
+            embedded = VERSION_LIKE_RE.findall(url)
+            if embedded and not any(ver in url for ver in (version, version.lstrip("v"))):
+                findings.append(
+                    Finding(
+                        SEVERITY_WARNING,
+                        "version-consistency",
+                        f"{location} {url!r} embeds version-like string(s) "
+                        f"{embedded} but not the manifest version {version!r} "
+                        "(stale url? - the manifest would install the old artifact)",
+                    )
+                )
         # A stale extract_dir is the corecycler install failure class; the value
         # may live at the top level or inside an architecture block.
         declared_dirs = [("extract_dir", manifest.get("extract_dir"))]

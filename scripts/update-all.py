@@ -17,18 +17,20 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, TextIO, Tuple, TypedDict, cast
+from typing import Dict, Iterable, List, Optional, Sequence, Set, TextIO, Tuple, TypedDict, cast
 
 SCRIPTS_DIR = Path(__file__).parent
 sys.path.append(str(SCRIPTS_DIR))
 
 from git_helpers import (  # noqa: E402
     commit_with_message,
+    get_removed_manifests,
     get_staged_bucket_changes,
     list_untracked_manifests,
     push_changes,
     run_git_command,
     stage_bucket_changes,
+    stage_manifest,
 )
 from summary_utils import format_webhook_body  # noqa: E402
 
@@ -165,8 +167,13 @@ def resolve_result_version(result: UpdateResult) -> str:
     return version
 
 
-def stage_and_commit_per_package(updated_results: Sequence[UpdateResult]) -> None:
-    """Stage and commit each updated manifest separately."""
+def stage_and_commit_per_package(updated_results: Sequence[UpdateResult]) -> bool:
+    """Stage and commit each updated manifest separately.
+
+    Returns False when at least one commit failed, so the caller can fail the
+    run instead of reporting success for a change that never landed.
+    """
+    committed = True
     for result in updated_results:
         package = package_name_from_script(result.script_name)
         manifest_path = BUCKET_DIR / f"{package}{MANIFEST_EXTENSION}"
@@ -176,6 +183,7 @@ def stage_and_commit_per_package(updated_results: Sequence[UpdateResult]) -> Non
         rc, out, err = run_git_command(["git", "add", str(manifest_path)])
         if rc != 0:
             print(f"⚠️  git add {manifest_path} failed: {err or out}")
+            committed = False
             continue
 
         rc, staged_out, _ = run_git_command(
@@ -193,7 +201,10 @@ def stage_and_commit_per_package(updated_results: Sequence[UpdateResult]) -> Non
             message = f"{package}: {action} version {version} (script: {result.script_name})"
         else:
             message = f"{package}: {action} manifest (script: {result.script_name})"
-        commit_with_message(message)
+        if not commit_with_message(message, paths=[str(manifest_path)]):
+            committed = False
+
+    return committed
 
 
 @dataclass(frozen=True)
@@ -493,8 +504,15 @@ def run_parallel(
     retries: int = 0,
     circuit_threshold: int = 3,
     circuit_sleep: float = 5.0,
+    fail_fast: bool = False,
+    max_fail: int = 0,
 ) -> List[UpdateResult]:
-    """Run update scripts in parallel with provider-aware throttling."""
+    """Run update scripts in parallel with provider-aware throttling.
+
+    ``fail_fast`` and ``max_fail`` stop the run once enough updaters failed.
+    They used to be honoured only by the sequential path, which left the
+    default (parallel) run silently ignoring them.
+    """
     if not scripts:
         return []
 
@@ -554,10 +572,43 @@ def run_parallel(
         rich_available = False
 
     results: List[UpdateResult] = []
+    failures = 0
+    queue = list(scripts)
+    in_flight: Dict[concurrent.futures.Future, ScriptRef] = {}
+
+    def submit_pending(executor: concurrent.futures.ThreadPoolExecutor) -> None:
+        """Keep the pool busy without queueing the whole run up front.
+
+        Submitting everything at once would make --fail-fast useless: a task
+        that is already running cannot be cancelled, so the run would keep
+        working through the remaining scripts anyway.
+        """
+        while queue and len(in_flight) < max_workers:
+            script_path = queue.pop(0)
+            in_flight[executor.submit(task, script_path)] = script_path
+
+    def handle_finished(future: concurrent.futures.Future, script_path: ScriptRef, report) -> bool:
+        """Record one finished task and report whether the run must stop."""
+        nonlocal failures
+        try:
+            result = future.result()
+        except Exception as error:
+            result = UpdateResult(script_path.name, False, str(error), 0.0, False)
+            report(f"💥 {script_path.name} - Unexpected error: {error}")
+
+        results.append(result)
+        if result.success:
+            return False
+
+        failures += 1
+        if provider := register_failure(script_path):
+            report(f"⏸️  Pausing {provider} tasks for {circuit_sleep:.1f}s due to failures")
+        if fail_fast or (max_fail and failures >= max_fail):
+            return True
+        return False
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_script = {
-            executor.submit(task, script_path): script_path for script_path in scripts
-        }
+        submit_pending(executor)
 
         if rich_available:
             with Progress(
@@ -571,38 +622,36 @@ def run_parallel(
                     f"[cyan]Running {len(scripts)} scripts...",
                     total=len(scripts),
                 )
-                for future in concurrent.futures.as_completed(future_to_script):
-                    script_path = future_to_script[future]
-                    try:
-                        result = future.result()
-                    except Exception as error:
-                        result = UpdateResult(script_path.name, False, str(error), 0.0, False)
-                        progress.console.print(
-                            f"[red]💥 {script_path.name} - Unexpected error: {error}[/red]"
-                        )
-                    results.append(result)
-                    progress.advance(task_id)
-                    if not result.success:
-                        if provider := register_failure(script_path):
-                            progress.console.print(
-                                f"[yellow]⏸️  Pausing {provider} tasks for "
-                                f"{circuit_sleep:.1f}s due to failures[/yellow]"
-                            )
+
+                def report(message: str) -> None:
+                    progress.console.print(message)
+
+                while in_flight:
+                    done, _ = concurrent.futures.wait(
+                        in_flight, return_when=concurrent.futures.FIRST_COMPLETED
+                    )
+                    stop = False
+                    for future in done:
+                        script_path = in_flight.pop(future)
+                        stop = handle_finished(future, script_path, report) or stop
+                        progress.advance(task_id)
+                    if stop:
+                        report(f"⛔ Stopping after {failures} failure(s)")
+                        break
+                    submit_pending(executor)
         else:
-            for future in concurrent.futures.as_completed(future_to_script):
-                script_path = future_to_script[future]
-                try:
-                    result = future.result()
-                except Exception as error:
-                    result = UpdateResult(script_path.name, False, str(error), 0.0, False)
-                    print(f"💥 {script_path.name} - Unexpected error: {error}")
-                results.append(result)
-                if not result.success:
-                    if provider := register_failure(script_path):
-                        print(
-                            f"⏸️  Pausing {provider} tasks for {circuit_sleep:.1f}s "
-                            "due to failures"
-                        )
+            while in_flight:
+                done, _ = concurrent.futures.wait(
+                    in_flight, return_when=concurrent.futures.FIRST_COMPLETED
+                )
+                stop = False
+                for future in done:
+                    script_path = in_flight.pop(future)
+                    stop = handle_finished(future, script_path, print) or stop
+                if stop:
+                    print(f"⛔ Stopping after {failures} failure(s)")
+                    break
+                submit_pending(executor)
 
     results.sort(key=lambda item: item.script_name)
     return results
@@ -1001,41 +1050,93 @@ def prepare_script_paths(args: argparse.Namespace) -> List[ScriptRef]:
     return refs
 
 
-def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateResult]) -> None:
-    """Stage, commit, and optionally push updated manifests."""
+def successful_packages(results: Sequence[UpdateResult]) -> Set[str]:
+    """Return the packages whose updater succeeded in this run.
+
+    An untracked manifest may only be published when its updater succeeded:
+    a manifest left behind by a failed or timed-out updater is unverified, and
+    publishing it would ship a manifest nobody could install.
+    """
+    return {package_name_from_script(result.script_name) for result in results if result.success}
+
+
+def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateResult]) -> bool:
+    """Stage, commit, and optionally push updated manifests.
+
+    Returns False when a commit or the push failed. The caller must fail the
+    run in that case: the scheduler resets the working tree to origin/main
+    before every run, so a change that was committed but not published would be
+    discarded silently while the run still reported success.
+    """
     if args.skip_git:
-        return
+        return True
 
     print("\n" + "-" * 80)
     print("🧩 Git integration: staging and committing changes...")
+
+    allowed = successful_packages(results)
+    committed = True
 
     try:
         if args.git_per_package or not args.git_aggregate:
             updated_results = [result for result in results if result.updated]
             if updated_results:
-                stage_and_commit_per_package(updated_results)
+                if not stage_and_commit_per_package(updated_results):
+                    committed = False
 
             for app_name, path in list_untracked_manifests():
-                rc, out, err = run_git_command(["git", "add", str(path)])
-                if rc != 0:
-                    print(f"⚠️  git add {path} failed: {err or out}")
+                if app_name not in allowed:
+                    print(
+                        f"⚠️  Skipping untracked manifest {path.name}: its updater did not "
+                        "succeed, so it is not verified."
+                    )
+                    continue
+                if not stage_manifest(path):
+                    committed = False
                     continue
 
                 version = get_manifest_version(app_name)
                 message = (
                     f"{app_name}: Add version {version}" if version else f"{app_name}: Add manifest"
                 )
-                commit_with_message(message)
+                if not commit_with_message(message, paths=[str(path)]):
+                    committed = False
 
-            push_changes()
-            return
+            # A manifest dropped from the bucket is removed on disk but still
+            # tracked in HEAD. This path stages manifests one by one, so the
+            # removal would never be committed without an explicit step.
+            for app_name in get_removed_manifests():
+                manifest_path = BUCKET_DIR / f"{app_name}{MANIFEST_EXTENSION}"
+                rc, out, err = run_git_command(["git", "add", "-A", "--", str(manifest_path)])
+                if rc != 0:
+                    print(f"⚠️  git add -A {manifest_path} failed: {err or out}")
+                    committed = False
+                    continue
+                if not commit_with_message(
+                    f"{app_name}: Remove manifest", paths=[str(manifest_path)]
+                ):
+                    committed = False
+
+            if not push_changes():
+                committed = False
+            return committed
 
         stage_bucket_changes()
-        added_apps, updated_apps = get_staged_bucket_changes()
+        for app_name, path in list_untracked_manifests():
+            if app_name not in allowed:
+                print(
+                    f"⚠️  Skipping untracked manifest {path.name}: its updater did not "
+                    "succeed, so it is not verified."
+                )
+                continue
+            if not stage_manifest(path):
+                committed = False
 
-        if not added_apps and not updated_apps:
+        added_apps, updated_apps, deleted_apps = get_staged_bucket_changes()
+
+        if not added_apps and not updated_apps and not deleted_apps:
             print("ℹ️  No staged changes found under bucket/ to commit.")
-            return
+            return committed
 
         if updated_apps:
             updated_with_versions = [
@@ -1044,7 +1145,8 @@ def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateRes
             ]
             message = f"updated ({len(updated_with_versions)}): {', '.join(updated_with_versions)}"
             print(f"📝 Committing: {message}")
-            commit_with_message(message)
+            if not commit_with_message(message, paths=["bucket"]):
+                committed = False
 
         if added_apps:
             added_with_versions = [
@@ -1053,11 +1155,22 @@ def handle_git_integration(args: argparse.Namespace, results: Sequence[UpdateRes
             ]
             message = f"added ({len(added_with_versions)}): {', '.join(added_with_versions)}"
             print(f"📝 Committing: {message}")
-            commit_with_message(message)
+            if not commit_with_message(message, paths=["bucket"]):
+                committed = False
 
-        push_changes()
+        if deleted_apps:
+            message = f"removed ({len(deleted_apps)}): {', '.join(deleted_apps)}"
+            print(f"📝 Committing: {message}")
+            if not commit_with_message(message, paths=["bucket"]):
+                committed = False
+
+        if not push_changes():
+            committed = False
     except Exception as error:
         print(f"⚠️  Git integration encountered an error: {error}")
+        committed = False
+
+    return committed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1315,6 +1428,8 @@ def main() -> None:
             retries=args.retry,
             circuit_threshold=args.circuit_threshold,
             circuit_sleep=args.circuit_sleep,
+            fail_fast=bool(args.fail_fast),
+            max_fail=int(args.max_fail or 0),
         )
     else:
         results = run_sequential(
@@ -1334,11 +1449,18 @@ def main() -> None:
     write_md_summary(results, total_duration, args, mode_label)
     send_webhook_if_configured(args)
 
-    handle_git_integration(args, results)
+    git_ok = handle_git_integration(args, results)
 
     failed_count = len([result for result in results if not result.success])
     if failed_count > 0 and not args.no_error_exit:
         print(f"\n⚠️  {failed_count} script(s) failed")
+        sys.exit(1)
+
+    if not git_ok:
+        # The scheduler treats a zero exit as success and resets the working
+        # tree to origin/main before the next run, so a commit or push that
+        # failed would be discarded silently. Fail loudly instead.
+        print("\n❌ Git integration failed: the update was not published.")
         sys.exit(1)
 
     print("\n🎉 All scripts completed successfully!")
