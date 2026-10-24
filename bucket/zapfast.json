@@ -1,12 +1,12 @@
 {
-  "version": "0.19.0",
+  "version": "0.20.1",
   "description": "Fast, native WhatsApp client in Rust and egui",
   "homepage": "https://github.com/crmne/zapfast",
   "license": "MIT",
   "changelog": "https://github.com/crmne/zapfast/releases/tag/v0.15.0",
-  "url": "https://github.com/crmne/zapfast/releases/download/v0.19.0/zapfast-v0.19.0-x86_64-pc-windows-msvc.zip",
-  "hash": "sha256:389d1456f258977fdf3c6d93da441d925d6e33ca7a5039a5b0159a0c000bad37",
-  "extract_dir": "zapfast-v0.19.0-x86_64-pc-windows-msvc",
+  "url": "https://github.com/crmne/zapfast/releases/download/v0.20.1/zapfast-v0.20.1-x86_64-pc-windows-msvc.zip",
+  "hash": "sha256:90784e6554c8b9f04cd25b4386a8b1760b67b450b6bffdb23c6d257821c83812",
+  "extract_dir": "zapfast-v0.20.1-x86_64-pc-windows-msvc",
   "bin": "zapfast.exe",
   "shortcuts": [
     [
