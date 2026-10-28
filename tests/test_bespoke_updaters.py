@@ -1,4 +1,4 @@
-"""Tests for the five bespoke updaters that had no direct coverage.
+"""Tests for the six bespoke updaters that had no direct coverage.
 
 The registry-driven runner is exercised elsewhere; these packages kept their own
 ``update-<pkg>.py`` because a ``SoftwareVersionConfig`` entry cannot express what
@@ -579,3 +579,121 @@ def test_victoria_patterns_match_real_vendor_phrasings(victoria):
         assert matched, f"no pattern matched the {label} phrasing: {page!r}"
         version = re.search(matched[0], page, re.IGNORECASE).group(1)
         assert version == "5.37", f"{label} phrasing produced {version!r}"
+
+
+# --------------------------------------------------------------------------- kuna
+
+KUNA_VERSION = "1.984"
+KUNA_WINDOWS_URL = (
+    "https://github.com/Noelo-Lab/kuna/releases/download/v1.984/" "kuna-v1.984-windows-x86_64.zip"
+)
+KUNA_SPECS_URL = (
+    "https://github.com/Noelo-Lab/kuna/releases/download/v1.984/kuna-v1.984-specs.tar.gz"
+)
+
+
+@pytest.fixture
+def kuna(tmp_path, monkeypatch):
+    """The kuna updater with the framework's network access replaced."""
+    module = load_updater("update-kuna")
+    module.BUCKET_DIR = tmp_path
+
+    import manifest_manager
+
+    monkeypatch.setattr(
+        manifest_manager,
+        "get_version_info",
+        lambda config, current_version=None: {
+            "version": KUNA_VERSION,
+            "download_url": KUNA_WINDOWS_URL,
+            "hash": "a" * 64,
+            "match_groups": {},
+        },
+    )
+
+    class _Detector:
+        def calculate_hash(self, url):
+            return "b" * 64
+
+    monkeypatch.setattr(manifest_manager, "VersionDetector", _Detector)
+    return module
+
+
+def _write_kuna_manifest(module):
+    write_manifest(
+        module.BUCKET_DIR / "kuna.json",
+        {
+            "version": "1.982",
+            "extract_dir": "kuna-v1.982-windows-x86_64",
+            "architecture": {
+                "64bit": {
+                    "url": ["old-windows.zip", "old-specs.tar.gz"],
+                    "hash": [f"sha256:{'0' * 64}", f"sha256:{'0' * 64}"],
+                }
+            },
+            "bin": ["kuna.exe", "decomp_dbg.exe", "slacomp.exe"],
+        },
+    )
+
+
+def test_kuna_update_derives_bin_from_the_release_archive(kuna, monkeypatch):
+    # The install failure: upstream dropped decomp_dbg.exe and slacomp.exe, the
+    # manifest kept shimming them, and scoop refuses to install a package whose
+    # shim target does not exist.
+    _write_kuna_manifest(kuna)
+    monkeypatch.setattr(kuna, "list_archive_binaries", lambda url, extract_dir: ["kuna.exe"])
+
+    assert kuna.update_manifest() is True
+
+    manifest = read_manifest(kuna.BUCKET_DIR / "kuna.json")
+    assert manifest["bin"] == ["kuna.exe"]
+
+
+def test_kuna_update_keeps_both_release_assets(kuna, monkeypatch):
+    _write_kuna_manifest(kuna)
+    monkeypatch.setattr(kuna, "list_archive_binaries", lambda url, extract_dir: ["kuna.exe"])
+
+    assert kuna.update_manifest() is True
+
+    manifest = read_manifest(kuna.BUCKET_DIR / "kuna.json")
+    entry = manifest["architecture"]["64bit"]
+    assert entry["url"] == [KUNA_WINDOWS_URL, KUNA_SPECS_URL]
+    assert entry["hash"] == [f"sha256:{'a' * 64}", f"sha256:{'b' * 64}"]
+    assert "url" not in manifest
+    assert "hash" not in manifest
+    assert manifest["extract_dir"] == "kuna-v1.984-windows-x86_64"
+
+
+def test_kuna_update_keeps_bin_when_the_archive_cannot_be_listed(kuna, monkeypatch):
+    # An unreachable archive must not empty the shim list: the manifest keeps
+    # what it had and the doctor reports the mismatch.
+    _write_kuna_manifest(kuna)
+    monkeypatch.setattr(kuna, "list_archive_binaries", lambda url, extract_dir: [])
+
+    assert kuna.update_manifest() is True
+
+    manifest = read_manifest(kuna.BUCKET_DIR / "kuna.json")
+    assert manifest["bin"] == ["kuna.exe", "decomp_dbg.exe", "slacomp.exe"]
+
+
+def test_list_archive_binaries_reads_the_app_root(monkeypatch):
+    # Only the executables next to the main binary are shimmable: a helper in
+    # a subfolder is not on PATH after the extraction.
+    module = load_updater("update-kuna")
+
+    import manifest_doctor
+
+    monkeypatch.setattr(
+        manifest_doctor,
+        "list_zip_entries",
+        lambda url, transport: [
+            "kuna-v1.984-windows-x86_64/",
+            "kuna-v1.984-windows-x86_64/kuna.exe",
+            "kuna-v1.984-windows-x86_64/LICENSE",
+            "kuna-v1.984-windows-x86_64/tools/helper.exe",
+        ],
+    )
+
+    binaries = module.list_archive_binaries(KUNA_WINDOWS_URL, "kuna-v1.984-windows-x86_64")
+
+    assert binaries == ["kuna.exe"]

@@ -614,19 +614,13 @@ def referenced_paths(manifest: Dict[str, Any], extract_dir: Any = _UNSET) -> Lis
 
 
 def _normalize(path: str) -> str:
+    """Normalize an archive path: backslashes, empty and ``.`` segments.
+
+    ``.`` is the app root once ``extract_dir`` has been applied, so it must
+    collapse to an empty path instead of surviving as a literal segment.
+    """
     norm = path.replace("\\", "/").strip()
-    while norm.startswith("./"):
-        norm = norm[2:]
-    return norm.strip("/")
-
-
-def target_folder(path: str) -> str:
-    """The path whose existence is verified: the containing folder, or the file
-    itself when the reference sits at the archive root."""
-    norm = _normalize(path)
-    if not norm:
-        return ""
-    return norm.rsplit("/", 1)[0] if "/" in norm else norm
+    return "/".join(part for part in norm.split("/") if part not in ("", "."))
 
 
 def resolve_zip_target(path: str, extract_root: str, is_extract_dir: bool = False) -> str:
@@ -648,11 +642,22 @@ def target_in_listing(
     dirs: Set[str],
     extract_root: str = "",
     is_extract_dir: bool = False,
+    expect_directory: bool = False,
 ) -> bool:
-    target = target_folder(resolve_zip_target(path, extract_root, is_extract_dir))
-    if not target:
+    """Check that a manifest reference resolves to something inside the archive.
+
+    ``bin`` and ``shortcuts`` name a file, ``extract_dir`` and ``env_add_path``
+    name a folder. The check used to look only at the containing folder, which
+    made every ``bin`` under an existing ``extract_dir`` look present - that is
+    how the kuna ``decomp_dbg.exe`` rot reached the bucket and scoop refused
+    to shim a file the release stopped shipping.
+    """
+    resolved = resolve_zip_target(path, extract_root, is_extract_dir)
+    if not resolved:
         return True  # nothing to check (e.g. "." or empty)
-    return target in files or target in dirs
+    if expect_directory or is_extract_dir:
+        return resolved in dirs or resolved in files
+    return resolved in files
 
 
 def _listing_index(entries: Sequence[str]) -> Tuple[Set[str], Set[str]]:
@@ -661,6 +666,10 @@ def _listing_index(entries: Sequence[str]) -> Tuple[Set[str], Set[str]]:
     for name in entries:
         norm = _normalize(name)
         if not norm:
+            continue
+        if name.rstrip("/") != name:
+            # An explicit directory entry ("folder/") - a folder, not a file.
+            dirs.add(norm)
             continue
         files.add(norm)
         parts = norm.split("/")
@@ -843,14 +852,18 @@ def doctor_manifest(
                 # files anywhere (bucket/victoria.json); not verifiable here.
                 continue
             is_extract_dir = kind == "extract_dir"
-            if not target_in_listing(path, files, dirs, extract_root, is_extract_dir):
-                resolved = resolve_zip_target(path, extract_root, is_extract_dir)
+            # ``bin`` and ``shortcuts`` name a file; ``extract_dir`` and
+            # ``env_add_path`` name a folder.
+            expect_directory = kind in ("extract_dir", "env_add_path")
+            resolved = resolve_zip_target(path, extract_root, is_extract_dir)
+            if not target_in_listing(
+                path, files, dirs, extract_root, is_extract_dir, expect_directory
+            ):
                 findings.append(
                     Finding(
                         SEVERITY_ERROR,
                         "zip-layout",
-                        f"{location}: {kind} '{path}' -> '{target_folder(resolved)}' "
-                        f"not found in {archive}",
+                        f"{location}: {kind} '{path}' -> '{resolved}' not found in {archive}",
                     )
                 )
     if (

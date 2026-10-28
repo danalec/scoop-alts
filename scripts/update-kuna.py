@@ -6,6 +6,11 @@ Keeps bucket/kuna.json in sync with Noelo-Lab/kuna releases. Upstream ships the
 Windows binaries and the Ghidra processor specs as two separate release assets,
 so the 64bit block keeps ``url``/``hash`` arrays and ``env_set.KUNA_SPECS``
 points at the specs tree that the second archive extracts.
+
+The ``bin`` list is derived from the Windows archive instead of being written
+by hand: upstream drops helper executables between releases (decomp_dbg.exe and
+slacomp.exe disappeared in 1.982) and a manifest that keeps listing them aborts
+the install with "Can't shim 'decomp_dbg.exe': File doesn't exist".
 """
 
 from __future__ import annotations
@@ -29,6 +34,38 @@ SPECS_URL_TEMPLATE = (
     "https://github.com/Noelo-Lab/kuna/releases/download/v$version/kuna-v$version-specs.tar.gz"
 )
 BUCKET_DIR = Path(__file__).parent.parent / "bucket"
+
+
+def list_archive_binaries(url: str, extract_dir: str) -> List[str]:
+    """Return the executables the Windows archive ships at the app root.
+
+    The archive is the only authority for the shim list: upstream adds and
+    drops helper binaries between releases, and a manifest that keeps a
+    dropped one makes scoop abort the install on a missing shim target.
+    Returns an empty list when the archive cannot be listed (offline, zip64),
+    so the caller can keep the current list instead of guessing.
+    """
+    try:
+        from manifest_doctor import HttpRangeTransport, list_zip_entries
+
+        entries = list_zip_entries(url.split("#", 1)[0], HttpRangeTransport())
+    except Exception as error:  # network failure, zip64, missing requests
+        print(f"⚠️ Could not list the kuna archive: {error}")
+        return []
+
+    prefix = f"{extract_dir}/" if extract_dir else ""
+    binaries: List[str] = []
+    for entry in entries:
+        name = entry.replace("\\", "/")
+        if not name.lower().endswith(".exe"):
+            continue
+        if prefix and not name.startswith(prefix):
+            continue
+        relative = name[len(prefix) :] if prefix else name
+        if "/" in relative:
+            continue  # only the executables at the app root are shimmable
+        binaries.append(relative)
+    return sorted(binaries)
 
 
 class KunaManifestUpdater(ManifestUpdater):
@@ -97,6 +134,26 @@ class KunaManifestUpdater(ManifestUpdater):
         # block carries the real metadata (the veracrypt incident).
         manifest.pop("url", None)
         manifest.pop("hash", None)
+        self._refresh_bin_entries(manifest, download_url)
+
+    def _refresh_bin_entries(self, manifest: Dict[str, Any], download_url: str) -> None:
+        """Rewrite ``bin`` from the executables the release archive ships.
+
+        The kuna Windows build dropped decomp_dbg.exe and slacomp.exe in
+        1.982 while the manifest kept shimming them, and scoop refuses to
+        install a package whose shim target does not exist. When the archive
+        cannot be listed the current list is kept and the doctor reports the
+        mismatch instead of the manifest silently guessing.
+        """
+        extract_dir = manifest.get("extract_dir")
+        binaries = list_archive_binaries(
+            download_url, extract_dir if isinstance(extract_dir, str) else ""
+        )
+        if not binaries:
+            self.log("⚠️ Could not read the binaries from the release archive - keeping bin")
+            return
+        manifest["bin"] = binaries
+        self.log(f"📦 kuna ships: {', '.join(binaries)}")
 
 
 def update_manifest(force: bool = False) -> bool:

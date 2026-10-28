@@ -333,7 +333,7 @@ def test_zip_layout_missing_bin_folder_errors():
     assert len(findings) == 1
     assert findings[0].severity == "error"
     assert "bin 'missing-folder/app.exe'" in findings[0].message
-    assert "'missing-folder'" in findings[0].message
+    assert "'missing-folder/app.exe'" in findings[0].message
 
 
 def test_zip_layout_missing_env_add_path_errors():
@@ -393,7 +393,7 @@ def test_zip_layout_missing_extract_dir_reports_joined_target():
     report = md.doctor_manifest("missing.json", manifest, transport=transport)
     findings = findings_by_check(report, "zip-layout")
     assert len(findings) == 2
-    assert all("'missing-dir'" in f.message for f in findings)
+    assert all("missing-dir" in f.message for f in findings)
 
 
 def test_zip_layout_installer_script_relocates_files_without_false_positive():
@@ -879,13 +879,19 @@ def test_zip_layout_architecture_extract_dir_still_detects_missing_bin():
 
 
 def test_zip_layout_bin_resolves_by_containing_folder():
-    # Documented behaviour (pre-existing, shared by every manifest): a bin
-    # reference verifies its containing folder, not the exact file name.
+    # The kuna class: the extract_dir folder is in the archive, but the binary
+    # the manifest still lists was dropped from the release. Verifying only
+    # the containing folder made this pass the gate until scoop refused to
+    # shim a file that does not exist.
     blob = make_zip_bytes({"app-1.2.3/different.exe": b"MZ"})
     transport = FakeRangeTransport(blob)
     manifest = arch_scoped_manifest("app-1.2.3", ["app.exe"])
     report = md.doctor_manifest("arch.json", manifest, transport=transport)
-    assert findings_by_check(report, "zip-layout") == []
+    findings = findings_by_check(report, "zip-layout")
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert "bin 'app.exe'" in findings[0].message
+    assert "app-1.2.3/app.exe" in findings[0].message
 
 
 def test_zip_layout_missing_architecture_extract_dir_errors():
