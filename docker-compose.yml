@@ -1,0 +1,45 @@
+services:
+  scheduler:
+    build: .
+    image: scoop-alts-scheduler:latest
+    container_name: scoop-alts-scheduler
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    environment:
+      - TZ=UTC
+      - SCHEDULE_UPDATE_ALL=0 * * * *
+      - HEARTBEAT_SCHEDULE=*/5 * * * *
+      - ORCHESTRATOR_FLAGS=--fast --retry 1
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # The forge serves git over SSH on this port, under this alias: the same
+      # IP answers the NAS on 22, so the alias keeps the two apart.
+      - DEPLOY_KEY_SSH_HOST=${DEPLOY_KEY_SSH_HOST:-}
+      - DEPLOY_KEY_SSH_HOSTNAME=${DEPLOY_KEY_SSH_HOSTNAME:-}
+      - DEPLOY_KEY_SSH_PORT=${DEPLOY_KEY_SSH_PORT:-}
+      # The scheduler works on its own clone (see the volume below), so it never
+      # resets the working tree of whoever is developing in the repository.
+      - REPO_URL=${REPO_URL:-}
+      - REPO_PUSH_URLS=${REPO_PUSH_URLS:-}
+      - SCOOP_GIT_REMOTE=origin
+      - SCOOP_GIT_BRANCH=main
+      - SYNC_REMOTE=origin
+      - SYNC_BRANCH=main
+    volumes:
+      - scoop-repo:/app/repo
+      - ./logs:/data/logs
+      - ./cache:/data/cache
+      - ./deploy_key:/data/deploy_key:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/scoop-bin/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  scoop-repo:

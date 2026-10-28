@@ -1,0 +1,162 @@
+{
+  "software": [
+    {
+      "name": "hdd-lff-portable",
+      "description": "HDD Low Level Format Tool (Portable) - A utility for low-level formatting of SATA, IDE, SAS, SCSI or SSD drives",
+      "homepage": "https://hddguru.com/software/HDD-LLF-Low-Level-Format-Tool/",
+      "license": "Freeware",
+      "version_regex": "HDDLLF\\.([\\d\\.]+)\\.exe",
+      "download_url_template": "https://hddguru.com/software/HDD-LLF-Low-Level-Format-Tool/HDDLLF.$version.exe",
+      "bin_name": "HDDLLF.$version.exe",
+      "shortcuts": [
+        [
+          "HDDLLF.$version.exe",
+          "HDD Low Level Format Tool"
+        ]
+      ]
+    },
+    {
+      "name": "usb-safely-remove",
+      "description": "USB Safely Remove - Safely remove USB devices with additional features",
+      "homepage": "https://safelyremove.com/download.htm",
+      "license": "Shareware",
+      "version_regex": "Version:\\s*([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)",
+      "download_url_template": "https://safelyremove.com/startdownload.htm?imm&v=&t=",
+      "bin_name": "USBSafelyRemove.exe",
+      "shortcuts": [
+        [
+          "USBSafelyRemove.exe",
+          "USB Safely Remove"
+        ]
+      ]
+    },
+    {
+      "name": "corecycler",
+      "description": "CoreCycler - CPU stress testing tool for stability testing",
+      "homepage": "https://github.com/sp00n/corecycler",
+      "license": "MIT",
+      "version_regex": "tag/v([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-zA-Z0-9]+)?)",
+      "download_url_template": "https://github.com/sp00n/CoreCycler/releases/download/v$version/CoreCycler-v$version.7z",
+      "extract_dir": "CoreCycler-v$version",
+      "bin_name": [["Run CoreCycler.bat", "corecycler"]]
+    },
+    {
+      "name": "ungoogled-chromium",
+      "description": "Ungoogled Chromium - Google Chromium without Google's integration",
+      "homepage": "https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest",
+      "license": "BSD-3-Clause",
+      "version_regex": "\"tag_name\":\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.[0-9]+)\"",
+      "download_url_template": "https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/$version/ungoogled-chromium_$version_windows_x64.zip",
+      "extract_dir": "ungoogled-chromium_$version_windows_x64",
+      "bin_name": "chrome.exe",
+      "persist": "User Data",
+      "post_install": [
+        "$shouldRun = $false",
+        "if ($env:SCOOP_SET_DEFAULT_BROWSER -eq '1') { $shouldRun = $true }",
+        "elseif ($env:SCOOP_INTERACTIVE -eq '1') {",
+        "  $ans = Read-Host 'Do you want to set Ungoogled Chromium as your default browser? (y/n)'",
+        "  if ($ans -match '^(y|Y)$') { $shouldRun = $true }",
+        "}",
+        "if ($shouldRun) {",
+        "  Write-Host 'Setting Ungoogled Chromium as default browser...'",
+        "  $chromePath = \"$dir\\chrome.exe\"",
+        "  $chromiumUserDataDir = \"$dir\\User Data\"",
+        "  $chromeArgs = \"--user-data-dir=``\"$chromiumUserDataDir``\" --disable-machine-id --disable-encryption --no-default-browser-check\"",
+        "  $registryPaths = @(HKCU:\\Software\\Classes\\ChromiumHTML\\shell\\open\\command, HKCU:\\Software\\Classes\\http\\shell\\open\\command, HKCU:\\Software\\Classes\\https\\shell\\open\\command)",
+        "  foreach ($path in $registryPaths) {",
+        "    if (!(Test-Path $path)) { New-Item -Path $path -Force | Out-Null }",
+        "    $commandValue = \"``\"$chromePath``\" $chromeArgs -- ``\"%1``\"\"",
+        "    Set-ItemProperty -Path $path -Name '(Default)' -Value $commandValue -Type String -ErrorAction SilentlyContinue",
+        "  }",
+        "  $progId = 'ChromiumHTML'",
+        "  if (!(Test-Path \"HKCU:\\Software\\Classes\\$progId\")) { New-Item -Path \"HKCU:\\Software\\Classes\\$progId\" -Force | Out-Null }",
+        "  Set-ItemProperty -Path \"HKCU:\\Software\\Classes\\$progId\" -Name '(Default)' -Value 'Chromium HTML Document' -Type String -ErrorAction SilentlyContinue",
+        "  $chromiumAppPath = 'HKCU:\\Software\\Clients\\StartMenuInternet\\Chromium\\shell\\open\\command'",
+        "  if (!(Test-Path $chromiumAppPath)) { New-Item -Path $chromiumAppPath -Force | Out-Null }",
+        "  Set-ItemProperty -Path $chromiumAppPath -Name '(Default)' -Value \"``\"$chromePath``\" $chromeArgs\" -Type String -ErrorAction SilentlyContinue",
+        "  $httpUserChoice = 'HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice'",
+        "  $httpsUserChoice = 'HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice'",
+        "  foreach ($uc in @($httpUserChoice, $httpsUserChoice)) {",
+        "    if (Test-Path $uc) {",
+        "      $currentProgId = (Get-ItemProperty -Path $uc -ErrorAction SilentlyContinue).ProgId",
+        "      if ($currentProgId) {",
+        "        $progIdPath = \"HKCU:\\Software\\Classes\\$currentProgId\\shell\\open\\command\"",
+        "        if (!(Test-Path $progIdPath)) { New-Item -Path $progIdPath -Force | Out-Null }",
+        "        Set-ItemProperty -Path $progIdPath -Name '(Default)' -Value \"``\"$chromePath``\" $chromeArgs -- ``\"%1``\"\" -Type String -ErrorAction SilentlyContinue",
+        "      }",
+        "    }",
+        "  }",
+        "  Write-Host 'Registry updated. Opening Default Apps settings for any remaining configuration...' -ForegroundColor Yellow",
+        "  try { Start-Process 'ms-settings:defaultapps' } catch { Write-Host 'Could not open Default Apps settings automatically.' -ForegroundColor Yellow }",
+        "} else {",
+        "  Write-Host 'Skipping default browser setup. To run automatically, set env var SCOOP_SET_DEFAULT_BROWSER=1 before install.'",
+        "}"
+      ],
+      "shortcuts": [
+        [
+          "chrome.exe",
+          "Ungoogled Chromium"
+        ]
+      ]
+    }
+    ,
+    {
+      "name": "depressurizer",
+      "description": "Depressurizer - A Steam library categorizing tool",
+      "homepage": "https://api.github.com/repos/julianxhokaxhiu/Depressurizer/releases/latest",
+      "license": "GPL-3.0",
+      "version_regex": "\"tag_name\":\\s*\"v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\"",
+      "download_url_template": "https://github.com/julianxhokaxhiu/Depressurizer/releases/download/$version/Depressurizer-v$version.0_Release.zip",
+      "bin_name": "Depressurizer.exe",
+      "shortcuts": [
+        [
+          "Depressurizer.exe",
+          "Depressurizer"
+        ]
+      ]
+    }
+    ,
+    {
+      "name": "cache-relocator",
+      "description": "SoftPerfect Cache Relocator - Relocate browser and app caches to another drive",
+      "homepage": "https://www.softperfect.com/products/cacherelocator/",
+      "license": "Freeware",
+      "version_regex": "Latest version[\\s\\S]*?([0-9]+\\.[0-9]+)",
+      "download_url_template": "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip",
+      "extract_dir": "64-bit",
+      "bin_name": "cacherelocator.exe",
+      "shortcuts": [
+        [
+          "cacherelocator.exe",
+          "Cache Relocator"
+        ]
+      ]
+    }
+    ,
+    {
+      "name": "ripgrep-all",
+      "description": "Ripgrep-All - Search in PDFs, e-books, Office docs, archives, and media via ripgrep",
+      "homepage": "https://github.com/phiresky/ripgrep-all/releases",
+      "license": "AGPL-3.0-or-later",
+      "version_regex": "releases/tag/v(0\\.10\\.9)",
+      "download_url_template": "https://github.com/phiresky/ripgrep-all/releases/download/v$version/ripgrep_all-v$version-x86_64-pc-windows-msvc.zip",
+      "bin_name": "rga.exe"
+    },
+    {
+      "name": "thorium-avx2",
+      "description": "Thorium AVX2 - Chromium fork named after radioactive element No. 90. Optimized for AVX2.",
+      "homepage": "https://thorium.rocks/",
+      "license": "BSD-3-Clause",
+      "version_regex": "\"tag_name\":\\s*\"M([\\d.]+)\"",
+      "download_url_template": "https://github.com/gz83/thorium/releases/download/M$version/Thorium_AVX2_$version.zip",
+      "extract_dir": "BIN",
+      "bin_name": "thorium.exe",
+      "shortcuts": [
+        [
+          "thorium.exe",
+          "Thorium AVX2"
+        ]
+      ]
+    }
+  ]
+}

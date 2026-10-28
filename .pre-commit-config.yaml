@@ -1,0 +1,84 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ["--line-length", "100"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        additional_dependencies: []
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-beautifulsoup4
+        args: ["--ignore-missing-imports", "--no-strict-optional"]
+        exclude: ^tests/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-json
+        files: ^bucket/
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        # MD051 disabled: it mis-slugs emoji-prefixed headings that GitHub renders fine
+        args: ["--disable", "MD013", "MD033", "MD041", "MD051", "--"]
+
+  # Quality gate for the shipped artifact. `bucket/*.json` is the deliverable,
+  # and lint alone cannot tell that a manifest is structurally valid or that a
+  # stale top-level url/hash block survived an update -- both were real bugs
+  # here that only surfaced after the manifest was already committed.
+  #
+  # `doctor` runs offline so a commit never downloads release archives; the
+  # zip-layout check stays in the manual `doctor` run. pytest is a pre-push
+  # hook because it costs seconds, not milliseconds.
+  #
+  # These use `language: system`, so the interpreter on PATH must have
+  # scripts/requirements-automation.txt and pytest installed.
+  - repo: local
+    hooks:
+      - id: validate-manifests
+        name: validate manifests against the schema
+        entry: python scripts/automate-scoop.py validate
+        language: system
+        pass_filenames: false
+        files: ^bucket/.*\.json$|^scripts/manifest_schema\.json$
+
+      - id: doctor-manifests
+        name: doctor manifests (offline checks only)
+        entry: python scripts/automate-scoop.py doctor --offline
+        language: system
+        pass_filenames: false
+        files: ^bucket/.*\.json$
+
+      - id: pytest
+        name: pytest
+        entry: python -m pytest tests/ -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

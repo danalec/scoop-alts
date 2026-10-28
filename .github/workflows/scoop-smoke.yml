@@ -1,0 +1,95 @@
+name: Scoop Smoke Test
+
+# Observability only: per-package install results are collected but never
+# fail the job. The job fails only if Scoop itself cannot be installed.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Install all manifests with Scoop
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Scoop
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          irm get.scoop.sh -outfile 'install.ps1'
+          .\install.ps1 -RunAsAdmin
+          scoop --version
+          # Persist the shims directory for all later steps (each runs in a new process).
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\scoop\shims"
+
+      - name: Install every manifest
+        shell: powershell
+        run: |
+          # Install manifests directly by path - 'scoop bucket add' requires a
+          # git URL and cannot register a plain local directory.
+          $perPackageTimeoutSec = 900
+          $manifests = Get-ChildItem -Path "${{ github.workspace }}\bucket" -Filter '*.json' | Sort-Object Name
+          New-Item -ItemType Directory -Force smoke-logs | Out-Null
+          $results = foreach ($manifest in $manifests) {
+              $name = $manifest.BaseName
+              $ok = $false
+              $output = @()
+              $installJob = $null
+              # This workflow is observability, so an unexpected error must be
+              # recorded as a FAIL for that package instead of aborting the sweep:
+              # one broken manifest would otherwise cost the report for all others.
+              try {
+                  # Run each install in a background job so a hung installer
+                  # cannot stall the whole sweep (bounded by $perPackageTimeoutSec).
+                  $installJob = Start-Job -ArgumentList $manifest.FullName -ScriptBlock {
+                      param($manifestPath)
+                      & scoop install --no-update-scoop $manifestPath *>&1
+                  }
+                  $finished = Wait-Job -Job $installJob -Timeout $perPackageTimeoutSec
+                  if ($finished) {
+                      $output = Receive-Job -Job $installJob
+                      $errors = @($output | Where-Object { "$_" -match '^\s*ERROR' })
+                      $ok = ($installJob.State -eq 'Completed') -and ($errors.Count -eq 0)
+                  } else {
+                      # Stop-Job takes no -Force parameter in Windows PowerShell 5.1
+                      # (nor in PowerShell 7). Passing it threw ParameterBindingException,
+                      # which failed the whole step and lost every remaining package.
+                      Stop-Job -Job $installJob -ErrorAction SilentlyContinue | Out-Null
+                      $output = @("TIMEOUT: scoop install did not finish within $perPackageTimeoutSec seconds")
+                  }
+              } catch {
+                  $ok = $false
+                  $output = @($output) + @("HARNESS-ERROR: " + $_.Exception.Message)
+              } finally {
+                  if ($installJob) {
+                      Remove-Job -Job $installJob -Force -ErrorAction SilentlyContinue
+                  }
+              }
+              $output | Out-File -FilePath "smoke-logs\$name.log" -Encoding utf8
+              [PSCustomObject]@{
+                  Package = $name
+                  Status  = if ($ok) { 'PASS' } else { 'FAIL' }
+              }
+          }
+          $results | Format-Table -AutoSize
+          $results | ForEach-Object { "$($_.Status)`t$($_.Package)" } | Out-File -FilePath smoke-results.txt -Encoding utf8
+          # Wrap in @() so the count survives a single match: .Count on a lone
+          # PSCustomObject yields nothing under Windows PowerShell 5.1.
+          $passed = @($results | Where-Object { $_.Status -eq 'PASS' }).Count
+          $failed = @($results | Where-Object { $_.Status -eq 'FAIL' }).Count
+          Write-Output "Scoop smoke summary: $passed passed, $failed failed"
+          # Never fail the job on package install failures (observability, not a gate).
+          exit 0
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoop-smoke-results
+          path: |
+            smoke-results.txt
+            smoke-logs/
