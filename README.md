@@ -1,7 +1,7 @@
 # Dan's Alternative Scoop Bucket (`scoop-alts`)
 
 [![CI](https://github.com/danalec/scoop-alts/actions/workflows/ci.yml/badge.svg)](https://github.com/danalec/scoop-alts/actions/workflows/ci.yml)
-[![Manifests](https://img.shields.io/badge/manifests-30%20packages-blue.svg)](bucket/)
+[![Manifests](https://img.shields.io/badge/manifests-29%20packages-blue.svg)](bucket/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-brightgreen.svg)](https://www.python.org/)
 
