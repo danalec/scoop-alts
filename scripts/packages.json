@@ -31,15 +31,6 @@
     "license": "BSD-3-Clause",
     "force_https": true
   },
-  "codecharta": {
-    "homepage": "https://api.github.com/repos/MaibornWolff/codecharta/tags",
-    "version_patterns": [
-      "vis-([\\d.]+)"
-    ],
-    "download_url_template": "https://github.com/MaibornWolff/codecharta/releases/download/vis-$version/codecharta-visualization-win32-x64.zip",
-    "description": "CodeCharta Visualization: interactive 3D maps of code metrics to analyze hotspots and architecture.",
-    "license": "BSD-3-Clause"
-  },
   "corecycler": {
     "homepage": "https://api.github.com/repos/sp00n/corecycler/tags",
     "version_patterns": [

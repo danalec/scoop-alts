@@ -38,7 +38,7 @@ scheduler, so `scoop update` is normally enough.
 
 ---
 
-## 📦 Package Catalog (30)
+## 📦 Package Catalog (29)
 
 | Manifest | Upstream Provider | Description | Persist |
 | :--- | :--- | :--- | :---: |
@@ -46,7 +46,6 @@ scheduler, so `scoop update` is normally enough.
 | [`atomic`](bucket/atomic.json) | GitHub Releases | High-performance alarm and event monitoring client | — |
 | [`cache-relocator`](bucket/cache-relocator.json) | SoftPerfect | Move browser and application caches to RAM disk or secondary storage | — |
 | [`chromium-crlset`](bucket/chromium-crlset.json) | Google Chrome | Latest CRLSet updates for Chromium | — |
-| [`codecharta`](bucket/codecharta.json) | GitHub Releases | Code analysis and interactive 3D city visualization | — |
 | [`corecycler`](bucket/corecycler.json) | GitHub Releases | Script-driven per-core stability tester (Prime95/Y-Cruncher) | — |
 | [`depressurizer`](bucket/depressurizer.json) | GitHub Releases | Steam library categorization and auto-tagging utility | — |
 | [`esptool`](bucket/esptool.json) | GitHub Releases | ROM bootloader utility for Espressif ESP8266 & ESP32 | — |

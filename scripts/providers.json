@@ -3,7 +3,6 @@
   "update-atomic.py": "github",
   "update-cache-relocator.py": "other",
   "update-chromium-crlset.py": "other",
-  "update-codecharta.py": "github",
   "update-corecycler.py": "github",
   "update-depressurizer.py": "github",
   "update-esptool.py": "github",
