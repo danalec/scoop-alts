@@ -56,7 +56,7 @@ stripping emoji from the source.
 `update-all.py` resolves each package to something runnable and executes it in its own
 subprocess. Two kinds, both exposed under the same logical name `update-<package>.py`:
 
-1. **Registry-driven** (24 packages) — config lives in `scripts/packages.json`; the
+1. **Registry-driven** (23 packages) — config lives in `scripts/packages.json`; the
    orchestrator runs `scripts/update-package.py <package>`. Adding a package is a JSON entry.
 2. **Bespoke** (6 packages) — their own `scripts/update-<package>.py`, for multi-asset url
    arrays (`kuna`), custom version detection (`widevinecdm`), redirect following
