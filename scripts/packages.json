@@ -15,7 +15,11 @@
     ],
     "download_url_template": "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip",
     "description": "SoftPerfect Cache Relocator - Relocate browser and app caches to another drive",
-    "license": "Freeware"
+    "license": "Freeware",
+    "architecture_templates": {
+      "64bit": "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip",
+      "arm64": "https://www.softperfect.com/download/freeware/cacherelocator_portable.zip"
+    }
   },
   "chromium-crlset": {
     "homepage": "https://clients2.google.com/service/update2/crx?x=id%3Dhfnkpimlhhgieaddgfemjhofmfblmnib%26v%3D0.0.0.0%26uc%26acceptformat%3Dcrx3",
