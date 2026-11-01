@@ -104,6 +104,15 @@
     "description": "High-performance full-text search across PDFs, Office documents, ZIP archives, email, media metadata and GGUF/LLM model files (ripgrep-compatible CLI, zero external dependencies, Zen 4+ tuned)",
     "license": "Apache-2.0"
   },
+  "rgy": {
+    "homepage": "https://api.github.com/repos/danalec/rgy/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"rgy-v([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/danalec/rgy/releases/download/rgy-v$version/rgy-v$version-x86_64-windows.zip",
+    "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both",
+    "license": "MIT OR Apache-2.0"
+  },
   "ripgrep-all": {
     "homepage": "https://github.com/danalec/ripgrep-all/releases",
     "version_patterns": [
