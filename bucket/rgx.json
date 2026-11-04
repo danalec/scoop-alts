@@ -1,12 +1,12 @@
 {
-  "version": "0.1.8",
+  "version": "0.1.9.0",
   "description": "High-performance full-text search across PDFs, Office documents, ZIP archives, email, media metadata and GGUF/LLM model files (ripgrep-compatible CLI, zero external dependencies)",
   "homepage": "https://github.com/danalec/rgx",
   "license": "Apache-2.0",
   "changelog": "https://github.com/danalec/rgx/releases",
-  "url": "https://github.com/danalec/rgx/releases/download/rgx-v0.1.8/rgx-v0.1.8-x86_64-windows.zip",
-  "hash": "sha256:50d907049986bdbeacda6084b69e0337e85d337256071b550940fa41f19e3f9f",
-  "extract_dir": "rgx-v0.1.8-x86_64-windows",
+  "url": "https://github.com/danalec/rgx/releases/download/rgx-v0.1.9.0/rgx-v0.1.9.0-x86_64-windows.zip",
+  "hash": "sha256:f855ce7c950a624bbb07b8b62f66f0bba25b8373833ac1e1af2fc781dc695dc3",
+  "extract_dir": "rgx-v0.1.9.0-x86_64-windows",
   "bin": "rgx.exe",
   "checkver": {
     "url": "https://api.github.com/repos/danalec/rgx/releases/latest",
