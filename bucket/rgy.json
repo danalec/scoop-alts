@@ -5,7 +5,7 @@
   "license": "MIT OR Apache-2.0",
   "changelog": "https://github.com/danalec/rgy/releases",
   "url": "https://github.com/danalec/rgy/releases/download/rgy-v0.1.10.0/rgy-v0.1.10.0-x86_64-windows.zip",
-  "hash": "sha256:9db42026e6290b29e6e890b54f03eaea41afde6a7e2b207172f84ad65f217a07",
+  "hash": "sha256:8b3ae61ebf99dd13f33fade50fb5df88aed783285becd6219e74898c961bdca0",
   "bin": [
     "rgy.exe",
     "rgy-autostart.exe",
