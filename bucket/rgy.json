@@ -12,6 +12,14 @@
     "searchctl.exe",
     "searchd.exe"
   ],
+  "post_install": [
+    "info 'rgy: Scoop does not start the search daemon. Pick one way to keep the name index fresh:'",
+    "info '  A) daemon (resident, live change feed):  rgy-autostart install'",
+    "info '     the same action is install.ps1 -Activate (no download, re-runnable). Undo: rgy-autostart uninstall'",
+    "info '  B) one-shot snapshot (no resident process):  searchctl --root $env:USERPROFILE --reindex --count ''*'''",
+    "info '     rebuilds the index ONCE, picking up new/changed files; repeat it (or schedule it daily) to refresh.'",
+    "info '  Choose one: the daemon and a scheduled rebuild both write the same index file. See the README.'"
+  ],
   "shortcuts": [
     [
       "rgxy.exe",
