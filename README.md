@@ -56,6 +56,7 @@ scheduler, so `scoop update` is normally enough.
 | [`ripgrep-all`](bucket/ripgrep-all.json) | [danalec/ripgrep-all](https://github.com/danalec/ripgrep-all) | Ripgrep wrapper searching inside PDFs, e-books, Office files and archives | — |
 | [`ripgrep-all-znver4`](bucket/ripgrep-all-znver4.json) | [danalec/ripgrep-all](https://github.com/danalec/ripgrep-all) | ripgrep-all build targeting AMD Zen 4 and newer | — |
 | [`rgx`](bucket/rgx.json) | [danalec/rgx](https://github.com/danalec/rgx) | Full-text search across PDFs, Office docs, archives, email and GGUF models (ripgrep-compatible) | — |
+| [`rgx-avx2`](bucket/rgx-avx2.json) | [danalec/rgx](https://github.com/danalec/rgx) | rgx build targeting AVX2 (Intel Haswell / AMD Excavator and newer) | — |
 | [`rgx-znver4`](bucket/rgx-znver4.json) | [danalec/rgx](https://github.com/danalec/rgx) | rgx build targeting AMD Zen 4 and newer | — |
 | [`rgy`](bucket/rgy.json) | [danalec/rgy](https://github.com/danalec/rgy) | File search engine and launcher: name search, content search, and a daemon behind both | — |
 | [`rgy-avx2`](bucket/rgy-avx2.json) | [danalec/rgy](https://github.com/danalec/rgy) | rgy build targeting AVX2 (Intel Haswell / AMD Excavator and newer) | — |
