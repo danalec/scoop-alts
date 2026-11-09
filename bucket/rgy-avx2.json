@@ -1,0 +1,40 @@
+{
+  "version": "0.1.10.2",
+  "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both (AVX2 tuned)",
+  "homepage": "https://github.com/danalec/rgy",
+  "license": "MIT OR Apache-2.0",
+  "changelog": "https://github.com/danalec/rgy/releases",
+  "url": "https://github.com/danalec/rgy/releases/download/rgy-v0.1.10.2/rgy-v0.1.10.2-avx2-windows.zip",
+  "hash": "sha256:03c0f7247bc49dd470ddd6c8d67bcfdf4177ae3660444df3799d50ccd858f0a4",
+  "bin": [
+    [
+      "rgy.exe",
+      "rgy-avx2"
+    ],
+    [
+      "rgy-autostart.exe",
+      "rgy-autostart-avx2"
+    ],
+    [
+      "searchctl.exe",
+      "searchctl-avx2"
+    ],
+    [
+      "searchd.exe",
+      "searchd-avx2"
+    ]
+  ],
+  "shortcuts": [
+    [
+      "rgxy.exe",
+      "rgy (avx2)"
+    ]
+  ],
+  "checkver": {
+    "url": "https://api.github.com/repos/danalec/rgy/releases/latest",
+    "regex": "\"tag_name\":\\s*\"rgy-v([\\d.]+)\""
+  },
+  "autoupdate": {
+    "url": "https://github.com/danalec/rgy/releases/download/rgy-v$version/rgy-v$version-avx2-windows.zip"
+  }
+}
