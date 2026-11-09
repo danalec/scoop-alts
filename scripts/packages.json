@@ -95,6 +95,15 @@
     "description": "High-performance full-text search across PDFs, Office documents, ZIP archives, email, media metadata and GGUF/LLM model files (ripgrep-compatible CLI, zero external dependencies)",
     "license": "Apache-2.0"
   },
+  "rgx-avx2": {
+    "homepage": "https://api.github.com/repos/danalec/rgx/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"rgx-v?([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/danalec/rgx/releases/download/rgx-v$version/rgx-v$version-avx2-windows.zip",
+    "description": "High-performance full-text search across PDFs, Office documents, ZIP archives, email, media metadata and GGUF/LLM model files (ripgrep-compatible CLI, zero external dependencies, AVX2 tuned)",
+    "license": "Apache-2.0"
+  },
   "rgx-znver4": {
     "homepage": "https://api.github.com/repos/danalec/rgx/releases/latest",
     "version_patterns": [

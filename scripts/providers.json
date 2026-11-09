@@ -13,6 +13,7 @@
   "update-ripgrep-all.py": "github",
   "update-ripgrep-all-znver4.py": "github",
   "update-rgx.py": "github",
+  "update-rgx-avx2.py": "github",
   "update-rgx-znver4.py": "github",
   "update-rgy.py": "github",
   "update-rgy-avx2.py": "github",
