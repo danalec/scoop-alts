@@ -113,6 +113,24 @@
     "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both",
     "license": "MIT OR Apache-2.0"
   },
+  "rgy-avx2": {
+    "homepage": "https://api.github.com/repos/danalec/rgy/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"rgy-v([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/danalec/rgy/releases/download/rgy-v$version/rgy-v$version-avx2-windows.zip",
+    "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both (AVX2 tuned)",
+    "license": "MIT OR Apache-2.0"
+  },
+  "rgy-znver4": {
+    "homepage": "https://api.github.com/repos/danalec/rgy/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"rgy-v([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/danalec/rgy/releases/download/rgy-v$version/rgy-v$version-znver4-windows.zip",
+    "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both (Zen 4+ tuned)",
+    "license": "MIT OR Apache-2.0"
+  },
   "ripgrep-all": {
     "homepage": "https://github.com/danalec/ripgrep-all/releases",
     "version_patterns": [

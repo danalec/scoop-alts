@@ -1,0 +1,40 @@
+{
+  "version": "0.1.10.2",
+  "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both (Zen 4+ tuned)",
+  "homepage": "https://github.com/danalec/rgy",
+  "license": "MIT OR Apache-2.0",
+  "changelog": "https://github.com/danalec/rgy/releases",
+  "url": "https://github.com/danalec/rgy/releases/download/rgy-v0.1.10.2/rgy-v0.1.10.2-znver4-windows.zip",
+  "hash": "sha256:63576f0ff7906e4095c52c0a7cadad6c13bf0d020ba5934dc4aa6c7674eea570",
+  "bin": [
+    [
+      "rgy.exe",
+      "rgy-znver4"
+    ],
+    [
+      "rgy-autostart.exe",
+      "rgy-autostart-znver4"
+    ],
+    [
+      "searchctl.exe",
+      "searchctl-znver4"
+    ],
+    [
+      "searchd.exe",
+      "searchd-znver4"
+    ]
+  ],
+  "shortcuts": [
+    [
+      "rgxy.exe",
+      "rgy (znver4)"
+    ]
+  ],
+  "checkver": {
+    "url": "https://api.github.com/repos/danalec/rgy/releases/latest",
+    "regex": "\"tag_name\":\\s*\"rgy-v([\\d.]+)\""
+  },
+  "autoupdate": {
+    "url": "https://github.com/danalec/rgy/releases/download/rgy-v$version/rgy-v$version-znver4-windows.zip"
+  }
+}
