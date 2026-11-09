@@ -1,11 +1,11 @@
 {
-  "version": "0.1.10.0",
+  "version": "0.1.10.1",
   "description": "Fast, native file search engine and launcher: name search, content search, and a daemon behind both",
   "homepage": "https://github.com/danalec/rgy",
   "license": "MIT OR Apache-2.0",
   "changelog": "https://github.com/danalec/rgy/releases",
-  "url": "https://github.com/danalec/rgy/releases/download/rgy-v0.1.10.0/rgy-v0.1.10.0-x86_64-windows.zip",
-  "hash": "sha256:8b3ae61ebf99dd13f33fade50fb5df88aed783285becd6219e74898c961bdca0",
+  "url": "https://github.com/danalec/rgy/releases/download/rgy-v0.1.10.1/rgy-v0.1.10.1-x86_64-windows.zip",
+  "hash": "sha256:84b3fc839678beb8ac4c3d4556aae77048ab7940e51cedc73c9ecb6fdcfa95ca",
   "bin": [
     "rgy.exe",
     "rgy-autostart.exe",
