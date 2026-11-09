@@ -1,12 +1,12 @@
 {
-  "version": "1.26.30",
+  "version": "1.26.31",
   "description": "VeraCrypt - Disk encryption with strong security based on TrueCrypt",
   "homepage": "https://github.com/veracrypt/VeraCrypt",
   "license": "Apache-2.0",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/veracrypt/VeraCrypt/releases/download/VeraCrypt_1.26.30/VeraCrypt_Setup_x64_1.26.30.msi",
-      "hash": "sha256:6164d4e4e8d8e600003f6cf14fafe7f50ce23b3452cae02ea19e5ad6f0cc41ad"
+      "url": "https://github.com/veracrypt/VeraCrypt/releases/download/VeraCrypt_1.26.31/VeraCrypt_Setup_x64_1.26.31.msi",
+      "hash": "sha256:6b0dbcc1d6910ec9f045689dd29172b4ae825b5fdcdae1a2d5f1e5b692782265"
     }
   },
   "bin": "PFiles\\VeraCrypt\\VeraCrypt.exe",
