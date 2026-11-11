@@ -1,0 +1,43 @@
+{
+  "version": "3.2.0",
+  "description": "Ghidra extension and stdio MCP bridge that serve live Ghidra analysis (plus x64dbg debugging) to AI agent harnesses.",
+  "homepage": "https://github.com/danalec/GhydraMCP",
+  "license": "Apache-2.0",
+  "changelog": "https://github.com/danalec/GhydraMCP/releases",
+  "url": [
+    "https://github.com/danalec/GhydraMCP/releases/download/v3.2.0/Ghydra-v3.2.0-20261111-183108-ghidra11.4.3.zip#/ghidra11.4.3.zip",
+    "https://github.com/danalec/GhydraMCP/releases/download/v3.2.0/Ghydra-v3.2.0-20261111-183111-ghidra12.2.zip#/ghidra12.2.zip",
+    "https://github.com/danalec/GhydraMCP/releases/download/v3.2.0/bridge_mcp_hydra.py"
+  ],
+  "hash": [
+    "sha256:e9d96790147fe3e031744db5b5f649d1f031afda12773d8a0bd89e64a7c88d7a",
+    "sha256:47ae6aa95e65c3ce7b4761f47f4abb955c91440220507317a34ba5dd39998923",
+    "sha256:ad135cf0e80b3381040d579298bdcd2e732d28d3053374c9e99ffd890057aac3"
+  ],
+  "extract_to": [
+    "ghidra11.4.3",
+    "ghidra12.2"
+  ],
+  "env_set": {
+    "GHYDRAMCP_HOME": "$dir"
+  },
+  "checkver": {
+    "url": "https://api.github.com/repos/danalec/GhydraMCP/releases/latest",
+    "regex": "\"tag_name\":\\s*\"v?([\\d.]+)\""
+  },
+  "notes": [
+    "Ghidra loads exactly one extension build per Ghidra version line, so this package ships both: $dir\\ghidra11.4.3\\Ghydra for Ghidra 11.4.3 and $dir\\ghidra12.2\\Ghydra for Ghidra 12.2.",
+    "Install the matching build: copy <variant>\\Ghydra into <Ghidra>\\Extensions\\Ghidra\\Ghydra, or let bin/Install-GhydraMCP.ps1 do it (it matches the installed Ghidra version and refuses a mismatch).",
+    "Installing is not enabling: open a CodeBrowser, then File > Configure > Developer and tick Ghydra. The first instance binds port 8192.",
+    "The stdio MCP bridge is $dir\\bridge_mcp_hydra.py and runs with uv: uv run --script $dir\\bridge_mcp_hydra.py.",
+    "Harness wiring (Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Cline, Roo Code, VS Code, Zed, opencode, Continue): bin/Install-GhydraMCP.ps1 -DryRun first; it merges one 'ghydra' server entry and leaves other servers untouched.",
+    "Upstream docs: https://github.com/danalec/GhydraMCP/blob/main/docs/GHYDRA_INSTALLATION.md and .../GHYDRA_MCP_CLIENTS.md."
+  ],
+  "post_install": [
+    "foreach ($variant in 'ghidra11.4.3','ghidra12.2') { $jar = Join-Path $dir \"$variant/Ghydra/lib/Ghydra.jar\"; if (-not (Test-Path $jar)) { warn \"GhydraMCP: the $variant payload is missing its Ghydra.jar\" } }",
+    "if (-not (Test-Path (Join-Path $dir 'bridge_mcp_hydra.py'))) { warn 'GhydraMCP: bridge_mcp_hydra.py did not extract' }",
+    "$scoopRoot = $env:SCOOP; if (-not $scoopRoot) { $scoopRoot = Split-Path (Split-Path (Split-Path $dir -Parent) -Parent) -Parent }",
+    "$installer = Get-ChildItem -Path (Join-Path $scoopRoot 'buckets/*/bin/Install-GhydraMCP.ps1') -ErrorAction SilentlyContinue | Select-Object -First 1",
+    "if ($installer) { info \"Harness setup: pwsh '$($installer.FullName)' -DryRun   (drop -DryRun to apply)\" } else { info 'Harness setup: run bin/Install-GhydraMCP.ps1 from the scoop-alts checkout.' }"
+  ]
+}

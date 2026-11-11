@@ -6,6 +6,7 @@
   "update-corecycler.py": "github",
   "update-depressurizer.py": "github",
   "update-esptool.py": "github",
+  "update-ghydramcp.py": "github",
   "update-hdd-lff-portable.py": "other",
   "update-harmony.py": "github",
   "update-kuna.py": "github",
