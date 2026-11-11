@@ -708,7 +708,12 @@ if ($bridge) {
 $harnessResults = @()
 if ($bridge) {
     if (-not $uv) {
-        $definitions = Get-HarnessDefinitions -Uv $uv -Bridge $bridge
+        try {
+            $definitions = Get-HarnessDefinitions -Uv $uv -Bridge $bridge
+        } catch {
+            Write-Notice $_.Exception.Message
+            exit 2
+        }
         foreach ($definition in $definitions) {
             if (-not (& $definition.Detect $definition.Path)) {
                 $harnessResults += [pscustomobject]@{ name = $definition.Name; configPath = $definition.Path; state = 'skipped'; detail = "harness not detected at $(Split-Path -Parent $definition.Path)"; changed = $false }
@@ -718,7 +723,12 @@ if ($bridge) {
         }
         $exitCode = 1
     } else {
-        $definitions = Get-HarnessDefinitions -Uv $uv -Bridge $bridge
+        try {
+            $definitions = Get-HarnessDefinitions -Uv $uv -Bridge $bridge
+        } catch {
+            Write-Notice $_.Exception.Message
+            exit 2
+        }
         foreach ($definition in $definitions) {
             if ($definition.Kind -eq 'toml') {
                 $result = Set-TomlHarness -Definition $definition -Remove:$Uninstall -Uv $uv -Bridge $bridge
@@ -775,6 +785,8 @@ if ($Json) {
         Write-Info 'Dry run: nothing was written. Re-run without -DryRun to apply.'
     } elseif ($changed) {
         Write-Info 'Done. Restart the configured clients (and Ghidra) to pick up the changes.'
+    } elseif ($exitCode -ne 0) {
+        Write-Info 'Finished with errors: see the messages above; nothing was written for the failing steps.'
     } else {
         Write-Info 'Nothing to do: every detected target was already current.'
     }

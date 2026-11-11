@@ -350,6 +350,15 @@ def test_harness_filter_only_touches_named_harness(sandbox):
 
 
 @requires_powershell
+def test_unknown_harness_is_invalid_usage(sandbox):
+    process, payload = sandbox.run_json("-Harness", "Nope", *sandbox.install_arguments())
+
+    assert process.returncode == 2
+    assert payload is None
+    assert "No known harness" in (process.stdout + process.stderr)
+
+
+@requires_powershell
 def test_mismatched_ghidra_line_is_reported_not_installed(sandbox):
     other = make_ghidra(sandbox.root / "ghidra_12.1.4_PUBLIC", "12.1.4")
     environment = sandbox._env(sandbox.bin, {"GHIDRA_HOME": str(other)})
