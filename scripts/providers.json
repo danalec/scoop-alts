@@ -1,5 +1,6 @@
 {
   "update-agy.py": "google",
+  "update-ahk.py": "github",
   "update-atomic.py": "github",
   "update-cache-relocator.py": "other",
   "update-chromium-crlset.py": "other",

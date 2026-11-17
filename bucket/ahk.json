@@ -10,7 +10,7 @@
   "bin": "ahk.exe",
   "checkver": {
     "url": "https://api.github.com/repos/danalec/ahk/releases/latest",
-    "regex": "\"tag_name\":\s*\"v?([\d.]+)\""
+    "regex": "\"tag_name\":\\s*\"v?([\\d.]+)\""
   },
   "autoupdate": {
     "url": "https://github.com/danalec/ahk/releases/download/v$version/ahk-v$version-x86_64-windows.zip",
