@@ -1,4 +1,13 @@
 {
+  "ahk": {
+    "homepage": "https://api.github.com/repos/danalec/ahk/releases/latest",
+    "version_patterns": [
+      "\"tag_name\":\\s*\"v?([\\d.]+)\""
+    ],
+    "download_url_template": "https://github.com/danalec/ahk/releases/download/v$version/ahk-v$version-x86_64-windows.zip",
+    "description": "An AutoHotkey interpreter written in Rust, running v1/v2/v2.1/KeySharp scripts on Windows and Linux",
+    "license": "Apache-2.0"
+  },
   "atomic": {
     "homepage": "https://api.github.com/repos/kenforthewin/atomic/releases/latest",
     "version_patterns": [
