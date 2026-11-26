@@ -1,11 +1,11 @@
 {
-  "version": "0.88.0",
+  "version": "0.98.0",
   "description": "One live dashboard for every AI coding tool, synced across every machine.",
   "homepage": "https://github.com/Javis603/token-monitor",
   "license": "MIT",
   "changelog": "https://github.com/Javis603/token-monitor/releases",
-  "url": "https://github.com/Javis603/token-monitor/releases/download/v0.88.0/Token-Monitor-Setup-0.88.0.exe#/setup.exe",
-  "hash": "sha256:37cebc0f22123208e6329523552f127e3b6a8a0c1bfc3a02685258bc2a28055c",
+  "url": "https://github.com/Javis603/token-monitor/releases/download/v0.98.0/Token-Monitor-Setup-0.98.0.exe#/setup.exe",
+  "hash": "sha256:188318829170369866fe36e5cff774222d5fd838b0e5f661a3ef3472821c1246",
   "installer": {
     "script": "Start-Process -Wait \"$dir\\setup.exe\" -ArgumentList '/S', \"/D=$dir\""
   },
