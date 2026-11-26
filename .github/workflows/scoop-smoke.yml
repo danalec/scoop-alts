@@ -32,7 +32,15 @@ jobs:
           # Install manifests directly by path - 'scoop bucket add' requires a
           # git URL and cannot register a plain local directory.
           $perPackageTimeoutSec = 900
-          $manifests = Get-ChildItem -Path "${{ github.workspace }}\bucket" -Filter '*.json' | Sort-Object Name
+          # The source builds are not swept. A package that compiles the tree
+          # on the runner takes longer than the per-package budget above, and
+          # a run that is killed half way leaves the build directory behind on
+          # the runner. The '-git' suffix is the AUR's own convention for a
+          # package built from source, and the bucket follows it.
+          $manifests = Get-ChildItem -Path "${{ github.workspace }}\bucket" -Filter '*.json' |
+              Where-Object { $_.BaseName -notlike '*-git' } |
+              Sort-Object Name
+          Write-Host "sweeping $($manifests.Count) manifests (the source builds are skipped)"
           New-Item -ItemType Directory -Force smoke-logs | Out-Null
           $results = foreach ($manifest in $manifests) {
               $name = $manifest.BaseName

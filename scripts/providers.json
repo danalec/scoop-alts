@@ -18,6 +18,7 @@
   "update-rgx-znver4.py": "github",
   "update-rgy.py": "github",
   "update-rgy-avx2.py": "github",
+  "update-rgy-git.py": "github",
   "update-rgy-znver4.py": "github",
   "update-spotifast.py": "github",
   "update-taskexplorer.py": "github",

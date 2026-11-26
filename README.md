@@ -60,6 +60,7 @@ scheduler, so `scoop update` is normally enough.
 | [`rgx-znver4`](bucket/rgx-znver4.json) | [danalec/rgx](https://github.com/danalec/rgx) | rgx build targeting AMD Zen 4 and newer | — |
 | [`rgy`](bucket/rgy.json) | [danalec/rgy](https://github.com/danalec/rgy) | File search engine and launcher: name search, content search, and a daemon behind both | — |
 | [`rgy-avx2`](bucket/rgy-avx2.json) | [danalec/rgy](https://github.com/danalec/rgy) | rgy build targeting AVX2 (Intel Haswell / AMD Excavator and newer) | — |
+| [`rgy-git`](bucket/rgy-git.json) | [danalec/rgy](https://github.com/danalec/rgy) | rgy built from source on your machine, with the SIMD your CPU carries — needs Rust and the MSVC build tools | — |
 | [`rgy-znver4`](bucket/rgy-znver4.json) | [danalec/rgy](https://github.com/danalec/rgy) | rgy build targeting AMD Zen 4 and newer | — |
 | [`spotifast`](bucket/spotifast.json) | [crmne/spotifast](https://github.com/crmne/spotifast) | Native and fast Spotify client with local playback and Spotify Connect | — |
 | [`taskexplorer`](bucket/taskexplorer.json) | GitHub Releases | Advanced task manager with driver-level inspection | — |
