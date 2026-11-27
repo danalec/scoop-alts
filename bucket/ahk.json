@@ -1,12 +1,12 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.7",
   "description": "An AutoHotkey interpreter written in Rust, running v1/v2/v2.1/KeySharp scripts on Windows and Linux",
   "homepage": "https://github.com/danalec/ahk",
   "license": "Apache-2.0",
   "changelog": "https://github.com/danalec/ahk/releases",
-  "url": "https://github.com/danalec/ahk/releases/download/v0.5.0/ahk-v0.5.0-x86_64-windows.zip",
-  "hash": "sha256:37b21ba77d2f142d75cb616093fa67acb59aea010dc93ede21c08e61a3e87304",
-  "extract_dir": "ahk-v0.5.0-x86_64-windows",
+  "url": "https://github.com/danalec/ahk/releases/download/v0.6.7/ahk-v0.6.7-x86_64-windows.zip",
+  "hash": "sha256:0222a5f9bab77317bebb38658b0273e0d752d07ec8766f020fae1fc42782276f",
+  "extract_dir": "ahk-v0.6.7-x86_64-windows",
   "bin": "ahk.exe",
   "checkver": {
     "url": "https://api.github.com/repos/danalec/ahk/releases/latest",
